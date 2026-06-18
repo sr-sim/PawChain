@@ -48,8 +48,12 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
       <div className="animate-grid-drift absolute inset-0 opacity-80 bg-[linear-gradient(rgba(255,138,0,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,138,0,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
 
       <div className="intro-content relative text-center">
-        <div className="intro-mark mx-auto mb-6 grid h-20 w-20 place-items-center rounded-[1.75rem] bg-gradient-to-br from-[var(--color-orange)] via-[var(--color-gold)] to-amber-300 text-2xl font-black shadow-[0_28px_90px_rgba(255,138,0,0.42)]">
-          PC
+        <div className="intro-mark mx-auto mb-6 grid h-20 w-20 place-items-center overflow-hidden rounded-[1.75rem] bg-white shadow-[0_28px_90px_rgba(255,138,0,0.42)] ring-1 ring-white/80">
+          <img
+            src="/images/logo.png"
+            alt="PawChain logo"
+            className="h-full w-full object-contain"
+          />
         </div>
         <h1 className="intro-title text-6xl font-black tracking-tight sm:text-7xl">
           PawChain
