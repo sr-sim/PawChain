@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { ConnectWallet } from "./components/ConnectWallet";
@@ -47,27 +48,24 @@ const roles = [
   },
 ];
 
-const campaigns = [
+const teamMembers = [
   {
-    shelter: "Happy Tails Rescue",
-    title: "Emergency Medical Care for Rescued Dogs",
-    progress: 74,
-    goal: "12.5 ETH goal",
-    status: "Milestone 2 Active",
+    id: 1,
+    name: "Gan Anwen",
+    role: "Fullstack Developer",
+    image: "/images/anwen.png",
   },
   {
-    shelter: "Safe Paws Shelter",
-    title: "New Kennel Upgrade and Winter Supplies",
-    progress: 51,
-    goal: "8.0 ETH goal",
-    status: "Verified",
+    id: 2,
+    name: "Saw Khoo Mei Huey",
+    role: "Fullstack Developer",
+    image: "/images/macy.png",
   },
   {
-    shelter: "Meow Haven",
-    title: "Cat Food and Vaccination Drive",
-    progress: 88,
-    goal: "5.4 ETH goal",
-    status: "Final Review",
+    id: 3,
+    name: "Sim Soo Ruan",
+    role: "Fullstack Developer",
+    image: "/images/sooruan.png",
   },
 ];
 
@@ -89,7 +87,7 @@ const navItems = [
   { label: "Home", id: "home" },
   { label: "How It Works", id: "how-it-works" },
   { label: "About", id: "about" },
-  { label: "Campaigns", id: "campaigns" },
+  { label: "Team", id: "team" },
 ];
 
 function SectionHeader({
@@ -135,9 +133,23 @@ function GlowCard({
 
 export default function Home() {
   const { isConnected } = useAppKitAccount();
-  const [showIntro, setShowIntro] = useState(true);
+  const [showIntro, setShowIntro] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+
+    const shouldSkipIntro =
+      window.sessionStorage.getItem("skipIntroOnce") === "true";
+
+    if (shouldSkipIntro) {
+      window.sessionStorage.removeItem("skipIntroOnce");
+    }
+
+    return !shouldSkipIntro;
+  });
   const [activeSection, setActiveSection] = useState("home");
   const wasConnectedRef = useRef(false);
+  const navRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (isConnected) {
@@ -190,7 +202,7 @@ export default function Home() {
       return;
     }
 
-    const headerOffset = window.innerWidth >= 1024 ? 104 : 136;
+    const headerOffset = (navRef.current?.getBoundingClientRect().height ?? 0) + 18;
     const sectionTop =
       section.getBoundingClientRect().top + window.scrollY - headerOffset;
 
@@ -216,7 +228,7 @@ export default function Home() {
         <div className="animate-pulse-soft pointer-events-none fixed right-10 top-32 hidden h-3 w-3 rounded-full bg-[var(--color-orange)] shadow-[0_0_32px_var(--color-orange)] lg:block" />
         <div className="animate-pulse-soft delay-300 pointer-events-none fixed bottom-24 left-12 hidden h-2.5 w-2.5 rounded-full bg-[var(--color-gold)] shadow-[0_0_28px_var(--color-gold)] lg:block" />
         <div className="relative">
-        <nav className="fixed inset-x-0 top-0 z-50 border-b border-orange-200/70 bg-[linear-gradient(90deg,rgba(255,250,241,0.97),rgba(255,255,255,0.92)_46%,rgba(255,239,199,0.95))] shadow-[0_14px_42px_rgba(155,86,20,0.1)] backdrop-blur-2xl">
+        <nav ref={navRef} className="fixed inset-x-0 top-0 z-50 border-b border-orange-200/70 bg-[linear-gradient(90deg,rgba(255,250,241,0.97),rgba(255,255,255,0.92)_46%,rgba(255,239,199,0.95))] shadow-[0_14px_42px_rgba(155,86,20,0.1)] backdrop-blur-2xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
             <a
               href="#home"
@@ -226,8 +238,12 @@ export default function Home() {
               }}
               className="flex min-w-0 items-center gap-2.5 rounded-full border border-transparent px-1.5 py-1 transition duration-300 hover:border-orange-100 hover:bg-white/70 hover:shadow-sm sm:gap-3 sm:px-2"
             >
-              <span className="animate-shimmer grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-orange-500 via-[var(--color-gold)] to-amber-300 text-sm font-black text-white shadow-lg shadow-orange-300/45 ring-1 ring-white/80 sm:h-10 sm:w-10">
-                PC
+              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-orange-300/45 ring-1 ring-white/80 sm:h-10 sm:w-10">
+                <img
+                  src="/images/logo.png"
+                  alt="PawChain logo"
+                  className="h-full w-full object-contain"
+                />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-base font-black leading-5 tracking-tight text-stone-950 sm:text-lg">
@@ -294,10 +310,14 @@ export default function Home() {
             </p>
             <div className="animate-fade-up delay-200 mt-7 flex flex-col gap-3 sm:flex-row">
               <a
-                href="#campaigns"
+                href="#how-it-works"
+                onClick={(event) => {
+                  event.preventDefault();
+                  scrollToSection("how-it-works");
+                }}
                 className="animate-shimmer rounded-full bg-gradient-to-r from-[var(--color-orange)] via-[var(--color-gold)] to-[var(--color-orange)] px-6 py-3 text-center text-sm font-black text-white shadow-2xl shadow-orange-300/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-orange-300/80"
               >
-                Explore Campaigns
+                See How It Works
               </a>
             </div>
           </div>
@@ -344,7 +364,7 @@ export default function Home() {
           </GlowCard>
         </section>
 
-        <section className="mx-auto max-w-7xl px-6 py-14 lg:px-8">
+        <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-20">
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {features.map((feature, index) => (
               <GlowCard
@@ -364,7 +384,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="how-it-works" className="scroll-mt-32 mx-auto max-w-7xl px-6 py-18 md:scroll-mt-24 lg:px-8 lg:py-20">
+        <section id="how-it-works" className="scroll-mt-32 mx-auto max-w-7xl px-6 py-16 md:scroll-mt-24 lg:px-8 lg:py-20">
           <SectionHeader
             eyebrow="How it works"
             title="A simple path from wallet to verified impact"
@@ -389,7 +409,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="about" className="scroll-mt-32 mx-auto max-w-7xl px-6 py-18 md:scroll-mt-24 lg:px-8 lg:py-20">
+        <section id="about" className="scroll-mt-32 mx-auto max-w-7xl px-6 py-16 md:scroll-mt-24 lg:px-8 lg:py-20">
           <SectionHeader
             eyebrow="Roles"
             title="Built for donors, shelters, and reviewers"
@@ -412,50 +432,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="campaigns" className="scroll-mt-32 mx-auto max-w-7xl px-6 py-18 md:scroll-mt-24 lg:px-8 lg:py-20">
-          <SectionHeader
-            eyebrow="Featured campaigns"
-            title="Campaign previews with clear funding status"
-            text="Dummy campaign cards show how donors can scan shelter identity, funding progress, goals, and milestone state before donating."
-          />
-          <div className="grid gap-6 lg:grid-cols-3">
-            {campaigns.map((campaign, index) => (
-              <GlowCard
-                key={campaign.title}
-                className="animate-fade-up flex flex-col"
-                style={{ animationDelay: `${index * 120}ms` } as React.CSSProperties}
-              >
-                <div className="mb-5 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-bold text-[var(--color-orange)]">
-                      {campaign.shelter}
-                    </p>
-                    <h3 className="mt-2 text-xl font-black leading-tight">
-                      {campaign.title}
-                    </h3>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700 shadow-[0_0_20px_rgba(255,138,0,0.16)] transition duration-300 group-hover:bg-orange-200">
-                    {campaign.status}
-                  </span>
-                </div>
-                <div className="mt-auto">
-                  <div className="mb-2 flex justify-between text-sm font-bold text-stone-600">
-                    <span>{campaign.progress}% funded</span>
-                    <span>{campaign.goal}</span>
-                  </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-orange-100">
-                    <div
-                      className="animate-shimmer h-full rounded-full bg-gradient-to-r from-[var(--color-orange)] via-[var(--color-gold)] to-[var(--color-orange)] transition-all duration-700"
-                      style={{ width: `${campaign.progress}%` }}
-                    />
-                  </div>
-                </div>
-              </GlowCard>
-            ))}
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
+        <section className="mx-auto max-w-7xl px-6 py-16 lg:px-8 lg:py-20">
           <div className="animate-fade-up grid items-center gap-10 rounded-[2.5rem] border border-white/70 bg-white/65 p-6 shadow-[0_30px_100px_rgba(244,183,56,0.2)] backdrop-blur-xl transition-all duration-500 hover:border-orange-100 hover:bg-white/75 hover:shadow-[0_36px_120px_rgba(255,138,0,0.24)] md:grid-cols-[0.9fr_1.1fr] md:p-10">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--color-orange)]">
@@ -486,21 +463,112 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="animate-fade-up mx-auto max-w-5xl px-6 py-24 text-center lg:px-8">
-          <h2 className="text-4xl font-black tracking-tight sm:text-5xl">
-            Start supporting verified shelters today
-          </h2>
-          <p className="mx-auto mt-5 max-w-2xl leading-8 text-stone-600">
-            Give with confidence, follow every transaction, and help shelters
-            unlock funds as real milestone progress is approved.
-          </p>
-          <a
-            href="#campaigns"
-            className="mt-9 inline-flex rounded-full bg-stone-950 px-8 py-4 text-sm font-black text-white shadow-2xl shadow-orange-200 transition-all duration-300 hover:-translate-y-1 hover:bg-[var(--color-orange)] hover:shadow-orange-300/70"
-          >
-            Explore Campaigns
-          </a>
+        <section id="team" className="scroll-mt-32 mx-auto max-w-7xl px-6 py-16 md:scroll-mt-24 lg:px-8 lg:py-20">
+          <SectionHeader
+            eyebrow="Our team"
+            title="The builders behind PawChain"
+            text="A focused fullstack team building transparent donation workflows for shelters, donors, and reviewers."
+          />
+
+          <div className="grid gap-6 md:grid-cols-3">
+            {teamMembers.map((member, index) => (
+              <div
+                key={member.id}
+                className="animate-fade-up group flex flex-col items-center rounded-[2rem] border border-white/70 bg-white/70 p-6 text-center shadow-[0_24px_80px_rgba(244,183,56,0.16)] backdrop-blur-xl transition-all duration-500 hover:-translate-y-2 hover:border-orange-200 hover:bg-white/85 hover:shadow-[0_34px_110px_rgba(255,138,0,0.22)]"
+                style={{ animationDelay: `${index * 110}ms` } as React.CSSProperties}
+              >
+                <div className="relative mb-5 h-44 w-44 rounded-full">
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-[var(--color-orange)] via-[var(--color-gold)] to-[var(--color-peach)] opacity-70 blur transition duration-500 group-hover:opacity-100" />
+                  <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-white bg-amber-50 shadow-[0_18px_55px_rgba(255,138,0,0.22)]">
+                    <Image
+                      src={member.image}
+                      alt={member.name}
+                      fill
+                      sizes="176px"
+                      className="object-cover transition duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-xl font-black text-stone-950">
+                  {member.name}
+                </h3>
+                <p className="mt-2 rounded-full bg-orange-100 px-4 py-1.5 text-sm font-black text-[var(--color-orange)]">
+                  {member.role}
+                </p>
+              </div>
+            ))}
+          </div>
         </section>
+
+        <footer className="border-t border-orange-200/80 bg-white/55 px-6 py-10 backdrop-blur-xl lg:px-8">
+          <div className="mx-auto flex max-w-7xl flex-col gap-8 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-md">
+              <a
+                href="#home"
+                onClick={(event) => {
+                  event.preventDefault();
+                  scrollToSection("home");
+                }}
+                className="inline-flex items-center gap-3 rounded-full transition duration-300 hover:opacity-80"
+              >
+                <span className="grid h-10 w-10 place-items-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-orange-300/40 ring-1 ring-white/80">
+                  <img
+                    src="/images/logo.png"
+                    alt="PawChain logo"
+                    className="h-full w-full object-contain"
+                  />
+                </span>
+                <span className="text-lg font-black tracking-tight text-stone-950">
+                  PawChain
+                </span>
+              </a>
+              <p className="mt-4 text-sm leading-6 text-stone-600">
+                Transparent shelter donations powered by wallet confirmation,
+                milestone proof, and smart contract fund release.
+              </p>
+            </div>
+
+            <div className="grid gap-8 sm:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-[0.18em] text-[var(--color-orange)]">
+                  Explore
+                </h3>
+                <div className="mt-4 grid gap-3 text-sm font-bold text-stone-700">
+                  {navItems.map((item) => (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        scrollToSection(item.id);
+                      }}
+                      className="transition duration-300 hover:text-[var(--color-orange)]"
+                    >
+                      {item.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-[0.18em] text-[var(--color-orange)]">
+                  Platform
+                </h3>
+                <div className="mt-4 grid gap-3 text-sm font-bold text-stone-700">
+                  <span>Verified campaigns</span>
+                  <span>On-chain tracking</span>
+                  <span>Milestone approvals</span>
+                  <span>Secure fund release</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mx-auto mt-8 flex max-w-7xl flex-col gap-3 border-t border-orange-100 pt-6 text-sm font-semibold text-stone-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>© 2026 PawChain. All rights reserved.</p>
+            <p>Built for transparent animal shelter support.</p>
+          </div>
+        </footer>
         </div>
       </div>
       )}

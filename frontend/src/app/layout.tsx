@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "PawChain | Transparent Shelter Donations",
   description:
     "A blockchain-based animal shelter donation platform with verified campaigns, milestone approvals, and smart contract fund release.",
+  icons: {
+    icon: "/images/logo.png",
+    shortcut: "/images/logo.png",
+    apple: "/images/logo.png",
+  },
 };
 
 export default async function RootLayout({
