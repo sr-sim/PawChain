@@ -1,0 +1,29 @@
+:root {
+  /* Primary palette */
+  --color-white: #ffffff;
+  --color-white-rgb: 255, 255, 255;
+
+  --color-cream: #fffcc9;
+  --color-cream-rgb: 255, 252, 201;
+
+  --color-peach: #ffcd80;
+  --color-peach-rgb: 255, 205, 128;
+
+  --color-gold: #f4b738;
+  --color-gold-rgb: 244, 183, 56;
+
+  --color-orange: #ff8a00;
+  --color-orange-rgb: 255, 138, 0;
+
+  /* Black */
+  --color-black: #000000;
+  --color-black-rgb: 0, 0, 0;
+
+  /* Convenience tokens */
+  --bg-primary: var(--color-white);
+  --text-primary: var(--color-black);
+}
+
+/* Utility: CSS classes using RGB variables */
+.bg-rgb-white { background-color: rgb(var(--color-white-rgb)); }
+.text-rgb-black { color: rgb(var(--color-black-rgb)); }
