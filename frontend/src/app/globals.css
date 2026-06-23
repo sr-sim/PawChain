@@ -157,6 +157,16 @@ html {
   }
 }
 
+@keyframes disconnect-progress {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @keyframes intro-overlay-in {
   from {
     opacity: 0;

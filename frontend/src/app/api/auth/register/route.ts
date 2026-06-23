@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { mintRoleNFT } from "@/lib/role-nft";
 
 type Role = "donor" | "shelter" | "admin";
 
@@ -52,14 +53,6 @@ function getRegisterError(error: unknown) {
   const message = rawMessage.toLowerCase();
   const details = String(rawDetails ?? "").toLowerCase();
 
-  if (message.includes("rate limit")) {
-    return {
-      message:
-        "Supabase signup email limit reached. Please wait a while, then try again with a new email.",
-      status: 429,
-    };
-  }
-
   if (
     message.includes("already registered") ||
     message.includes("user already exists") ||
@@ -96,19 +89,11 @@ function getRegisterError(error: unknown) {
     };
   }
 
-  if (message.includes("password")) {
-    return {
-      message:
-        "Password is not accepted. Please use at least 6 characters.",
-      status: 400,
-    };
-  }
-
   return { message: rawMessage || "Unable to create account.", status: 500 };
 }
 
 async function walletAlreadyExists(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createAdminClient>,
   walletAddress: string,
 ) {
   const normalizedWallet = walletAddress.toLowerCase();
@@ -134,17 +119,15 @@ async function walletAlreadyExists(
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const formData = await request.formData();
-
-  const role = readText(formData, "role");
-  const fullName = readText(formData, "fullName");
-  const email = readText(formData, "email");
-  const password = readText(formData, "password");
-  const confirmPassword = readText(formData, "confirmPassword");
-  const walletAddress = readText(formData, "walletAddress");
-
   try {
+    const supabase = createAdminClient();
+    const formData = await request.formData();
+
+    const role = readText(formData, "role");
+    const fullName = readText(formData, "fullName");
+    const email = readText(formData, "email");
+    const walletAddress = readText(formData, "walletAddress");
+
     if (!isRole(role)) {
       return NextResponse.json(
         { message: "Invalid role selected." },
@@ -166,13 +149,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (password !== confirmPassword) {
-      return NextResponse.json(
-        { message: "Passwords do not match." },
-        { status: 400 },
-      );
-    }
-
     if (await walletAlreadyExists(supabase, walletAddress)) {
       return NextResponse.json(
         {
@@ -183,23 +159,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: signUpData, error: signUpError } =
-      await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            role,
-            wallet_address: walletAddress,
-          },
-        },
-      });
-
-    if (signUpError) throw signUpError;
-    if (!signUpData.user) throw new Error("Unable to create account.");
-
-    const userId = signUpData.user.id;
+    const userId = crypto.randomUUID();
 
     const { error: profileError } = await supabase.from("profiles").insert({
       id: userId,
@@ -218,9 +178,12 @@ export async function POST(request: NextRequest) {
 
       if (error) throw error;
 
+      const mintResult = await mintRoleNFT(walletAddress, "donor");
+
       return NextResponse.json({
         status: "success",
         message: "Donor account created successfully.",
+        roleNFTTxHash: mintResult.txHash,
       });
     }
 

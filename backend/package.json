@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "hardhat compile",
+    "node": "hardhat node",
+    "deploy:local": "hardhat ignition deploy ignition/modules/RoleNFT.ts --network localhost",
+    "test": "hardhat test",
+    "upload:role-metadata": "node scripts/upload-role-nft-metadata.mjs"
   },
   "keywords": [],
   "author": "",

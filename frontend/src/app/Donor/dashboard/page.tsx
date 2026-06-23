@@ -1,19 +1,19 @@
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
-import { createClient } from "@/lib/supabase/server";
+import { RoleNFTBadge } from "@/app/components/RoleNFTBadge";
+import { getDashboardProfile } from "@/lib/dashboard-access";
 
-export default async function DonorDashboard() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+type DashboardProps = {
+  searchParams?: Promise<{
+    walletAddress?: string;
+  }>;
+};
 
-  const { data: profile } = user
-    ? await supabase
-        .from("profiles")
-        .select("full_name, email, role, wallet_address")
-        .eq("id", user.id)
-        .single()
-    : { data: null };
+export default async function DonorDashboard({ searchParams }: DashboardProps) {
+  const params = await searchParams;
+  const { userId, profile, accessMode, roleNFT } = await getDashboardProfile(
+    "donor",
+    params?.walletAddress,
+  );
 
   return (
     <>
@@ -24,11 +24,13 @@ export default async function DonorDashboard() {
           This is dashboard for current logged in user details.
         </p>
         <div className="mt-6 space-y-2 rounded-2xl border border-orange-100 bg-white p-5 text-sm font-bold shadow-sm">
-          <p>User ID: {user?.id ?? "Not logged in"}</p>
+          <p>User ID: {userId ?? "Not logged in"}</p>
+          <p>Access: {accessMode === "wallet" ? "RoleNFT wallet" : accessMode}</p>
           <p>Name: {profile?.full_name ?? "-"}</p>
-          <p>Email: {profile?.email ?? user?.email ?? "-"}</p>
+          <p>Email: {profile?.email ?? "-"}</p>
           <p>Role: {profile?.role ?? "-"}</p>
           <p>Wallet: {profile?.wallet_address ?? "-"}</p>
+          <RoleNFTBadge role="Donor" roleNFT={roleNFT} />
         </div>
       </main>
     </>

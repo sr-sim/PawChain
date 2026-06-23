@@ -1,7 +1,9 @@
-import { revalidatePath } from "next/cache";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
-import { createClient } from "@/lib/supabase/server";
 
 type ShelterApplication = {
   id: string;
@@ -19,79 +21,123 @@ type ShelterApplication = {
   created_at: string;
 };
 
-async function approveShelter(formData: FormData) {
-  "use server";
+export default function ShelterApprovedPage() {
+  const { address, isConnected } = useAppKitAccount();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(false);
+  const [applications, setApplications] = useState<ShelterApplication[]>([]);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const applicationId = String(formData.get("applicationId") ?? "");
+  const checkAdmin = async (walletAddress: string) => {
+    setIsCheckingAdmin(true);
 
-  if (!user || !applicationId) {
-    return;
-  }
+    try {
+      const response = await fetch(
+        `/api/auth/admin-status?walletAddress=${encodeURIComponent(
+          walletAddress,
+        )}`,
+      );
+      const result = await response.json();
+      setIsAdmin(response.ok && Boolean(result.isAdmin));
+      return response.ok && Boolean(result.isAdmin);
+    } catch {
+      setIsAdmin(false);
+      return false;
+    } finally {
+      setIsCheckingAdmin(false);
+    }
+  };
 
-  await supabase
-    .from("shelter_applications")
-    .update({
-      status: "approved",
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-      rejection_reason: null,
-    })
-    .eq("id", applicationId);
+  const loadApplications = async (adminAllowed = isAdmin) => {
+    if (!address || !adminAllowed) {
+      setApplications([]);
+      return;
+    }
 
-  revalidatePath("/Admin/shelter-approved");
-}
+    setIsLoading(true);
+    setError("");
 
-async function rejectShelter(formData: FormData) {
-  "use server";
+    try {
+      const response = await fetch(
+        `/api/admin/shelter-applications?walletAddress=${encodeURIComponent(
+          address,
+        )}`,
+      );
+      const result = await response.json();
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const applicationId = String(formData.get("applicationId") ?? "");
-  const rejectionReason = String(formData.get("rejectionReason") ?? "").trim();
+      if (!response.ok) {
+        throw new Error(result.message || "Unable to load applications.");
+      }
 
-  if (!user || !applicationId) {
-    return;
-  }
+      setApplications(result.applications ?? []);
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load applications.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  await supabase
-    .from("shelter_applications")
-    .update({
-      status: "rejected",
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-      rejection_reason: rejectionReason || "Application rejected by admin.",
-    })
-    .eq("id", applicationId);
+  useEffect(() => {
+    if (!address || !isConnected) {
+      setIsAdmin(false);
+      setApplications([]);
+      return;
+    }
 
-  revalidatePath("/Admin/shelter-approved");
-}
+    const loadAdminApplications = async () => {
+      const adminAllowed = await checkAdmin(address);
+      await loadApplications(adminAllowed);
+    };
 
-export default async function ShelterApprovedPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    void loadAdminApplications();
+  }, [address, isConnected]);
 
-  const { data: profile } = user
-    ? await supabase.from("profiles").select("role").eq("id", user.id).single()
-    : { data: null };
+  const submitAdminAction = async (
+    applicationId: string,
+    action: "approve" | "reject",
+    rejectionReason = "",
+  ) => {
+    if (!address) return;
 
-  const isAdmin = profile?.role === "admin";
+    setPendingActionId(applicationId);
+    setError("");
 
-  const { data: applications, error } = isAdmin
-    ? await supabase
-        .from("shelter_applications")
-        .select(
-          "id, user_id, shelter_name, registration_id, contact_phone, website_url, shelter_address, organization_description, proof_document_path, status, reviewed_at, rejection_reason, created_at",
-        )
-        .order("created_at", { ascending: false })
-    : { data: null, error: null };
+    try {
+      const response = await fetch("/api/admin/shelter-applications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress: address,
+          applicationId,
+          action,
+          rejectionReason,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Unable to update application.");
+      }
+
+      await loadApplications(true);
+    } catch (actionError) {
+      setError(
+        actionError instanceof Error
+          ? actionError.message
+          : "Unable to update application.",
+      );
+    } finally {
+      setPendingActionId(null);
+    }
+  };
 
   return (
     <>
@@ -113,26 +159,34 @@ export default async function ShelterApprovedPage() {
               Review shelter applications
             </h1>
             <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-stone-600">
-              Admin can approve real shelter organizations here. Approved
-              shelters can log in and access their Shelter dashboard.
+              Admin access is checked by connected wallet. Approved shelters
+              receive a Shelter RoleNFT before dashboard access unlocks.
             </p>
           </div>
 
-          {!user ? (
+          {!isConnected ? (
             <div className="mt-6 rounded-2xl border border-orange-100 bg-white p-5 text-sm font-bold shadow-sm">
-              Please login as admin first.
+              Connect an admin wallet first.
+            </div>
+          ) : isCheckingAdmin ? (
+            <div className="mt-6 rounded-2xl border border-orange-100 bg-white p-5 text-sm font-bold shadow-sm">
+              Checking admin access...
             </div>
           ) : !isAdmin ? (
             <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-600 shadow-sm">
-              Access denied. This page is only for admin accounts.
+              Access denied. This wallet is not in the admin allowlist.
             </div>
           ) : error ? (
             <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-600 shadow-sm">
-              {error.message}
+              {error}
             </div>
-          ) : applications?.length ? (
+          ) : isLoading ? (
+            <div className="mt-6 rounded-2xl border border-orange-100 bg-white p-5 text-sm font-bold shadow-sm">
+              Loading shelter applications...
+            </div>
+          ) : applications.length ? (
             <div className="mt-6 grid gap-4">
-              {(applications as ShelterApplication[]).map((application) => (
+              {applications.map((application) => (
                 <article
                   key={application.id}
                   className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm"
@@ -172,29 +226,31 @@ export default async function ShelterApprovedPage() {
 
                   {application.status === "pending" && (
                     <div className="mt-5 grid gap-3 lg:grid-cols-[auto_1fr]">
-                      <form action={approveShelter}>
-                        <input
-                          type="hidden"
-                          name="applicationId"
-                          value={application.id}
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 hover:bg-[var(--color-orange)]"
-                        >
-                          Approve shelter
-                        </button>
-                      </form>
+                      <button
+                        type="button"
+                        disabled={pendingActionId === application.id}
+                        onClick={() => {
+                          void submitAdminAction(application.id, "approve");
+                        }}
+                        className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 hover:bg-[var(--color-orange)] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {pendingActionId === application.id
+                          ? "Updating..."
+                          : "Approve shelter"}
+                      </button>
 
                       <form
-                        action={rejectShelter}
                         className="grid gap-2 sm:grid-cols-[1fr_auto]"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const formData = new FormData(event.currentTarget);
+                          void submitAdminAction(
+                            application.id,
+                            "reject",
+                            String(formData.get("rejectionReason") ?? ""),
+                          );
+                        }}
                       >
-                        <input
-                          type="hidden"
-                          name="applicationId"
-                          value={application.id}
-                        />
                         <input
                           name="rejectionReason"
                           placeholder="Reason if rejected"
@@ -202,7 +258,8 @@ export default async function ShelterApprovedPage() {
                         />
                         <button
                           type="submit"
-                          className="rounded-full border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100"
+                          disabled={pendingActionId === application.id}
+                          className="rounded-full border border-red-100 bg-red-50 px-5 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Reject
                         </button>

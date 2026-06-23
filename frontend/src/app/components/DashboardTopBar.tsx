@@ -1,3 +1,5 @@
+"use client";
+
 import { ConnectWallet } from "./ConnectWallet";
 
 type DashboardTopBarProps = {

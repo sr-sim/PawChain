@@ -1,0 +1,15 @@
+{
+  "name": "pawchain",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "backend": "npm --prefix backend run node",
+    "deploy": "npm --prefix backend run deploy:local",
+    "frontend": "npm --prefix frontend run dev",
+    "seed:role-nfts": "npm --prefix frontend run seed:role-nfts",
+    "test:backend": "npm --prefix backend test",
+    "build:frontend": "npm --prefix frontend run build",
+    "dev:windows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\\Users\\User\\PawChain\\PawChain\\backend''; npm.cmd run node'; Start-Sleep -Seconds 3; Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\\Users\\User\\PawChain\\PawChain\\frontend''; npm.cmd run dev'\"",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\\Users\\User\\PawChain\\PawChain\\backend''; npm.cmd run node'; Start-Sleep -Seconds 10; npm.cmd run deploy; npm.cmd run seed:role-nfts; npm.cmd run frontend\""
+  }
+}

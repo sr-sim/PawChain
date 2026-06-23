@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getRoleNFTStatus } from "@/lib/role-nft";
 
 async function getShelterApplication(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createAdminClient>,
   userId: string,
 ) {
   const { data: application } = await supabase
@@ -31,63 +32,138 @@ async function getShelterApplication(
 }
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-  const walletAddress = request.nextUrl.searchParams.get("walletAddress");
+  try {
+    const supabase = createAdminClient();
+    const walletAddress = request.nextUrl.searchParams.get("walletAddress");
 
-  if (!walletAddress) {
-    return NextResponse.json(
-      { message: "Wallet address is required." },
-      { status: 400 },
-    );
-  }
+    if (!walletAddress) {
+      return NextResponse.json(
+        { message: "Wallet address is required." },
+        { status: 400 },
+      );
+    }
 
-  const { data: rpcProfile, error: rpcError } = await supabase.rpc(
-    "wallet_profile_lookup",
-    {
-      wallet_address_input: walletAddress.toLowerCase(),
-    },
-  );
+    let roleStatus: Awaited<ReturnType<typeof getRoleNFTStatus>>;
 
-  if (!rpcError && Array.isArray(rpcProfile) && rpcProfile.length > 0) {
-    const profile = rpcProfile[0];
-    const { data: profileWithId } = await supabase
-      .from("profiles")
-      .select("id")
-      .ilike("wallet_address", walletAddress)
-      .maybeSingle();
-    const application =
-      profile.role === "shelter" && profileWithId?.id
-        ? await getShelterApplication(supabase, profileWithId.id)
-        : null;
+    try {
+      roleStatus = await getRoleNFTStatus(walletAddress);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          message:
+            error instanceof Error
+              ? error.message
+              : "Unable to verify RoleNFT for this wallet.",
+        },
+        { status: 503 },
+      );
+    }
 
-    return NextResponse.json({
-      profile: {
-        role: profile.role,
-        email: profile.email,
-        fullName: profile.full_name,
-        application,
+    const { data: rpcProfile, error: rpcError } = await supabase.rpc(
+      "wallet_profile_lookup",
+      {
+        wallet_address_input: walletAddress.toLowerCase(),
       },
-    });
-  }
+    );
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role, email, full_name")
-    .ilike("wallet_address", walletAddress)
-    .maybeSingle();
-  const application =
-    profile?.role === "shelter"
-      ? await getShelterApplication(supabase, profile.id)
-      : null;
+    if (!rpcError && Array.isArray(rpcProfile) && rpcProfile.length > 0) {
+      const profile = rpcProfile.find((item) =>
+        roleStatus.hasNFT ? item.role === roleStatus.dbRole : true,
+      );
 
-  return NextResponse.json({
-    profile: profile
-      ? {
+      if (!profile) {
+        return NextResponse.json({
+          profile: null,
+          nftVerified: roleStatus.hasNFT,
+          contractRole: roleStatus.contractRole,
+          needsRegistration: true,
+        });
+      }
+
+      const { data: profileWithId } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("wallet_address", walletAddress)
+        .maybeSingle();
+      const application =
+        profile.role === "shelter" && profileWithId?.id
+          ? await getShelterApplication(supabase, profileWithId.id)
+          : null;
+
+      const isPendingShelter =
+        profile.role === "shelter" &&
+        (application?.status === "pending" || application?.status === "rejected");
+
+      if (!roleStatus.hasNFT && !isPendingShelter) {
+        return NextResponse.json({
+          profile: null,
+          nftVerified: false,
+          needsRegistration: true,
+        });
+      }
+
+      return NextResponse.json({
+        profile: {
           role: profile.role,
           email: profile.email,
           fullName: profile.full_name,
           application,
-        }
-      : null,
-  });
+          nftVerified: roleStatus.hasNFT,
+          directDashboard: roleStatus.hasNFT && !isPendingShelter,
+        },
+        nftVerified: roleStatus.hasNFT,
+        contractRole: roleStatus.contractRole,
+      });
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, role, email, full_name")
+      .ilike("wallet_address", walletAddress)
+      .eq("role", roleStatus.hasNFT ? roleStatus.dbRole : "shelter")
+      .maybeSingle();
+    const application =
+      profile?.role === "shelter"
+        ? await getShelterApplication(supabase, profile.id)
+        : null;
+    const isPendingShelter =
+      profile?.role === "shelter" &&
+      (application?.status === "pending" || application?.status === "rejected");
+
+    if (!roleStatus.hasNFT && !isPendingShelter) {
+      return NextResponse.json({
+        profile: null,
+        nftVerified: false,
+        needsRegistration: true,
+      });
+    }
+
+    return NextResponse.json(
+      {
+        profile: profile
+          ? {
+              role: profile.role,
+              email: profile.email,
+              fullName: profile.full_name,
+              application,
+              nftVerified: roleStatus.hasNFT,
+              directDashboard: roleStatus.hasNFT && !isPendingShelter,
+            }
+          : null,
+        nftVerified: roleStatus.hasNFT,
+        contractRole: roleStatus.contractRole,
+        needsRegistration: !profile,
+      },
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to look up wallet profile.",
+      },
+      { status: 500 },
+    );
+  }
 }
