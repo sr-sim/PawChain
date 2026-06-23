@@ -42,6 +42,8 @@ type WalletProfile = {
   email: string;
   fullName?: string;
   application?: ShelterApplicationStatus | null;
+  nftVerified?: boolean;
+  directDashboard?: boolean;
 };
 
 type TextFieldProps = {
@@ -63,70 +65,24 @@ function TextField({
   value,
   defaultValue,
 }: TextFieldProps) {
-  const [showPassword, setShowPassword] = useState(false);
-  const isPassword = type === "password";
-  const inputType = isPassword && showPassword ? "text" : type;
-
   return (
     <label className="block text-left">
       <span className="text-sm font-black text-stone-700">{label}</span>
       <span className="relative mt-1.5 block">
         <input
           name={name}
-          type={inputType}
+          type={type}
           required={!readOnly}
           readOnly={readOnly}
           value={value}
           defaultValue={defaultValue}
           placeholder={placeholder}
           className={`w-full rounded-xl border border-orange-100 px-3 py-2 text-sm font-bold outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100 ${
-            isPassword ? "pr-11" : ""
-          } ${
             readOnly
               ? "bg-white/60 text-stone-500"
               : "bg-white/80 text-stone-900"
           }`}
         />
-        {isPassword ? (
-          <button
-            type="button"
-            onClick={() => setShowPassword((current) => !current)}
-            className="absolute inset-y-0 right-2 my-auto grid h-8 w-8 place-items-center rounded-full text-stone-500 transition hover:bg-orange-100 hover:text-[var(--color-orange)]"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? (
-              <svg
-                aria-hidden="true"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M3 3l18 18" />
-                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-                <path d="M9.9 4.2A10.7 10.7 0 0 1 12 4c5 0 8.7 3.1 10 8a12.3 12.3 0 0 1-2.1 4.1" />
-                <path d="M6.1 6.1A12 12 0 0 0 2 12c1.3 4.9 5 8 10 8a10.9 10.9 0 0 0 5.9-1.7" />
-              </svg>
-            ) : (
-              <svg
-                aria-hidden="true"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            )}
-          </button>
-        ) : null}
       </span>
     </label>
   );
@@ -196,7 +152,23 @@ export function RoleChooser() {
       setLastAddress(address);
 
       const lookupWalletProfile = async () => {
+        let isRedirectingToDashboard = false;
+
         try {
+          const adminResponse = await fetch(
+            `/api/auth/admin-status?walletAddress=${encodeURIComponent(
+              address,
+            )}`,
+          );
+          const adminResult = await adminResponse.json();
+
+          if (adminResponse.ok && adminResult.isAdmin) {
+            setIsComplete(true);
+            isRedirectingToDashboard = true;
+            router.replace("/Admin/dashboard");
+            return;
+          }
+
           const [response] = await Promise.all([
             fetch(
               `/api/auth/wallet-profile?walletAddress=${encodeURIComponent(
@@ -212,6 +184,16 @@ export function RoleChooser() {
           if (response.ok && result.profile) {
             const profile = result.profile as WalletProfile;
 
+            if (profile.directDashboard) {
+              isRedirectingToDashboard = true;
+              router.push(
+                `/${toUiRole(profile.role)}/dashboard?walletAddress=${encodeURIComponent(
+                  address,
+                )}`,
+              );
+              return;
+            }
+
             setWalletProfile(profile);
             setSelectedRole(toUiRole(profile.role));
             if (
@@ -226,7 +208,9 @@ export function RoleChooser() {
             setIsAuthOpen(true);
           }
         } finally {
-          setIsWalletLookupLoading(false);
+          if (!isRedirectingToDashboard) {
+            setIsWalletLookupLoading(false);
+          }
         }
       };
 
@@ -240,11 +224,20 @@ export function RoleChooser() {
   };
 
   const handleCheckShelterStatus = async () => {
+    if (!address) {
+      setStatusMessage("Wallet is not connected.");
+      return;
+    }
+
     setStatusMessage("");
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/shelter/application-status");
+      const response = await fetch(
+        `/api/shelter/application-status?walletAddress=${encodeURIComponent(
+          address,
+        )}`,
+      );
       const result = await response.json();
 
       if (!response.ok) {
@@ -253,7 +246,9 @@ export function RoleChooser() {
 
       if (result.status === "approved") {
         setIsComplete(true);
-        router.push("/Shelter/dashboard");
+        router.push(
+          `/Shelter/dashboard?walletAddress=${encodeURIComponent(address)}`,
+        );
         return;
       }
 
@@ -268,67 +263,6 @@ export function RoleChooser() {
         error instanceof Error
           ? error.message
           : "Unable to check application status.",
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!selectedRole || !address) {
-      setFormError("Wallet is not connected.");
-      return;
-    }
-
-    setFormError("");
-    setIsSubmitting(true);
-
-    const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? "");
-    const password = String(formData.get("password") ?? "");
-    const role = toDbRole(selectedRole);
-
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          role,
-          walletAddress: address,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Unable to sign in.");
-      }
-
-      if (result.status === "pending") {
-        setShelterApplication(result.application ?? { status: "pending" });
-        setIsShelterPending(true);
-        setCanCheckShelterStatus(true);
-        return;
-      }
-
-      if (result.status === "rejected") {
-        setShelterApplication(result.application ?? { status: "rejected" });
-        setIsShelterPending(true);
-        setCanCheckShelterStatus(true);
-        return;
-      }
-
-      setIsComplete(true);
-      router.push(`/${selectedRole}/dashboard`);
-    } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : "Something went wrong.",
       );
     } finally {
       setIsSubmitting(false);
@@ -506,42 +440,14 @@ export function RoleChooser() {
                         {selectedRole}
                       </p>
                       <h2 className="mt-2 text-3xl font-black tracking-tight text-stone-950">
-                        Login
+                        RoleNFT required
                       </h2>
                       <p className="mt-1 text-sm leading-6 text-stone-600">
-                        Enter the account password for the linked email. Pending
-                        shelters will see their application status before
-                        dashboard access is unlocked.
+                        PawChain found a database profile for this wallet, but
+                        dashboard access now requires a matching RoleNFT. If
+                        this is a donor account, register again with a fresh
+                        test wallet or ask admin to repair the role badge.
                       </p>
-
-                      <form
-                        className="mt-5 space-y-3"
-                        onSubmit={(event) => {
-                          void handleAuthSubmit(event);
-                        }}
-                      >
-                        <TextField
-                          label="Email"
-                          name="email"
-                          type="email"
-                          placeholder="you@example.com"
-                          readOnly
-                          value={walletProfile.email}
-                        />
-                        <TextField
-                          label="Password"
-                          name="password"
-                          type="password"
-                          placeholder="Enter password"
-                        />
-                        <button
-                          type="submit"
-                          disabled={isSubmitting}
-                          className="w-full rounded-full bg-stone-950 px-6 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-300/70 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isSubmitting ? "Please wait..." : "Login"}
-                        </button>
-                      </form>
 
                       {formError && (
                         <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-center text-sm font-bold text-red-600">

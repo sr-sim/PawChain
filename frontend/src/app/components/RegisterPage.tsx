@@ -37,69 +37,23 @@ function TextField({
   readOnly = false,
   value,
 }: TextFieldProps) {
-  const [showPassword, setShowPassword] = useState(false);
-  const isPassword = type === "password";
-  const inputType = isPassword && showPassword ? "text" : type;
-
   return (
     <label className="block text-left">
       <span className="text-sm font-black text-stone-700">{label}</span>
       <span className="relative mt-1.5 block">
         <input
           name={name}
-          type={inputType}
+          type={type}
           required={!readOnly}
           readOnly={readOnly}
           value={value}
           placeholder={placeholder}
           className={`w-full rounded-xl border border-orange-100 px-3 py-2 text-sm font-bold outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100 ${
-            isPassword ? "pr-11" : ""
-          } ${
             readOnly
               ? "bg-white/60 text-stone-500"
               : "bg-white/80 text-stone-900"
           }`}
         />
-        {isPassword ? (
-          <button
-            type="button"
-            onClick={() => setShowPassword((current) => !current)}
-            className="absolute inset-y-0 right-2 my-auto grid h-8 w-8 place-items-center rounded-full text-stone-500 transition hover:bg-orange-100 hover:text-[var(--color-orange)]"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? (
-              <svg
-                aria-hidden="true"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M3 3l18 18" />
-                <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-                <path d="M9.9 4.2A10.7 10.7 0 0 1 12 4c5 0 8.7 3.1 10 8a12.3 12.3 0 0 1-2.1 4.1" />
-                <path d="M6.1 6.1A12 12 0 0 0 2 12c1.3 4.9 5 8 10 8a10.9 10.9 0 0 0 5.9-1.7" />
-              </svg>
-            ) : (
-              <svg
-                aria-hidden="true"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            )}
-          </button>
-        ) : null}
       </span>
     </label>
   );
@@ -230,14 +184,7 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
     setIsSubmitting(true);
 
     const formData = new FormData(event.currentTarget);
-    const password = String(formData.get("password") ?? "");
-    const confirmPassword = String(formData.get("confirmPassword") ?? "");
-
     try {
-      if (password !== confirmPassword) {
-        throw new Error("Passwords do not match.");
-      }
-
       formData.set("role", role);
       formData.set("walletAddress", address);
 
@@ -257,7 +204,9 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
         return;
       }
 
-      router.push(`/${roleLabel}/dashboard`);
+      router.push(
+        `/${roleLabel}/dashboard?walletAddress=${encodeURIComponent(address)}`,
+      );
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Something went wrong.",
@@ -374,18 +323,6 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
                           type="email"
                           placeholder="you@example.com"
                         />
-                        <TextField
-                          label="Password"
-                          name="password"
-                          type="password"
-                          placeholder="Enter password"
-                        />
-                        <TextField
-                          label="Confirm password"
-                          name="confirmPassword"
-                          type="password"
-                          placeholder="Confirm password"
-                        />
                       </div>
 
                       <div className="space-y-2.5 rounded-2xl border border-orange-100 bg-white/75 p-4">
@@ -478,18 +415,6 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
                       name="email"
                       type="email"
                       placeholder="you@example.com"
-                    />
-                    <TextField
-                      label="Password"
-                      name="password"
-                      type="password"
-                      placeholder="Enter password"
-                    />
-                    <TextField
-                      label="Confirm password"
-                      name="confirmPassword"
-                      type="password"
-                      placeholder="Confirm password"
                     />
                   </div>
                 )}

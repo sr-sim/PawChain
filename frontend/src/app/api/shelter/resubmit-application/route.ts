@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const formData = await request.formData();
   const walletAddress = readText(formData, "walletAddress");
 
