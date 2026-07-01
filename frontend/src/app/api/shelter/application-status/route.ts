@@ -1,17 +1,31 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+export async function GET(request: NextRequest) {
+  const supabase = createAdminClient();
+  const walletAddress = request.nextUrl.searchParams.get("walletAddress");
 
-  if (userError || !user) {
+  if (!walletAddress) {
     return NextResponse.json(
-      { message: "Please login first." },
-      { status: 401 },
+      { message: "Wallet address is required." },
+      { status: 400 },
+    );
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .ilike("wallet_address", walletAddress)
+    .maybeSingle();
+
+  if (profileError) {
+    return NextResponse.json({ message: profileError.message }, { status: 500 });
+  }
+
+  if (!profile || profile.role !== "shelter") {
+    return NextResponse.json(
+      { message: "No shelter account found for this wallet." },
+      { status: 404 },
     );
   }
 
@@ -20,7 +34,7 @@ export async function GET() {
     .select(
       "status, shelter_name, registration_id, contact_phone, website_url, shelter_address, organization_description, proof_document_path, created_at, reviewed_at, rejection_reason",
     )
-    .eq("user_id", user.id)
+    .eq("user_id", profile.id)
     .single();
 
   if (error) {

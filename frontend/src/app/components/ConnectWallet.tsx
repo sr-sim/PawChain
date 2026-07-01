@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   useAppKit,
   useAppKitAccount,
   useDisconnect,
 } from "@reown/appkit/react";
-import { supabase } from "@/lib/supabase-client";
+import { walletDisconnectEvent } from "./DisconnectOverlayHost";
 
 type ConnectWalletProps = {
   variant?: "dark" | "outline";
@@ -22,7 +21,6 @@ function formatAddress(address?: string) {
 }
 
 export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
-  const router = useRouter();
   const { open } = useAppKit();
   const { disconnect } = useDisconnect();
   const { address, isConnected } = useAppKitAccount();
@@ -70,15 +68,13 @@ export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
   const handleDisconnect = async () => {
     setIsMenuOpen(false);
     setIsDisconnecting(true);
+    window.sessionStorage.removeItem("skipIntroOnce");
+    window.dispatchEvent(new Event(walletDisconnectEvent));
 
     try {
-      await supabase.auth.signOut();
       await disconnect();
-      router.replace("/");
-    } finally {
-      setTimeout(() => {
-        setIsDisconnecting(false);
-      }, 700);
+    } catch {
+      setIsDisconnecting(false);
     }
   };
 
@@ -110,19 +106,6 @@ export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
         )}
       </div>
 
-      {isDisconnecting && (
-        <div className="fixed inset-0 z-[200] grid place-items-center bg-[var(--color-cream)]/95 px-6 text-center text-stone-950 backdrop-blur-xl">
-          <div>
-            <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-orange-100 border-t-[var(--color-orange)]" />
-            <p className="mt-5 text-sm font-black uppercase tracking-[0.18em] text-[var(--color-orange)]">
-              Disconnecting wallet
-            </p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight">
-              Returning to PawChain
-            </h1>
-          </div>
-        </div>
-      )}
     </>
   );
 }
