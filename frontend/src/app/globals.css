@@ -55,6 +55,61 @@ html {
   animation: shimmer 2.8s ease-in-out infinite;
 }
 
+.donor-motion > * {
+  animation: donor-section-in 0.46s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.donor-motion > *:nth-child(2) {
+  animation-delay: 55ms;
+}
+
+.donor-motion > *:nth-child(3) {
+  animation-delay: 110ms;
+}
+
+.donor-motion > *:nth-child(4) {
+  animation-delay: 165ms;
+}
+
+.donor-motion > *:nth-child(n + 5) {
+  animation-delay: 220ms;
+}
+
+.donor-motion .shadow-sm {
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.donor-motion .shadow-sm:hover {
+  border-color: rgba(var(--color-orange-rgb), 0.32);
+  box-shadow: 0 18px 44px rgba(155, 86, 20, 0.08);
+  transform: translateY(-2px);
+}
+
+.donor-progress-fill {
+  animation: donor-progress-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: left center;
+}
+
+.donor-nav-rail {
+  animation: donor-sidebar-in 0.28s ease-out both;
+}
+
+.donor-nav-row {
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.donor-nav-row:hover {
+  transform: translateX(2px);
+}
+
 .intro-overlay {
   animation: intro-overlay-in 0.5s ease-out both;
 }
@@ -154,6 +209,40 @@ html {
 
   50% {
     background-position: 100% 50%;
+  }
+}
+
+@keyframes donor-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes donor-progress-grow {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes donor-sidebar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 

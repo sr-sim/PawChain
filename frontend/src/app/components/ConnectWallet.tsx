@@ -114,6 +114,7 @@ export function ConnectWallet({ variant = 'dark' }: ConnectWalletProps) {
             <button
               type="button"
               onClick={handleDisconnect}
+              suppressHydrationWarning
               className="w-full rounded-xl px-3 py-2 text-left text-sm font-black text-red-600 transition hover:bg-red-50"
             >
               Disconnect
