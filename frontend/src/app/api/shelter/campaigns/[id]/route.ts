@@ -102,7 +102,7 @@ export async function GET(
     const { data: campaign, error } = await supabase
       .from("campaigns")
       .select(
-        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, created_at, updated_at",
+        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
       )
       .eq("id", id)
       .eq("shelter_id", profile.id)
@@ -254,10 +254,11 @@ export async function PATCH(
         duration_days: durationDays,
         image_url: imageUrl || null,
         campaign_status: "pending_approval",
+        rejection_reason: null,
       })
       .eq("id", campaign.id)
       .select(
-        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, created_at, updated_at",
+        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
       )
       .single();
 

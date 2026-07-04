@@ -22,6 +22,7 @@ export type Campaign = {
   duration_days: number;
   image_url: string | null;
   contract_address: string | null;
+  rejection_reason?: string | null;
   created_at?: string;
   updated_at?: string;
 };

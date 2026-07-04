@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     const { data: campaigns, error } = await supabase
       .from("campaigns")
       .select(
-        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, created_at, updated_at",
+        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
       )
       .eq("shelter_id", profile.id)
       .order("created_at", { ascending: false });
@@ -200,9 +200,10 @@ export async function POST(request: NextRequest) {
         duration_days: durationDays,
         image_url: imageUrl || null,
         contract_address: null,
+        rejection_reason: null,
       })
       .select(
-        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, created_at, updated_at",
+        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
       )
       .single();
 

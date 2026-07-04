@@ -90,9 +90,7 @@ function getProofState(milestone: CampaignMilestone, hasProof: boolean) {
   if (milestone.status === "rejected") {
     return {
       label: "Proof rejected",
-      description:
-        milestone.rejection_reason ||
-        "Review the requirement and upload revised proof.",
+      description: "Review the admin feedback and upload revised proof.",
       className: "border-red-100 bg-red-50/70 text-red-800",
     };
   }
@@ -179,6 +177,18 @@ export function MilestoneCard({
                   </span>
                 ) : null}
               </div>
+
+              {milestone.status === "rejected" ? (
+                <div className="mt-3 rounded-2xl border border-red-100 bg-white/72 px-4 py-3 text-red-800">
+                  <p className="text-xs font-black uppercase tracking-[0.14em]">
+                    Milestone Rejection Reason
+                  </p>
+                  <p className="mt-1 text-sm font-bold leading-6">
+                    {milestone.rejection_reason ||
+                      "Admin rejected this proof but did not provide a reason."}
+                  </p>
+                </div>
+              ) : null}
 
               {existingProofFiles.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
