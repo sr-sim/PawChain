@@ -175,8 +175,7 @@ export default function CampaignDetailPage() {
             )}
 
             <div className="p-5 sm:p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+              <div>
                   <div className="flex flex-wrap gap-2">
                     <StatusBadge status={campaign.campaign_status} />
                     <span className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-black capitalize text-[var(--color-orange)]">
@@ -192,29 +191,43 @@ export default function CampaignDetailPage() {
                   <p className="mt-3 max-w-3xl text-base font-bold leading-7 text-stone-700">
                     {campaign.description}
                   </p>
-                </div>
+                  {campaign.campaign_status === "rejected" ? (
+                    <div className="mt-5 rounded-2xl border border-red-100 bg-red-50/80 p-4 text-red-800">
+                      <p className="text-xs font-black uppercase tracking-[0.14em]">
+                        Rejection Reason
+                      </p>
+                      <p className="mt-2 text-sm font-bold leading-6">
+                        {campaign.rejection_reason ||
+                          "Admin rejected this campaign but did not provide a reason."}
+                      </p>
+                    </div>
+                  ) : null}
+              </div>
 
-                <div className="rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,rgba(var(--color-cream-rgb),0.72),rgba(var(--color-peach-rgb),0.22))] p-4 lg:min-w-72">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">
-                    Campaign Progress
-                  </p>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-sm font-black">
-                    <span className="text-stone-950">
-                      {formatCurrency(campaign.current_amount)}
+              <div className="mt-5 rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,rgba(var(--color-cream-rgb),0.62),rgba(var(--color-peach-rgb),0.18))] p-4 shadow-inner shadow-orange-100/70">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">
+                      Campaign Progress
+                    </p>
+                    <p className="mt-2 text-2xl font-black text-stone-950">
+                      {progress}% funded
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-sm font-black">
+                    <span className="rounded-full border border-orange-100 bg-white px-3 py-1.5 text-stone-950">
+                      Raised {formatCurrency(campaign.current_amount)}
                     </span>
-                    <span className="text-stone-500">
-                      {formatCurrency(campaign.goal_amount)}
+                    <span className="rounded-full border border-orange-100 bg-white px-3 py-1.5 text-stone-600">
+                      Goal {formatCurrency(campaign.goal_amount)}
                     </span>
                   </div>
-                  <div className="mt-2 h-3 overflow-hidden rounded-full bg-orange-100">
-                    <div
-                      className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-gold),var(--color-orange))]"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                  <p className="mt-2 text-right text-xs font-black text-stone-500">
-                    {progress}% funded
-                  </p>
+                </div>
+                <div className="mt-4 h-4 overflow-hidden rounded-full bg-white shadow-inner shadow-orange-100">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-gold),var(--color-orange))]"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
               </div>
 
