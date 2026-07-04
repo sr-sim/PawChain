@@ -1,6 +1,29 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleNFTStatus, type DbRole } from "./role-nft";
 
+async function getOptionalShelterImageUrl(
+  supabase: ReturnType<typeof createAdminClient>,
+  profileId?: string,
+) {
+  if (!profileId) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("shelter_profiles")
+    .select("shelter_image_url")
+    .eq("user_id", profileId)
+    .maybeSingle();
+
+  if (error) {
+    return null;
+  }
+
+  return typeof data?.shelter_image_url === "string"
+    ? data.shelter_image_url
+    : null;
+}
+
 export async function getDashboardProfile(
   expectedRole: DbRole,
   walletAddress?: string,
@@ -33,10 +56,14 @@ export async function getDashboardProfile(
     .ilike("wallet_address", walletAddress)
     .eq("role", expectedRole)
     .maybeSingle();
+  const shelterImageUrl =
+    expectedRole === "shelter"
+      ? await getOptionalShelterImageUrl(supabase, profile?.id)
+      : null;
 
   return {
     userId: profile?.id ?? null,
-    profile,
+    profile: profile ? { ...profile, shelter_image_url: shelterImageUrl } : null,
     accessMode: "wallet" as const,
     roleNFT: roleStatus.roleNFT,
   };

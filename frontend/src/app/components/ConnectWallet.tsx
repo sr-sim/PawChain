@@ -1,47 +1,62 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from 'react';
 import {
   useAppKit,
   useAppKitAccount,
   useDisconnect,
-} from "@reown/appkit/react";
-import { walletDisconnectEvent } from "./DisconnectOverlayHost";
+} from '@reown/appkit/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { walletDisconnectEvent } from './DisconnectOverlayHost';
 
 type ConnectWalletProps = {
-  variant?: "dark" | "outline";
+  variant?: 'dark' | 'outline';
 };
 
 function formatAddress(address?: string) {
   if (!address) {
-    return "Connect Wallet";
+    return 'Connect Wallet';
   }
 
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
+export function ConnectWallet({ variant = 'dark' }: ConnectWalletProps) {
   const { open } = useAppKit();
   const { disconnect } = useDisconnect();
   const { address, isConnected } = useAppKitAccount();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Sync wallet address to URL for persistence across navigation
+  useEffect(() => {
+    if (!isConnected || !address) {
+      return;
+    }
+
+    const currentWalletParam = searchParams.get('walletAddress');
+
+    if (currentWalletParam !== address) {
+      const params = new URLSearchParams(searchParams);
+      params.set('walletAddress', address);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    }
+  }, [address, isConnected, searchParams, router]);
+
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(event.target as Node)
-      ) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
     }
 
-    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener('pointerdown', handlePointerDown);
 
     return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
     };
   }, []);
 
@@ -52,9 +67,9 @@ export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
   }, [isConnected]);
 
   const className =
-    variant === "outline"
-      ? "rounded-full border border-orange-200 bg-white/75 px-6 py-3 text-center text-sm font-black text-stone-900 shadow-lg shadow-orange-100 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-200/70"
-      : "rounded-full bg-stone-950 px-3 py-2 text-xs font-black text-white shadow-lg shadow-orange-200/70 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-300/70 sm:px-4 sm:py-2.5 sm:text-sm";
+    variant === 'outline'
+      ? 'rounded-full border border-orange-200 bg-white/75 px-6 py-3 text-center text-sm font-black text-stone-900 shadow-lg shadow-orange-100 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-200/70'
+      : 'rounded-full bg-stone-950 px-3 py-2 text-xs font-black text-white shadow-lg shadow-orange-200/70 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-300/70 sm:px-4 sm:py-2.5 sm:text-sm';
 
   const handleClick = () => {
     if (isConnected) {
@@ -68,7 +83,7 @@ export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
   const handleDisconnect = async () => {
     setIsMenuOpen(false);
     setIsDisconnecting(true);
-    window.sessionStorage.removeItem("skipIntroOnce");
+    window.sessionStorage.removeItem('skipIntroOnce');
     window.dispatchEvent(new Event(walletDisconnectEvent));
 
     try {
@@ -86,8 +101,9 @@ export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
           className={className}
           onClick={handleClick}
           disabled={isDisconnecting}
+          suppressHydrationWarning
         >
-          {isConnected ? formatAddress(address) : "Connect Wallet"}
+          {isConnected ? formatAddress(address) : 'Connect Wallet'}
         </button>
 
         {isConnected && isMenuOpen && (
@@ -105,7 +121,6 @@ export function ConnectWallet({ variant = "dark" }: ConnectWalletProps) {
           </div>
         )}
       </div>
-
     </>
   );
 }

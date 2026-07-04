@@ -22,6 +22,7 @@
   /* Convenience tokens */
   --bg-primary: var(--color-white);
   --text-primary: var(--color-black);
+  --shelter-sidebar-width: 18rem;
 }
 
 /* Utility: CSS classes using RGB variables */
