@@ -12,6 +12,9 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const notificationHref = address
+    ? `/Donor/notifications?walletAddress=${encodeURIComponent(address)}`
+    : "/Donor/notifications";
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -36,6 +39,8 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
       <DashboardTopBar
         role="Donor"
         isMenuOpen={isSidebarOpen}
+        notificationCount={1}
+        notificationHref={notificationHref}
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
       />
       <div className="flex min-h-screen bg-[var(--color-cream)] pt-16 text-stone-950">

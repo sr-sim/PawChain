@@ -1,99 +1,14 @@
 import Link from "next/link";
 import { DonorRoleNFTCard } from "@/app/components/DonorRoleNFTCard";
 import { getDashboardProfile } from "@/lib/dashboard-access";
+import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
+import { getShelters } from "../campaignData";
 
 type DashboardProps = {
   searchParams?: Promise<{
     walletAddress?: string;
   }>;
 };
-
-const transparencyStats = [
-  {
-    label: "On-chain donations",
-    value: "3",
-  },
-  {
-    label: "Transaction hashes",
-    value: "3",
-  },
-  {
-    label: "Fund releases",
-    value: "2",
-  },
-];
-
-const milestoneStatusSummary = [
-  {
-    label: "Pending proof",
-    value: "1",
-  },
-  {
-    label: "Under review",
-    value: "1",
-  },
-  {
-    label: "Funds released",
-    value: "1",
-  },
-];
-
-const transparencyOverview = [...transparencyStats, ...milestoneStatusSummary];
-
-const monthlyImpact = [
-  { month: "Apr", amount: 120 },
-  { month: "May", amount: 230 },
-  { month: "Jun", amount: 350 },
-];
-
-const donationActivities: {
-  campaign: string;
-  shelter: string;
-  amount: string;
-  date: string;
-  hash: string;
-  status: string;
-}[] = [
-  {
-    campaign: "Medical Recovery Fund",
-    shelter: "Safe Tails Rescue",
-    amount: "RM 350.00",
-    date: "18 Jun 2026",
-    hash: "0xa71f...9182",
-    status: "Under review",
-  },
-  {
-    campaign: "Emergency Food Support",
-    shelter: "Happy Paws Shelter",
-    amount: "RM 200.00",
-    date: "02 Jun 2026",
-    hash: "0x6b0f...2aaf",
-    status: "Funds released",
-  },
-  {
-    campaign: "Warm Kennel Upgrade",
-    shelter: "Second Chance Home",
-    amount: "RM 150.00",
-    date: "21 May 2026",
-    hash: "0xd109...ba93",
-    status: "Pending proof",
-  },
-];
-
-const savedCampaigns = [
-  {
-    title: "Vaccination Drive",
-    shelter: "Furry Friends Network",
-    progress: 35,
-    note: "24 days left",
-  },
-  {
-    title: "Adoption Care Kits",
-    shelter: "Happy Paws Shelter",
-    progress: 54,
-    note: "16 days left",
-  },
-];
 
 const quickActions = [
   {
@@ -129,29 +44,6 @@ const impactSteps = [
   {
     title: "Funds released",
     description: "Approved support reaches the shelter.",
-  },
-];
-
-const milestoneNotifications = [
-  {
-    campaign: "Medical Recovery Fund",
-    milestone: "Vet treatment proof submitted",
-    status: "Under review",
-    description:
-      "Shelter submitted proof for the first medical care milestone.",
-  },
-  {
-    campaign: "Emergency Food Support",
-    milestone: "Food supplies purchased",
-    status: "Funds released",
-    description: "Approved milestone funds are ready to be tracked by donors.",
-  },
-  {
-    campaign: "Warm Kennel Upgrade",
-    milestone: "Shelter equipment delivery",
-    status: "Pending proof",
-    description:
-      "Milestone proof will appear here after the shelter uploads it.",
   },
 ];
 
@@ -191,16 +83,54 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   );
   const displayName = profile?.full_name ?? "Anwen";
   const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? "-";
+  let activeCampaigns: Awaited<ReturnType<typeof getActiveDonorCampaigns>> = [];
+
+  try {
+    activeCampaigns = await getActiveDonorCampaigns();
+  } catch {
+    activeCampaigns = [];
+  }
+
+  const shelters = getShelters(activeCampaigns);
+  const latestCampaigns = activeCampaigns.slice(0, 2);
+  const milestoneCount = activeCampaigns.reduce(
+    (total, campaign) => total + campaign.milestones.length,
+    0,
+  );
+  const activeCampaignMilestones = activeCampaigns.slice(0, 3).map((campaign) => ({
+    campaign: campaign.title,
+    milestone: campaign.milestones[0]?.title ?? "Milestone plan pending",
+    status: "Active",
+    description: `${campaign.shelter} has ${campaign.milestones.length} planned milestone releases for this campaign.`,
+  }));
+  const transparencyOverview = [
+    {
+      label: "Active campaigns",
+      value: String(activeCampaigns.length),
+    },
+    {
+      label: "Verified shelters",
+      value: String(shelters.length),
+    },
+    {
+      label: "Milestone plans",
+      value: String(milestoneCount),
+    },
+    {
+      label: "Donation records",
+      value: "Pending",
+    },
+  ];
   const summaryStats = [
     {
       label: "Total donated",
-      value: "RM 700.00",
-      detail: "Across 3 supported campaigns",
+      value: "Pending",
+      detail: "Needs donations table",
     },
     {
-      label: "Latest donation",
-      value: "RM 350.00",
-      detail: "Medical Recovery Fund",
+      label: "Active campaigns",
+      value: String(activeCampaigns.length),
+      detail: `${shelters.length} verified shelters available`,
     },
     {
       label: "Role access",
@@ -222,8 +152,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               Welcome back, {displayName}.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Your contribution history, on-chain transparency, and supported
-              campaign milestones are organized here for quick review.
+              Your donor profile and available verified campaigns are organized
+              here while donation records wait for the live payment connection.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <Link
@@ -303,7 +233,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 Watchlist
               </p>
               <h2 className="mt-1 text-xl font-black text-stone-950">
-                Saved campaigns
+                Latest active campaigns
               </h2>
             </div>
             <Link
@@ -314,29 +244,38 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             </Link>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {savedCampaigns.map((campaign) => (
+            {latestCampaigns.length > 0 ? (
+            latestCampaigns.map((campaign) => (
               <article
-                key={campaign.title}
+                key={campaign.id}
                 className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"
               >
-                <p className="text-sm font-semibold text-stone-950">
+                <Link
+                  href={`/Donor/campaigns/${campaign.id}`}
+                  className="text-sm font-semibold text-stone-950 transition hover:text-[var(--color-orange)]"
+                >
                   {campaign.title}
-                </p>
+                </Link>
                 <p className="mt-1 text-xs font-medium text-stone-500">
-                  {campaign.shelter} - {campaign.note}
+                  {campaign.shelter} - {campaign.daysLeft} days left
                 </p>
                 <div className="mt-3 flex items-center justify-between text-xs font-semibold text-stone-500">
                   <span>Raised</span>
-                  <span>{campaign.progress}%</span>
+                  <span>{campaign.raised}%</span>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100">
                   <div
                     className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
-                    style={{ width: `${campaign.progress}%` }}
+                    style={{ width: `${campaign.raised}%` }}
                   />
                 </div>
               </article>
-            ))}
+            ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/25 p-4 text-sm font-semibold text-stone-600 md:col-span-2">
+                No active campaigns approved yet.
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -383,36 +322,41 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           <div className="mt-4 rounded-xl border border-orange-100 bg-white p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-stone-950">
-                Donation trend
+                Campaign readiness
               </p>
               <p className="text-xs font-medium text-stone-500">
-                Preview chart
+                Supabase data
               </p>
             </div>
             <div className="mt-3 flex h-32 items-end gap-3">
-              {monthlyImpact.map((item) => (
+              {activeCampaigns.slice(0, 3).map((item) => (
                 <div
-                  key={item.month}
+                  key={item.id}
                   className="flex flex-1 flex-col items-center gap-2"
                 >
                   <div className="flex h-24 w-full items-end rounded-lg bg-orange-50">
                     <div
                       className="donor-progress-fill w-full rounded-lg bg-[var(--color-orange)]"
                       style={{
-                        height: `${Math.max(18, (item.amount / 350) * 100)}%`,
+                        height: `${Math.max(18, item.raised)}%`,
                       }}
                     />
                   </div>
                   <div className="text-center">
                     <p className="text-xs font-black text-stone-950">
-                      RM {item.amount}
+                      {item.raised}%
                     </p>
                     <p className="text-[0.68rem] font-semibold text-stone-400">
-                      {item.month}
+                      {item.urgency}
                     </p>
                   </div>
                 </div>
               ))}
+              {activeCampaigns.length === 0 ? (
+                <div className="grid h-full flex-1 place-items-center rounded-xl border border-dashed border-orange-200 bg-orange-50/25 text-center text-sm font-semibold text-stone-600">
+                  Waiting for approved campaigns.
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -476,40 +420,6 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             </Link>
           </div>
 
-          {donationActivities.length > 0 ? (
-            <div className="mt-4 overflow-hidden rounded-xl border border-orange-100">
-              <div className="hidden grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr] gap-4 bg-orange-50/55 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 md:grid">
-                <span>Campaign</span>
-                <span>Amount</span>
-                <span>Tx hash</span>
-                <span>Status</span>
-              </div>
-              <div className="divide-y divide-orange-100">
-                {donationActivities.map((activity) => (
-                  <div
-                    key={`${activity.campaign}-${activity.hash}`}
-                    className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr] md:items-center"
-                  >
-                    <div>
-                      <p className="font-semibold text-stone-950">
-                        {activity.campaign}
-                      </p>
-                      <p className="mt-1 text-xs font-medium text-stone-500">
-                        {activity.shelter} - {activity.date}
-                      </p>
-                    </div>
-                    <p className="font-semibold text-stone-800">
-                      {activity.amount}
-                    </p>
-                    <p className="font-mono text-xs font-semibold text-stone-500">
-                      {activity.hash}
-                    </p>
-                    <StatusPill status={activity.status} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
             <div className="mt-4 rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-[var(--color-orange)] shadow-sm">
                 <svg
@@ -530,7 +440,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               </h3>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-600">
                 Once you support a campaign, donation amount, transaction hash,
-                and confirmation status will appear here.
+                and confirmation status will appear here from the future donations table.
               </p>
               <Link
                 href="/Donor/discover"
@@ -539,7 +449,6 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 Browse campaigns
               </Link>
             </div>
-          )}
         </div>
 
         <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
@@ -561,7 +470,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           </div>
 
           <div className="mt-4 space-y-3">
-            {milestoneNotifications.map((notification) => (
+            {activeCampaignMilestones.length > 0 ? (
+            activeCampaignMilestones.map((notification) => (
               <article
                 key={`${notification.campaign}-${notification.milestone}`}
                 className="rounded-xl border border-orange-100 bg-orange-50/30 p-3"
@@ -581,7 +491,12 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   {notification.description}
                 </p>
               </article>
-            ))}
+            ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-4 text-sm font-semibold text-stone-600">
+                Milestone updates will appear after campaigns are approved.
+              </div>
+            )}
           </div>
         </div>
       </section>

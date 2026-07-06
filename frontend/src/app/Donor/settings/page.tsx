@@ -1,16 +1,25 @@
-import { getDashboardProfile } from "@/lib/dashboard-access";
+"use client";
 
-type SettingsProps = {
-  searchParams?: Promise<{
-    walletAddress?: string;
-  }>;
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+
+type DonorProfile = {
+  id: string;
+  role: string;
+  fullName: string;
+  email: string;
+  walletAddress: string;
+  accountStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  donorSince: string;
 };
 
 const readinessItems = [
   { label: "Donor account created", status: "Complete" },
   { label: "Wallet connected", status: "Complete" },
   { label: "RoleNFT credential", status: "Verified" },
-  { label: "Profile details", status: "Ready to update" },
+  { label: "Profile details", status: "Connected" },
 ];
 
 const communicationPrefs = [
@@ -20,8 +29,20 @@ const communicationPrefs = [
   "Support request replies",
 ];
 
+function formatDate(value?: string) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 function StatusPill({ status }: { status: string }) {
-  const isDone = status === "Complete" || status === "Verified";
+  const isDone = status === "Complete" || status === "Verified" || status === "Connected";
 
   return (
     <span
@@ -80,12 +101,107 @@ function SettingsPanel({
   );
 }
 
-export default async function DonorSettingsPage({ searchParams }: SettingsProps) {
-  const params = await searchParams;
-  const { profile } = await getDashboardProfile("donor", params?.walletAddress);
-  const displayName = profile?.full_name ?? "Anwen";
-  const email = profile?.email ?? "anwen@example.com";
-  const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? "-";
+export default function DonorSettingsPage() {
+  const searchParams = useSearchParams();
+  const walletAddress = searchParams.get("walletAddress") ?? "";
+  const [profile, setProfile] = useState<DonorProfile | null>(null);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadProfile() {
+      setIsLoading(true);
+      setErrorMessage("");
+      setStatusMessage("");
+
+      if (!walletAddress) {
+        setProfile(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/donor/profile?walletAddress=${encodeURIComponent(walletAddress)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message ?? "Unable to load donor profile.");
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProfile(result.profile);
+        setFullName(result.profile.fullName ?? "");
+        setEmail(result.profile.email ?? "");
+      } catch (error) {
+        if (isMounted) {
+          setProfile(null);
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load donor profile.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [walletAddress]);
+
+  async function saveProfile() {
+    setIsSaving(true);
+    setErrorMessage("");
+    setStatusMessage("");
+
+    try {
+      const response = await fetch("/api/donor/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          fullName,
+          email,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to save donor profile.");
+      }
+
+      setProfile(result.profile);
+      setFullName(result.profile.fullName ?? "");
+      setEmail(result.profile.email ?? "");
+      setStatusMessage(result.message ?? "Donor profile updated.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to save donor profile.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -97,136 +213,152 @@ export default async function DonorSettingsPage({ searchParams }: SettingsProps)
           Donor settings
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-          Keep account controls here so your profile page stays clean and easy
-          to read.
+          Manage the donor profile stored in Supabase for your connected wallet.
         </p>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <SettingsPanel
-          defaultOpen
-          title="Personal profile"
-          description="Update the donor details shown on your profile page."
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Full name
-              </span>
-              <input
-                defaultValue={displayName}
-                className="mt-2 h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Email
-              </span>
-              <input
-                defaultValue={email}
-                type="email"
-                className="mt-2 h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Phone number
-              </span>
-              <input
-                placeholder="Add phone number"
-                className="mt-2 h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition placeholder:text-stone-400 focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Display name
-              </span>
-              <input
-                defaultValue={displayName}
-                className="mt-2 h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100"
-              />
-            </label>
-            <label className="block sm:col-span-2">
-              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Wallet address
-              </span>
-              <div className="mt-2 break-all rounded-xl border border-orange-100 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-stone-700">
-                {walletAddress}
-              </div>
-            </label>
-          </div>
-          <button
-            type="button"
-            className="mt-4 rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
-          >
-            Save profile changes to Supabase
-          </button>
-          <p className="mt-2 text-xs font-medium text-stone-500">
-            Save action is UI-only until the Supabase update API is connected.
+      {isLoading ? (
+        <section className="rounded-2xl border border-orange-100 bg-white p-6 text-center shadow-sm">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
+          <p className="mt-3 text-sm font-semibold text-stone-600">
+            Loading donor profile...
           </p>
-        </SettingsPanel>
+        </section>
+      ) : null}
 
-        <SettingsPanel
-          title="Account readiness"
-          description="Check registration, wallet, and donor credential setup."
-        >
-          <div className="divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-            {readinessItems.map((item) => (
-              <div
-                key={item.label}
-                className="flex items-center justify-between gap-3 bg-orange-50/20 px-3 py-3"
-              >
-                <p className="text-sm font-semibold text-stone-800">
-                  {item.label}
-                </p>
-                <StatusPill status={item.status} />
-              </div>
-            ))}
-          </div>
-        </SettingsPanel>
+      {!isLoading && !walletAddress ? (
+        <section className="rounded-2xl border border-orange-100 bg-white p-6 text-center shadow-sm">
+          <h2 className="text-lg font-black text-stone-950">
+            Connect wallet to edit settings
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
+            Your donor profile is matched by wallet address.
+          </p>
+        </section>
+      ) : null}
 
-        <SettingsPanel
-          title="Notification preferences"
-          description="Choose the donor updates you want to receive."
-        >
-          <div className="space-y-2">
-            {communicationPrefs.map((pref) => (
-              <div
-                key={pref}
-                className="flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5"
-              >
-                <p className="text-sm font-semibold text-stone-800">{pref}</p>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                  On
+      {!isLoading && walletAddress ? (
+        <section className="grid gap-4 xl:grid-cols-2">
+          <SettingsPanel
+            defaultOpen
+            title="Personal profile"
+            description="Update the donor details saved in Supabase."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                  Full name
                 </span>
-              </div>
-            ))}
-          </div>
-        </SettingsPanel>
-
-        <SettingsPanel
-          title="Privacy and support"
-          description="Manage report visibility and support request preferences."
-        >
-          <div className="space-y-2">
-            {[
-              ["Show donor name on public receipts", "Private by default"],
-              ["Attach wallet to support reports", "Enabled"],
-              ["Receive admin replies", "Enabled"],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="flex items-center justify-between gap-4 rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5"
-              >
-                <p className="text-sm font-semibold text-stone-800">{label}</p>
-                <span className="text-right text-xs font-semibold text-stone-500">
-                  {value}
+                <input
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  className="mt-2 h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                  Email
                 </span>
-              </div>
-            ))}
-          </div>
-        </SettingsPanel>
-      </section>
+                <input
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  className="mt-2 h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                  Wallet address
+                </span>
+                <div className="mt-2 break-all rounded-xl border border-orange-100 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-stone-700">
+                  {profile?.walletAddress ?? walletAddress}
+                </div>
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={saveProfile}
+              disabled={isSaving || !fullName.trim() || !email.trim()}
+              className="mt-4 rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-200"
+            >
+              {isSaving ? "Saving..." : "Save profile changes"}
+            </button>
+            {statusMessage ? (
+              <p className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                {statusMessage}
+              </p>
+            ) : null}
+            {errorMessage ? (
+              <p className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                {errorMessage}
+              </p>
+            ) : null}
+          </SettingsPanel>
+
+          <SettingsPanel
+            defaultOpen
+            title="Supabase account record"
+            description="Read-only donor account values from your current tables."
+          >
+            <div className="divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
+              {[
+                ["Role", profile?.role ?? "donor"],
+                ["Account status", profile?.accountStatus ?? "-"],
+                ["Donor since", formatDate(profile?.donorSince)],
+                ["Last updated", formatDate(profile?.updatedAt)],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-center justify-between gap-3 bg-orange-50/20 px-3 py-3"
+                >
+                  <p className="text-sm font-semibold text-stone-500">{label}</p>
+                  <p className="text-right text-sm font-black text-stone-950">
+                    {value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </SettingsPanel>
+
+          <SettingsPanel
+            title="Account readiness"
+            description="Check registration, wallet, and donor credential setup."
+          >
+            <div className="divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
+              {readinessItems.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-center justify-between gap-3 bg-orange-50/20 px-3 py-3"
+                >
+                  <p className="text-sm font-semibold text-stone-800">
+                    {item.label}
+                  </p>
+                  <StatusPill status={item.status} />
+                </div>
+              ))}
+            </div>
+          </SettingsPanel>
+
+          <SettingsPanel
+            title="Notification preferences"
+            description="Preview only until donor notification tables are added."
+          >
+            <div className="space-y-2">
+              {communicationPrefs.map((pref) => (
+                <div
+                  key={pref}
+                  className="flex items-center justify-between rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5"
+                >
+                  <p className="text-sm font-semibold text-stone-800">{pref}</p>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                    Preview
+                  </span>
+                </div>
+              ))}
+            </div>
+          </SettingsPanel>
+        </section>
+      ) : null}
     </div>
   );
 }
