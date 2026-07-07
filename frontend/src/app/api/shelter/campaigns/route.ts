@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 
 type UrgencyLevel = "medium" | "high" | "critical";
 type MilestonePayload = {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const profile = await getShelterProfile(walletAddress);
+    const profile = await requireActiveShelter(walletAddress);
 
     if (!profile) {
       return NextResponse.json(
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
             ? error.message
             : "Unable to load campaigns.",
       },
-      { status: 500 },
+      { status: error instanceof ShelterAccessError ? error.status : 500 },
     );
   }
 }
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const profile = await getShelterProfile(walletAddress);
+    const profile = await requireActiveShelter(walletAddress);
 
     if (!profile) {
       return NextResponse.json(
