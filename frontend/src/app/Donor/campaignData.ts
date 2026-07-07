@@ -131,9 +131,12 @@ export const campaigns = [
   },
 ];
 
-export type Campaign = (typeof campaigns)[number];
+export type Campaign = (typeof campaigns)[number] & {
+  imageUrl?: string | null;
+  shelterImageUrl?: string | null;
+};
 
-export function getShelters() {
+export function getShelters(sourceCampaigns: Campaign[] = campaigns) {
   const shelterMap = new Map<string, {
     id: string;
     name: string;
@@ -141,11 +144,12 @@ export function getShelters() {
     verifiedSince: string;
     animalsHelped: string;
     imageClass: string;
+    imageUrl?: string | null;
     story: string;
     campaigns: Campaign[];
   }>();
 
-  campaigns.forEach((campaign) => {
+  sourceCampaigns.forEach((campaign) => {
     const existing = shelterMap.get(campaign.shelterId);
 
     if (existing) {
@@ -160,6 +164,7 @@ export function getShelters() {
       verifiedSince: campaign.verifiedSince,
       animalsHelped: campaign.animalsHelped,
       imageClass: campaign.imageClass,
+      imageUrl: campaign.shelterImageUrl ?? null,
       story: campaign.story,
       campaigns: [campaign],
     });
