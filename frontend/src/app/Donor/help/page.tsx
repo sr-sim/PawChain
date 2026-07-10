@@ -24,19 +24,19 @@ const helpTopics = [
 
 const faqs = [
   {
-    question: "Why is my donation shown as preview data?",
+    question: "Why is donation checkout still preview-only?",
     answer:
-      "The current donor UI is ready for presentation. Real donation records will appear after the donation smart contract and backend history are connected.",
+      "PawChain stores confirmed donation history in Supabase, but new checkout is kept preview-only until the smart contract returns a real transaction hash.",
   },
   {
     question: "Who checks milestone proof?",
     answer:
-      "Milestone proof is intended to be reviewed by admin before campaign funds are released.",
+      "Admin reviews shelter milestone proof before the milestone status and fund release information are reflected to donors.",
   },
   {
     question: "Can I report a shelter or campaign?",
     answer:
-      "Yes. The report flow is represented here as a donor support request and can later be connected to an admin review queue.",
+      "Yes. Reports are saved as donor support requests in Supabase so the admin side can review and respond.",
   },
 ];
 
@@ -77,7 +77,7 @@ export default function DonorHelpPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Ask questions, report campaign concerns, or check how donation and
-          milestone review should work once live data is connected.
+          milestone review works across PawChain records.
         </p>
       </section>
 
