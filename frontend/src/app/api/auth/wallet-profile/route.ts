@@ -94,6 +94,14 @@ export async function GET(request: NextRequest) {
         profile.role === "shelter" &&
         (application?.status === "pending" || application?.status === "rejected");
 
+      if (!roleStatus.hasNFT && !isPendingShelter) {
+        return NextResponse.json({
+          profile: null,
+          nftVerified: false,
+          needsRegistration: true,
+        });
+      }
+
       return NextResponse.json({
         profile: {
           role: profile.role,
@@ -101,22 +109,19 @@ export async function GET(request: NextRequest) {
           fullName: profile.full_name,
           application,
           nftVerified: roleStatus.hasNFT,
-          directDashboard: !isPendingShelter,
+          directDashboard: roleStatus.hasNFT && !isPendingShelter,
         },
         nftVerified: roleStatus.hasNFT,
         contractRole: roleStatus.contractRole,
-        needsRegistration: false,
       });
     }
 
-    const { data: fallbackProfiles } = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
       .select("id, role, email, full_name")
       .ilike("wallet_address", walletAddress)
-      .limit(5);
-    const profile = (fallbackProfiles ?? []).find((item) =>
-      roleStatus.hasNFT ? item.role === roleStatus.dbRole : true,
-    );
+      .eq("role", roleStatus.hasNFT ? roleStatus.dbRole : "shelter")
+      .maybeSingle();
     const application =
       profile?.role === "shelter"
         ? await getShelterApplication(supabase, profile.id)
@@ -124,6 +129,14 @@ export async function GET(request: NextRequest) {
     const isPendingShelter =
       profile?.role === "shelter" &&
       (application?.status === "pending" || application?.status === "rejected");
+
+    if (!roleStatus.hasNFT && !isPendingShelter) {
+      return NextResponse.json({
+        profile: null,
+        nftVerified: false,
+        needsRegistration: true,
+      });
+    }
 
     return NextResponse.json(
       {
@@ -134,7 +147,7 @@ export async function GET(request: NextRequest) {
               fullName: profile.full_name,
               application,
               nftVerified: roleStatus.hasNFT,
-              directDashboard: !isPendingShelter,
+              directDashboard: roleStatus.hasNFT && !isPendingShelter,
             }
           : null,
         nftVerified: roleStatus.hasNFT,

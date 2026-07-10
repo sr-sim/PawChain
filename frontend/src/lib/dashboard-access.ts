@@ -41,6 +41,15 @@ export async function getDashboardProfile(
 
   const roleStatus = await getRoleNFTStatus(walletAddress);
 
+  if (!roleStatus.hasNFT || roleStatus.dbRole !== expectedRole) {
+    return {
+      userId: null,
+      profile: null,
+      accessMode: "wallet" as const,
+      roleNFT: roleStatus.roleNFT,
+    };
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("id, full_name, email, role, wallet_address")
@@ -55,10 +64,7 @@ export async function getDashboardProfile(
   return {
     userId: profile?.id ?? null,
     profile: profile ? { ...profile, shelter_image_url: shelterImageUrl } : null,
-    accessMode:
-      roleStatus.hasNFT && roleStatus.dbRole === expectedRole
-        ? ("wallet" as const)
-        : ("profile" as const),
+    accessMode: "wallet" as const,
     roleNFT: roleStatus.roleNFT,
   };
 }
