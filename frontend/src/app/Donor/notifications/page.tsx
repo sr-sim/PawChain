@@ -1,20 +1,43 @@
+"use client";
+
 import Link from "next/link";
-import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+
+type DonorNotification = {
+  id: string;
+  campaign_id: string | null;
+  title: string;
+  message: string;
+  status: string;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+};
 
 const statusStyles: Record<string, string> = {
-  Active: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Submitted: "border-amber-200 bg-amber-50 text-amber-700",
-  Rejected: "border-red-200 bg-red-50 text-red-700",
-  Pending: "border-slate-200 bg-slate-50 text-slate-600",
+  info: "border-slate-200 bg-slate-50 text-slate-600",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  warning: "border-amber-200 bg-amber-50 text-amber-700",
+  urgent: "border-red-200 bg-red-50 text-red-700",
 };
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={[
-        "inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold",
-        statusStyles[status] ?? "border-slate-200 bg-slate-50 text-slate-600",
+        "inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold capitalize",
+        statusStyles[status] ?? statusStyles.info,
       ].join(" ")}
     >
       {status}
@@ -22,44 +45,112 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-export default async function DonorNotificationsPage() {
-  let campaigns: Awaited<ReturnType<typeof getActiveDonorCampaigns>> = [];
+export default function DonorNotificationsPage() {
+  const searchParams = useSearchParams();
+  const walletAddress = searchParams.get("walletAddress") ?? "";
+  const [notifications, setNotifications] = useState<DonorNotification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<"All" | "Unread" | "Read">("All");
 
-  try {
-    campaigns = await getActiveDonorCampaigns();
-  } catch {
-    campaigns = [];
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadNotifications() {
+      setIsLoading(true);
+      setErrorMessage("");
+
+      if (!walletAddress) {
+        setNotifications([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/donor/notifications?walletAddress=${encodeURIComponent(walletAddress)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message ?? "Unable to load notifications.");
+        }
+
+        if (isMounted) {
+          setNotifications(
+            Array.isArray(result.notifications) ? result.notifications : [],
+          );
+        }
+      } catch (error) {
+        if (isMounted) {
+          setNotifications([]);
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load notifications.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadNotifications();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [walletAddress]);
+
+  async function markAsRead(notificationId: string) {
+    try {
+      const response = await fetch("/api/donor/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          notificationId,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to update notification.");
+      }
+
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notificationId
+            ? {
+                ...item,
+                is_read: true,
+                read_at: result.notification?.read_at ?? new Date().toISOString(),
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to update notification.",
+      );
+    }
   }
 
-  const milestoneUpdates = campaigns.flatMap((campaign) =>
-    (campaign.milestoneDetails ??
-      campaign.milestones.map((milestone) => ({
-        ...milestone,
-        description: "",
-        requirement: "",
-        status: "Pending",
-      }))
-    ).map((milestone, index) => ({
-      id: `${campaign.id}-${index}`,
-      campaignId: campaign.id,
-      campaign: campaign.title,
-      shelter: campaign.shelter,
-      title: milestone.title,
-      percentage: milestone.percentage,
-      status: milestone.status,
-      requirement: milestone.requirement,
-      description:
-        milestone.description ||
-        `${campaign.shelter} planned this milestone for ${milestone.percentage}% of the campaign release.`,
-    })),
-  );
-
-  const counts = {
-    all: milestoneUpdates.length,
-    pending: milestoneUpdates.filter((item) => item.status === "Pending").length,
-    submitted: milestoneUpdates.filter((item) => item.status === "Submitted").length,
-    approved: milestoneUpdates.filter((item) => item.status === "Approved").length,
-  };
+  const unreadCount = notifications.filter((item) => !item.is_read).length;
+  const readCount = notifications.length - unreadCount;
+  const filteredNotifications =
+    activeTab === "Unread"
+      ? notifications.filter((item) => !item.is_read)
+      : activeTab === "Read"
+        ? notifications.filter((item) => item.is_read)
+        : notifications;
 
   return (
     <div className="space-y-5">
@@ -70,12 +161,11 @@ export default async function DonorNotificationsPage() {
               Notifications
             </p>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
-              Campaign milestone updates
+              Donor notification inbox
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Review real milestone plans and proof statuses from active
-              Supabase campaigns. Personal unread/read history will be added
-              after donor notification records exist.
+              Read donor-specific milestone updates, report replies, and admin
+              messages saved in Supabase.
             </p>
           </div>
           <Link
@@ -87,12 +177,11 @@ export default async function DonorNotificationsPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-3">
         {[
-          ["All updates", counts.all],
-          ["Pending", counts.pending],
-          ["Submitted", counts.submitted],
-          ["Approved", counts.approved],
+          ["All notifications", notifications.length],
+          ["Unread", unreadCount],
+          ["Read", readCount],
         ].map(([label, value]) => (
           <div
             key={label}
@@ -105,7 +194,7 @@ export default async function DonorNotificationsPage() {
               {value}
             </p>
             <p className="mt-1 text-xs font-medium text-stone-500">
-              From campaign milestones
+              From donor_notifications
             </p>
           </div>
         ))}
@@ -118,79 +207,101 @@ export default async function DonorNotificationsPage() {
               Inbox
             </p>
             <h2 className="mt-1 text-xl font-black text-stone-950">
-              Latest milestone records
+              Latest updates
             </h2>
           </div>
           <p className="text-xs font-medium text-stone-500">
-            {milestoneUpdates.length} records
+            {filteredNotifications.length} shown
           </p>
         </div>
 
-        <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/25 p-3">
-          <p className="text-sm font-semibold text-stone-950">
-            Read/unread tabs are waiting for `donor_notifications`.
-          </p>
-          <p className="mt-1 text-xs leading-5 text-stone-600">
-            For now, this page shows real campaign milestone status shared by
-            shelters and admins.
-          </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(["All", "Unread", "Read"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={[
+                "rounded-full border px-4 py-2 text-sm font-black transition",
+                activeTab === tab
+                  ? "border-[var(--color-orange)] bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200/70"
+                  : "border-orange-100 bg-orange-50/60 text-stone-700 hover:bg-orange-100",
+              ].join(" ")}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
+
+        {errorMessage ? (
+          <p className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            {errorMessage}
+          </p>
+        ) : null}
 
         <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-          {milestoneUpdates.length > 0 ? (
-            milestoneUpdates.map((item) => (
+          {isLoading ? (
+            <div className="p-6 text-center">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
+              <p className="mt-3 text-sm font-semibold text-stone-600">
+                Loading notifications...
+              </p>
+            </div>
+          ) : filteredNotifications.length > 0 ? (
+            filteredNotifications.map((item) => (
               <article
                 key={item.id}
-                className="grid gap-3 bg-white px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
+                className={[
+                  "grid gap-3 px-4 py-3 sm:grid-cols-[1fr_auto] sm:items-start",
+                  item.is_read ? "bg-white" : "bg-orange-50/35",
+                ].join(" ")}
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-[var(--color-orange)]" />
+                    {!item.is_read ? (
+                      <span className="h-2 w-2 rounded-full bg-[var(--color-orange)]" />
+                    ) : null}
                     <p className="text-sm font-semibold text-stone-950">
                       {item.title}
                     </p>
                   </div>
                   <p className="mt-1 text-xs font-medium text-stone-500">
-                    {item.campaign} - {item.shelter}
+                    {formatDate(item.created_at)}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-stone-600">
-                    {item.description}
+                    {item.message}
                   </p>
-                  {item.requirement ? (
-                    <p className="mt-2 rounded-xl border border-orange-100 bg-orange-50/35 px-3 py-2 text-xs font-semibold text-stone-600">
-                      Requirement: {item.requirement}
-                    </p>
-                  ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Link
-                      href={`/Donor/campaigns/${item.campaignId}`}
-                      className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
-                    >
-                      Open campaign
-                    </Link>
-                    <Link
-                      href="/Donor/tracking"
-                      className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 transition hover:border-[var(--color-orange)] hover:bg-orange-50"
-                    >
-                      View tracking
-                    </Link>
+                    {item.campaign_id ? (
+                      <Link
+                        href={`/Donor/campaigns/${item.campaign_id}`}
+                        className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
+                      >
+                        Open campaign
+                      </Link>
+                    ) : null}
+                    {!item.is_read ? (
+                      <button
+                        type="button"
+                        onClick={() => markAsRead(item.id)}
+                        className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 transition hover:border-[var(--color-orange)] hover:bg-orange-50"
+                      >
+                        Mark as read
+                      </button>
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2 sm:items-end">
-                  <StatusPill status={item.status} />
-                  <span className="text-xs font-semibold text-stone-500">
-                    {item.percentage}% release
-                  </span>
-                </div>
+                <StatusPill status={item.status} />
               </article>
             ))
           ) : (
             <div className="p-6 text-center">
               <h3 className="text-base font-black text-stone-950">
-                No milestone updates yet
+                No donor notifications yet
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                Approved active campaigns and milestone plans will appear here.
+                Admin replies, report updates, and milestone notices will appear
+                here after records are added to `donor_notifications`.
               </p>
             </div>
           )}

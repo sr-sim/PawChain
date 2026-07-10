@@ -8,6 +8,7 @@ import { DonorSidebar } from "@/app/components/DonorSidebar";
 
 export function DonorShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { address, isConnected } = useAppKitAccount();
   const pathname = usePathname();
   const router = useRouter();
@@ -34,12 +35,45 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
     router.replace(`${pathname}?${nextParams.toString()}`);
   }, [address, isConnected, pathname, router, searchParams]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUnreadCount() {
+      if (!isConnected || !address) {
+        setUnreadCount(0);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/donor/notifications?walletAddress=${encodeURIComponent(address)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+
+        if (isMounted && response.ok) {
+          setUnreadCount(Number(result.unreadCount) || 0);
+        }
+      } catch {
+        if (isMounted) {
+          setUnreadCount(0);
+        }
+      }
+    }
+
+    loadUnreadCount();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [address, isConnected, pathname]);
+
   return (
     <>
       <DashboardTopBar
         role="Donor"
         isMenuOpen={isSidebarOpen}
-        notificationCount={1}
+        notificationCount={unreadCount}
         notificationHref={notificationHref}
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
       />

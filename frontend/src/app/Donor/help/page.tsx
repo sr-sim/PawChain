@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import DonorReportForm from "../../components/DonorReportForm";
+import { DonorSupportRequestList } from "@/app/components/DonorSupportRequestList";
 
 const helpTopics = [
   {
@@ -36,21 +37,6 @@ const faqs = [
     question: "Can I report a shelter or campaign?",
     answer:
       "Yes. The report flow is represented here as a donor support request and can later be connected to an admin review queue.",
-  },
-];
-
-const reportStatuses = [
-  {
-    id: "RPT-2026-014",
-    subject: "Medical Recovery Fund proof concern",
-    status: "Under admin review",
-    updated: "Today, 11:15 AM",
-  },
-  {
-    id: "RPT-2026-009",
-    subject: "Shelter spending clarification",
-    status: "Reply received",
-    updated: "24 Jun 2026",
   },
 ];
 
@@ -120,35 +106,10 @@ export default function DonorHelpPage() {
                 </h2>
               </div>
               <p className="text-xs font-medium text-stone-500">
-                Preview queue
+                Supabase queue
               </p>
             </div>
-            <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-              {reportStatuses.map((report) => (
-                <article
-                  key={report.id}
-                  className="grid gap-2 bg-orange-50/20 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-stone-950">
-                      {report.subject}
-                    </p>
-                    <p className="mt-1 text-xs font-medium text-stone-500">
-                      {report.id} - {report.updated}
-                    </p>
-                  </div>
-                  <span className="inline-flex min-w-32 justify-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                    {report.status}
-                  </span>
-                  <Link
-                    href={`/Donor/reports/${report.id}`}
-                    className="text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950 sm:col-span-2"
-                  >
-                    View report detail
-                  </Link>
-                </article>
-              ))}
-            </div>
+            <DonorSupportRequestList />
           </div>
 
           <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
