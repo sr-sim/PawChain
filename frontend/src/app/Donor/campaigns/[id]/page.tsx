@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { campaigns } from "../../campaignData";
+import { getDonorCampaignById } from "@/lib/donor-campaigns";
+
+export const dynamic = "force-dynamic";
 
 function getUrgencyStyle(urgency: string) {
   if (urgency === "Critical") {
@@ -20,28 +22,49 @@ export default async function DonorCampaignDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const campaign = campaigns.find((item) => item.id === id);
+  const campaign = await getDonorCampaignById(id);
 
   if (!campaign) {
     notFound();
   }
 
+  const imageUrl =
+    "imageUrl" in campaign && typeof campaign.imageUrl === "string"
+      ? campaign.imageUrl
+      : null;
+  const milestoneItems =
+    campaign.milestoneDetails ??
+    campaign.milestones.map((milestone) => ({
+      ...milestone,
+      description: "",
+      requirement: "",
+      status: "Pending",
+    }));
+
   return (
     <div className="space-y-5">
       <Link
-        href={`/Donor/discover?campaign=${campaign.id}`}
+        href="/Donor/discover"
         className="inline-flex items-center rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
       >
         Back to discover
       </Link>
 
       <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
-        <div
-          className={[
-            "min-h-56 bg-gradient-to-br",
-            campaign.imageClass,
-          ].join(" ")}
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="h-64 w-full object-cover"
+          />
+        ) : (
+          <div
+            className={[
+              "min-h-56 bg-gradient-to-br",
+              campaign.imageClass,
+            ].join(" ")}
+          />
+        )}
         <div className="p-5 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -148,7 +171,7 @@ export default async function DonorCampaignDetailPage({
               Milestone release plan
             </h2>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {campaign.milestones.map((milestone, index) => (
+              {milestoneItems.map((milestone, index) => (
                 <div
                   key={milestone.title}
                   className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"
@@ -162,6 +185,16 @@ export default async function DonorCampaignDetailPage({
                   <p className="mt-1 text-xs font-semibold text-[var(--color-orange)]">
                     {milestone.percentage}% release
                   </p>
+                  {milestone.description ? (
+                    <p className="mt-2 text-xs leading-5 text-stone-600">
+                      {milestone.description}
+                    </p>
+                  ) : null}
+                  {milestone.requirement ? (
+                    <p className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
+                      Requirement: {milestone.requirement}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>

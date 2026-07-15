@@ -28,6 +28,45 @@ html {
   background: rgba(var(--color-orange-rgb), 0.22);
 }
 
+.admin-chart-enter {
+  animation: admin-chart-reveal 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.admin-chart-centre {
+  animation: admin-chart-centre-in 420ms ease-out 420ms both;
+}
+
+@keyframes admin-chart-reveal {
+  from {
+    clip-path: circle(0% at 50% 50%);
+    opacity: 0;
+    transform: rotate(-55deg) scale(0.72);
+  }
+  to {
+    clip-path: circle(72% at 50% 50%);
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes admin-chart-centre-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-chart-enter,
+  .admin-chart-centre {
+    animation: none;
+  }
+}
+
 .animate-fade-up {
   animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

@@ -371,6 +371,33 @@ export async function mintRoleNFT(walletAddress: string, role: DbRole) {
   return { txHash: hash };
 }
 
+export async function revokeRoleNFT(walletAddress: string) {
+  const config = getRoleNFTConfig();
+  const wallet = normalizeWallet(walletAddress);
+  const privateKey = getRequiredEnv("ROLE_NFT_MINTER_PRIVATE_KEY");
+
+  if (!privateKey.startsWith("0x")) {
+    throw new Error("ROLE_NFT_MINTER_PRIVATE_KEY must start with 0x.");
+  }
+
+  const account = privateKeyToAccount(privateKey as Address);
+  const client = createWalletClient({
+    account,
+    chain: config.chain,
+    transport: http(config.rpcUrl),
+  }).extend(publicActions);
+
+  const hash = await client.writeContract({
+    address: config.address,
+    abi: roleNFTAbi,
+    functionName: "revokeRoleNFT",
+    args: [wallet],
+  });
+
+  await client.waitForTransactionReceipt({ hash });
+  return { txHash: hash };
+}
+
 export async function upgradeDonorBadge(
   walletAddress: string,
   level: DonorBadgeLevel,

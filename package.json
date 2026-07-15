@@ -9,7 +9,7 @@
     "seed:role-nfts": "npm --prefix frontend run seed:role-nfts",
     "test:backend": "npm --prefix backend test",
     "build:frontend": "npm --prefix frontend run build",
-    "dev:windows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\\Users\\User\\PawChain\\PawChain\\backend''; npm.cmd run node'; Start-Sleep -Seconds 3; Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\\Users\\User\\PawChain\\PawChain\\frontend''; npm.cmd run dev'\"",
-    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process powershell -ArgumentList '-NoExit','-Command','Set-Location ''C:\\Users\\User\\PawChain\\PawChain\\backend''; npm.cmd run node'; Start-Sleep -Seconds 10; npm.cmd run deploy; npm.cmd run seed:role-nfts; npm.cmd run frontend\""
+    "dev:windows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root=(Get-Location).Path; Start-Process powershell -WorkingDirectory (Join-Path $root 'backend') -ArgumentList '-NoExit','-Command','npm.cmd run node'; Start-Sleep -Seconds 3; Start-Process powershell -WorkingDirectory (Join-Path $root 'frontend') -ArgumentList '-NoExit','-Command','npm.cmd run dev'\"",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root=(Get-Location).Path; Start-Process powershell -WorkingDirectory (Join-Path $root 'backend') -ArgumentList '-NoExit','-Command','npm.cmd run node'; Start-Sleep -Seconds 10; npm.cmd run deploy; npm.cmd run seed:role-nfts; npm.cmd run frontend\""
   }
 }

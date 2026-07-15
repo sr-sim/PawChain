@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, role")
+    .select("id, role, account_status, deactivation_reason")
     .ilike("wallet_address", walletAddress)
     .maybeSingle();
 
@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     status: application.status,
+    accountStatus: profile.account_status,
+    deactivationReason: profile.deactivation_reason,
     application: {
       status: application.status,
       shelterName: application.shelter_name,

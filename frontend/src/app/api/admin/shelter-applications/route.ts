@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const { data: applications, error } = await supabase
     .from("shelter_applications")
     .select(
-      "id, user_id, shelter_name, registration_id, contact_phone, website_url, shelter_address, organization_description, proof_document_path, status, reviewed_at, rejection_reason, created_at",
+      "id, user_id, shelter_name, registration_id, contact_phone, website_url, shelter_address, organization_description, proof_document_path, status, reviewed_by, reviewed_at, rejection_reason, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 
@@ -54,25 +54,38 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createAdminClient();
+  const { data: adminProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("wallet_address", adminWallet.toLowerCase())
+    .maybeSingle();
 
-  if (action === "approve") {
-    const { data: application, error: applicationError } = await supabase
+  const { data: currentApplication, error: currentApplicationError } =
+    await supabase
       .from("shelter_applications")
-      .select("user_id")
+      .select("id, user_id, status")
       .eq("id", applicationId)
       .single();
 
-    if (applicationError) {
-      return NextResponse.json(
-        { message: applicationError.message },
-        { status: 500 },
-      );
-    }
+  if (currentApplicationError) {
+    return NextResponse.json(
+      { message: currentApplicationError.message },
+      { status: 500 },
+    );
+  }
 
+  if (currentApplication.status !== "pending") {
+    return NextResponse.json(
+      { message: "Only pending applications can be reviewed." },
+      { status: 409 },
+    );
+  }
+
+  if (action === "approve") {
     const { data: shelterProfile, error: profileError } = await supabase
       .from("profiles")
       .select("wallet_address")
-      .eq("id", application.user_id)
+      .eq("id", currentApplication.user_id)
       .eq("role", "shelter")
       .single();
 
@@ -103,6 +116,7 @@ export async function POST(request: NextRequest) {
       .update({
         status: "approved",
         reviewed_at: new Date().toISOString(),
+        reviewed_by: adminProfile?.id ?? null,
         rejection_reason: null,
       })
       .eq("id", applicationId);
@@ -114,12 +128,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "approved" });
   }
 
+  if (!rejectionReason) {
+    return NextResponse.json(
+      { message: "A rejection reason is required." },
+      { status: 400 },
+    );
+  }
+
   const { error } = await supabase
     .from("shelter_applications")
     .update({
       status: "rejected",
       reviewed_at: new Date().toISOString(),
-      rejection_reason: rejectionReason || "Application rejected by admin.",
+      reviewed_by: adminProfile?.id ?? null,
+      rejection_reason: rejectionReason,
     })
     .eq("id", applicationId);
 

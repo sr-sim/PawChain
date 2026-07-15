@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 
 type ProofFile = {
   name?: unknown;
@@ -78,7 +79,7 @@ export async function PATCH(
       );
     }
 
-    const profile = await getShelterProfile(walletAddress);
+    const profile = await requireActiveShelter(walletAddress);
 
     if (!profile) {
       return NextResponse.json(
@@ -164,7 +165,7 @@ export async function PATCH(
             ? error.message
             : "Unable to upload milestone proof.",
       },
-      { status: 500 },
+      { status: error instanceof ShelterAccessError ? error.status : 500 },
     );
   }
 }

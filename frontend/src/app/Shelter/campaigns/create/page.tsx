@@ -236,6 +236,19 @@ export default function CreateCampaignPage() {
   const [milestones, setMilestones] = useState<MilestoneForm[]>(initialMilestones);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deactivationReason, setDeactivationReason] = useState("");
+
+  useEffect(() => {
+    if (!address || !isConnected) return;
+    void fetch(`/api/shelter/application-status?walletAddress=${encodeURIComponent(address)}`)
+      .then((response) => response.json())
+      .then((result) => {
+        if (result.accountStatus === "deactivated") {
+          setDeactivationReason(result.deactivationReason || "This shelter account is deactivated.");
+        }
+      })
+      .catch(() => undefined);
+  }, [address, isConnected]);
 
   const totalPercentage = useMemo(
     () =>
@@ -331,6 +344,11 @@ export default function CreateCampaignPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (deactivationReason) {
+      setError(`Campaign creation is disabled: ${deactivationReason}`);
+      return;
+    }
+
     if (!address) {
       open();
       return;
@@ -384,6 +402,12 @@ export default function CreateCampaignPage() {
 
   return (
     <div className="space-y-6">
+      {deactivationReason ? (
+        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm font-bold text-stone-700">
+          <span className="font-black text-[var(--color-orange)]">Account deactivated:</span>{" "}
+          {deactivationReason} Campaign creation is disabled.
+        </div>
+      ) : null}
       <section className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,rgba(var(--color-white-rgb),0.98),rgba(var(--color-cream-rgb),0.9)_48%,rgba(var(--color-peach-rgb),0.5))] p-5 shadow-[0_22px_60px_rgba(155,86,20,0.12)] sm:p-6">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
           Create Campaign
@@ -697,6 +721,7 @@ export default function CreateCampaignPage() {
                   setStep(2);
                 }
               }}
+              disabled={Boolean(deactivationReason)}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 hover:bg-[var(--color-orange)]"
             >
               Next Step
@@ -705,7 +730,7 @@ export default function CreateCampaignPage() {
           ) : (
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || Boolean(deactivationReason)}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 hover:bg-[var(--color-orange)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Submitting..." : "Submit Campaign for Approval"}

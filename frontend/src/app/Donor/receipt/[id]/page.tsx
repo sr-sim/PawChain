@@ -1,62 +1,63 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { campaigns } from "../../campaignData";
+import { getDonorDonationById } from "@/lib/donor-donations";
 
-const receipts = [
-  {
-    id: "DON-1007",
-    campaignId: "medical-recovery",
-    amount: "RM 350.00",
-    date: "18 Jun 2026",
-    wallet: "0x1FE2Ee638b8b12D8b4b0fb92b444557D40bC7611",
-    txHash:
-      "0xa71f2c8d9e3b4450b8a62f407ad58c1f3389db17346ed9c8ac49f8073e0b9182",
-    status: "Under review",
-  },
-  {
-    id: "DON-1004",
-    campaignId: "food-support",
-    amount: "RM 200.00",
-    date: "02 Jun 2026",
-    wallet: "0x1FE2Ee638b8b12D8b4b0fb92b444557D40bC7611",
-    txHash:
-      "0x6b0f1ad9349338e58a25311197c063f1dd8739c8bcdb86a29f25b62de0532aaf",
-    status: "Funds released",
-  },
-  {
-    id: "DON-1001",
-    campaignId: "kennel-upgrade",
-    amount: "RM 150.00",
-    date: "21 May 2026",
-    wallet: "0x1FE2Ee638b8b12D8b4b0fb92b444557D40bC7611",
-    txHash:
-      "0xd10944a47f12c1f96c51fc9dfd68f731e66fc884bdc3cb50870a62e247cfba93",
-    status: "Pending proof",
-  },
-];
+type ReceiptPageProps = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{
+    walletAddress?: string;
+  }>;
+};
+
+const statusStyles: Record<string, string> = {
+  Confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Pending: "border-amber-200 bg-amber-50 text-amber-700",
+  Failed: "border-red-200 bg-red-50 text-red-700",
+  Refunded: "border-sky-200 bg-sky-50 text-sky-700",
+};
 
 function shortHash(value: string) {
   return `${value.slice(0, 12)}...${value.slice(-10)}`;
 }
 
+function formatAmount(amount: number, currency: string) {
+  return `${currency} ${amount.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 export default async function DonorReceiptPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+  searchParams,
+}: ReceiptPageProps) {
   const { id } = await params;
-  const receipt = receipts.find((item) => item.id === id);
+  const query = await searchParams;
+  const walletAddress = query?.walletAddress;
+  const receipt = await getDonorDonationById(id, walletAddress);
 
   if (!receipt) {
     notFound();
   }
 
-  const campaign = campaigns.find((item) => item.id === receipt.campaignId);
+  const trackingHref = walletAddress
+    ? `/Donor/tracking?walletAddress=${encodeURIComponent(walletAddress)}`
+    : "/Donor/tracking";
 
   return (
     <div className="space-y-5">
       <Link
-        href="/Donor/tracking"
+        href={trackingHref}
         className="inline-flex items-center rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
       >
         Back to tracking
@@ -68,14 +69,21 @@ export default async function DonorReceiptPage({
         </p>
         <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
+            <h1 className="break-all text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
               {receipt.id}
             </h1>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              A donor-facing receipt preview for the blockchain donation record.
+              Verified donor receipt generated from the Supabase donation
+              history record.
             </p>
           </div>
-          <span className="w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+          <span
+            className={[
+              "w-fit rounded-full border px-3 py-1 text-xs font-semibold",
+              statusStyles[receipt.status] ??
+                "border-slate-200 bg-slate-50 text-slate-600",
+            ].join(" ")}
+          >
             {receipt.status}
           </span>
         </div>
@@ -87,20 +95,21 @@ export default async function DonorReceiptPage({
             <h2 className="text-xl font-black text-stone-950">
               Receipt details
             </h2>
-            <button
-              type="button"
+            <Link
+              href={`/Donor/campaigns/${receipt.campaignId}`}
               className="w-fit rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
             >
-              Print receipt
-            </button>
+              View campaign
+            </Link>
           </div>
           <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
             {[
-              ["Campaign", campaign?.title ?? "Campaign"],
-              ["Shelter", campaign?.shelter ?? "-"],
-              ["Amount", receipt.amount],
-              ["Date", receipt.date],
-              ["Wallet", receipt.wallet],
+              ["Campaign", receipt.campaignTitle],
+              ["Shelter", receipt.shelterName],
+              ["Location", receipt.location],
+              ["Amount", formatAmount(receipt.amount, receipt.currency)],
+              ["Date", formatDate(receipt.createdAt)],
+              ["Wallet", walletAddress ?? "-"],
               ["Transaction hash", shortHash(receipt.txHash)],
             ].map(([label, value]) => (
               <div
@@ -123,7 +132,9 @@ export default async function DonorReceiptPage({
                   key={index}
                   className={[
                     "rounded-sm",
-                    [0, 2, 4, 6, 8, 10, 12, 16, 18, 20, 22, 24].includes(index)
+                    [0, 2, 4, 6, 8, 10, 12, 16, 18, 20, 22, 24].includes(
+                      index,
+                    )
                       ? "bg-stone-900"
                       : "bg-orange-100",
                   ].join(" ")}
@@ -131,14 +142,14 @@ export default async function DonorReceiptPage({
               ))}
             </div>
             <p className="mt-3 text-center text-xs font-semibold text-stone-500">
-              Transaction verification preview
+              Transaction hash linked to donor history
             </p>
           </div>
           <div className="mt-4 space-y-3">
             {[
-              "Wallet signature will confirm donor ownership.",
-              "Smart contract record will link the campaign and amount.",
-              "Milestone status will update after admin review.",
+              "Donation record belongs to the connected donor wallet.",
+              "Campaign and shelter context are loaded from Supabase.",
+              "Smart contract explorer link can be added after Web3 network is finalized.",
             ].map((item, index) => (
               <div
                 key={item}
@@ -151,12 +162,14 @@ export default async function DonorReceiptPage({
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
-          >
-            Copy transaction hash
-          </button>
+          <div className="mt-4 rounded-xl border border-orange-100 bg-white p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
+              Full transaction hash
+            </p>
+            <p className="mt-2 break-all text-sm font-semibold text-stone-950">
+              {receipt.txHash}
+            </p>
+          </div>
         </div>
       </section>
     </div>

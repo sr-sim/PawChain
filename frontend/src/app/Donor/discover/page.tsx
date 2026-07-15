@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { campaigns, getShelters } from "../campaignData";
+import { getShelters, type Campaign } from "../campaignData";
+
+type DonorCampaign = Campaign & {
+  imageUrl?: string | null;
+  source?: "supabase";
+};
 
 const urgencies = ["All", "Critical", "High", "Medium"];
 const locations = ["All", "Kuala Lumpur", "Selangor", "Penang", "Johor"];
@@ -61,11 +66,26 @@ function VerifiedBadge() {
 
 function CampaignImage({
   imageClass,
+  imageUrl,
   size = "card",
 }: {
   imageClass: string;
+  imageUrl?: string | null;
   size?: "card" | "hero";
 }) {
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt=""
+        className={[
+          "w-full rounded-xl object-cover",
+          size === "hero" ? "min-h-52" : "h-32",
+        ].join(" ")}
+      />
+    );
+  }
+
   return (
     <div
       className={[
@@ -113,6 +133,12 @@ function SelectField({
 
 export default function DonorDiscoverPage() {
   const searchParams = useSearchParams();
+  const walletAddress = searchParams.get("walletAddress") ?? "";
+  const [campaigns, setCampaigns] = useState<DonorCampaign[]>([]);
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
+  const [campaignLoadError, setCampaignLoadError] = useState("");
+  const [savedLoadError, setSavedLoadError] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [urgency, setUrgency] = useState("All");
   const [location, setLocation] = useState("All");
@@ -121,14 +147,102 @@ export default function DonorDiscoverPage() {
   const [selectedId, setSelectedId] = useState<string | null>(
     searchParams.get("campaign"),
   );
-  const [savedIds, setSavedIds] = useState<string[]>([
-    "vaccination-drive",
-    "adoption-care-kits",
-  ]);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
     urgency !== "All" ||
     location !== "All";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCampaigns() {
+      setIsLoadingCampaigns(true);
+      setCampaignLoadError("");
+
+      try {
+        const response = await fetch("/api/donor/campaigns", {
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message ?? "Unable to load campaigns.");
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCampaigns(Array.isArray(result.campaigns) ? result.campaigns : []);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setCampaigns([]);
+        setCampaignLoadError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load active campaigns from Supabase.",
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoadingCampaigns(false);
+        }
+      }
+    }
+
+    loadCampaigns();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSavedCampaigns() {
+      setSavedLoadError("");
+
+      if (!walletAddress) {
+        setSavedIds([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/donor/saved-campaigns?walletAddress=${encodeURIComponent(walletAddress)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message ?? "Unable to load saved campaigns.");
+        }
+
+        if (isMounted) {
+          setSavedIds(Array.isArray(result.campaignIds) ? result.campaignIds : []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSavedIds([]);
+          setSavedLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load saved campaigns.",
+          );
+        }
+      }
+    }
+
+    loadSavedCampaigns();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [walletAddress]);
 
   function clearFilters() {
     setSearchTerm("");
@@ -136,12 +250,46 @@ export default function DonorDiscoverPage() {
     setLocation("All");
   }
 
-  function toggleSaved(campaignId: string) {
-    setSavedIds((current) =>
-      current.includes(campaignId)
-        ? current.filter((item) => item !== campaignId)
-        : [...current, campaignId],
-    );
+  async function toggleSaved(campaignId: string) {
+    if (!walletAddress || savingId) {
+      return;
+    }
+
+    const isSaved = savedIds.includes(campaignId);
+    const nextSavedIds = isSaved
+      ? savedIds.filter((item) => item !== campaignId)
+      : [...savedIds, campaignId];
+
+    setSavingId(campaignId);
+    setSavedLoadError("");
+    setSavedIds(nextSavedIds);
+
+    try {
+      const response = await fetch("/api/donor/saved-campaigns", {
+        method: isSaved ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          campaignId,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to update saved campaign.");
+      }
+    } catch (error) {
+      setSavedIds(savedIds);
+      setSavedLoadError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update saved campaign.",
+      );
+    } finally {
+      setSavingId(null);
+    }
   }
 
   const filteredCampaigns = useMemo(() => {
@@ -194,7 +342,13 @@ export default function DonorDiscoverPage() {
   const otherShelterCampaigns = shelterCampaigns.filter(
     (campaign) => campaign.id !== selectedCampaign?.id,
   );
-  const shelters = useMemo(() => getShelters(), []);
+  const shelters = useMemo(() => getShelters(campaigns), [campaigns]);
+  const locationOptions = useMemo(() => {
+    const campaignLocations = campaigns.map((campaign) => campaign.location);
+    const shelterLocations = shelters.map((shelter) => shelter.location);
+
+    return ["All", ...Array.from(new Set([...campaignLocations, ...shelterLocations]))];
+  }, [campaigns, shelters]);
 
   const filteredShelters = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -224,6 +378,12 @@ export default function DonorDiscoverPage() {
   const savedCampaigns = useMemo(() => {
     return sortedCampaigns.filter((campaign) => savedIds.includes(campaign.id));
   }, [savedIds, sortedCampaigns]);
+  const displayedCampaigns =
+    activeTab === "Saved"
+      ? savedCampaigns
+      : sortedCampaigns.length === 0 && campaigns.length > 0
+        ? campaigns
+        : sortedCampaigns;
 
   const sortedShelters = useMemo(() => {
     return [...filteredShelters].sort((first, second) => {
@@ -255,23 +415,28 @@ export default function DonorDiscoverPage() {
     });
   }, [filteredShelters, sortBy]);
 
-  const matchingCount =
-    activeTab === "Campaigns"
-      ? sortedCampaigns.length
-      : activeTab === "Saved"
-        ? savedCampaigns.length
-        : sortedShelters.length;
-  const totalDiscoverable = campaigns.length + shelters.length;
-  const resultLabel =
-    activeTab === "Campaigns"
-      ? "campaigns found"
-      : activeTab === "Saved"
-        ? "saved campaigns"
-        : "shelters found";
+  const tabCounts: Record<(typeof tabs)[number], number> = {
+    Campaigns: campaigns.length,
+    Shelters: shelters.length,
+    Saved: savedIds.length,
+  };
+  const emptyCampaignTitle =
+    activeTab === "Saved"
+      ? "No saved campaigns yet"
+      : hasActiveFilters && campaigns.length > 0
+        ? "No campaigns match these filters"
+        : "No active campaigns found";
+  const emptyCampaignMessage =
+    activeTab === "Saved"
+      ? "Tap the heart on an active campaign to keep it in this list."
+      : hasActiveFilters && campaigns.length > 0
+        ? "Your active Supabase campaigns are loaded, but the current search or filter selection is hiding them."
+        : "Donor Discover now shows only Supabase campaigns approved as active. Wait for Admin to approve a shelter campaign if this stays empty.";
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm sm:p-6">
+      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+        <div className="p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
@@ -284,28 +449,27 @@ export default function DonorDiscoverPage() {
               Explore trusted shelter profiles, compare active campaigns, read background stories, and review milestone plans before donating.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-orange-50/60 p-2.5">
-            <div className="rounded-xl bg-white/85 px-3 py-2.5">
+          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-orange-100 bg-orange-50/45 p-2.5">
+            <div className="rounded-xl bg-white px-3 py-2.5 shadow-sm">
               <p className="text-sm font-black text-stone-950">
-                {matchingCount} {resultLabel}
+                {campaigns.length} total campaigns
               </p>
               <p className="text-xs font-semibold text-stone-500">
-                Current filters
+                Active
               </p>
             </div>
-            <div className="rounded-xl bg-white/85 px-3 py-2.5">
+            <div className="rounded-xl bg-white px-3 py-2.5 shadow-sm">
               <p className="text-sm font-black text-stone-950">
-                {totalDiscoverable} total listings
+                {shelters.length} total shelters
               </p>
               <p className="text-xs font-semibold text-stone-500">
-                Shelters and campaigns
+                Verified
               </p>
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+        <div className="mt-5 border-t border-orange-100 pt-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-stone-950">
@@ -380,7 +544,7 @@ export default function DonorDiscoverPage() {
           <SelectField
             label="Location"
             value={location}
-            options={locations}
+            options={locationOptions.length > 1 ? locationOptions : locations}
             onChange={setLocation}
           />
           <SelectField
@@ -390,25 +554,36 @@ export default function DonorDiscoverPage() {
             onChange={setSortBy}
           />
         </div>
+        {isLoadingCampaigns || campaignLoadError || savedLoadError ? (
+          <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/35 px-3 py-2 text-xs font-semibold text-stone-500">
+            {isLoadingCampaigns
+              ? "Loading active campaigns..."
+              : campaignLoadError || savedLoadError}
+          </div>
+        ) : null}
+        </div>
+        </div>
       </section>
 
-      <section className="border-b border-orange-100">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            suppressHydrationWarning
-            className={[
-              "mr-6 border-b-2 px-1 pb-3 text-sm font-semibold transition",
-              activeTab === tab
-                ? "border-[var(--color-orange)] text-[var(--color-orange)]"
-                : "border-transparent text-stone-500 hover:text-stone-950",
-            ].join(" ")}
-          >
-            {tab}
-          </button>
-        ))}
+      <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              suppressHydrationWarning
+              className={[
+                "rounded-full border px-4 py-2 text-sm font-black transition",
+                activeTab === tab
+                  ? "border-[var(--color-orange)] bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200/70"
+                  : "border-orange-100 bg-orange-50/60 text-stone-700 hover:bg-orange-100",
+              ].join(" ")}
+            >
+              {tab} ({tabCounts[tab]})
+            </button>
+          ))}
+        </div>
       </section>
 
       <section>
@@ -433,8 +608,27 @@ export default function DonorDiscoverPage() {
 
         {activeTab !== "Shelters" ? (
           <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {(activeTab === "Saved" ? savedCampaigns : sortedCampaigns).length > 0 ? (
-            (activeTab === "Saved" ? savedCampaigns : sortedCampaigns).map((campaign) => (
+            {isLoadingCampaigns ? (
+              <div className="rounded-2xl border border-orange-100 bg-white p-6 text-center lg:col-span-2 xl:col-span-3">
+                <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
+                <h2 className="mt-4 text-lg font-black text-stone-950">
+                  Loading active campaigns
+                </h2>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
+                  Checking Supabase for campaigns approved by Admin.
+                </p>
+              </div>
+            ) : campaignLoadError ? (
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-center lg:col-span-2 xl:col-span-3">
+                <h2 className="text-lg font-black text-red-900">
+                  Unable to load campaigns
+                </h2>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-red-700">
+                  {campaignLoadError}
+                </p>
+              </div>
+            ) : displayedCampaigns.length > 0 ? (
+            displayedCampaigns.map((campaign) => (
               <article
                 key={campaign.id}
                 className={[
@@ -445,10 +639,14 @@ export default function DonorDiscoverPage() {
                 ].join(" ")}
               >
                 <div className="relative">
-                  <CampaignImage imageClass={campaign.imageClass} />
+                  <CampaignImage
+                    imageClass={campaign.imageClass}
+                    imageUrl={campaign.imageUrl}
+                  />
                   <button
                     type="button"
                     onClick={() => toggleSaved(campaign.id)}
+                    disabled={!walletAddress || savingId === campaign.id}
                     aria-label={
                       savedIds.includes(campaign.id)
                         ? "Remove saved campaign"
@@ -465,6 +663,9 @@ export default function DonorDiscoverPage() {
                       savedIds.includes(campaign.id)
                         ? "border-orange-200 text-[var(--color-orange)]"
                         : "border-white text-stone-500 hover:text-[var(--color-orange)]",
+                      !walletAddress || savingId === campaign.id
+                        ? "cursor-not-allowed opacity-60"
+                        : "",
                     ].join(" ")}
                   >
                     <svg
@@ -581,11 +782,31 @@ export default function DonorDiscoverPage() {
             ) : (
             <div className="rounded-2xl border border-dashed border-orange-200 bg-white p-6 text-center lg:col-span-2 xl:col-span-3">
               <h2 className="text-xl font-black text-stone-950">
-                No campaigns found
+                {emptyCampaignTitle}
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                Try another search term or adjust the filters to discover more verified shelter campaigns.
+                {emptyCampaignMessage}
               </p>
+              {campaigns.length > 0 && activeTab !== "Campaigns" ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("Campaigns")}
+                  suppressHydrationWarning
+                  className="mt-4 inline-flex items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
+                >
+                  Show active campaigns
+                </button>
+              ) : null}
+              {campaigns.length > 0 && hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  suppressHydrationWarning
+                  className="mt-4 inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
+                >
+                  Clear filters
+                </button>
+              ) : null}
             </div>
             )}
           </div>
@@ -597,7 +818,10 @@ export default function DonorDiscoverPage() {
                   key={shelter.name}
                   className="grid gap-4 rounded-2xl border border-orange-100 bg-white p-3 shadow-sm transition hover:border-orange-200 lg:grid-cols-[14rem_1fr]"
                 >
-                  <CampaignImage imageClass={shelter.imageClass} />
+                  <CampaignImage
+                    imageClass={shelter.imageClass}
+                    imageUrl={shelter.imageUrl}
+                  />
 
                   <div className="min-w-0">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -756,6 +980,7 @@ export default function DonorDiscoverPage() {
             <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
               <CampaignImage
                 imageClass={selectedCampaign.imageClass}
+                imageUrl={selectedCampaign.imageUrl}
                 size="hero"
               />
 

@@ -2,8 +2,13 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
-import { campaigns } from "../campaignData";
+import { useEffect, useMemo, useState } from "react";
+import type { Campaign } from "../campaignData";
+
+type DonorCampaign = Campaign & {
+  imageUrl?: string | null;
+  source?: "supabase";
+};
 
 const quickAmounts = [25, 50, 100, 250];
 const currencies = ["MYR", "ETH", "USDC"];
@@ -32,7 +37,23 @@ function VerifiedBadge() {
   );
 }
 
-function CampaignImage({ imageClass }: { imageClass: string }) {
+function CampaignImage({
+  imageClass,
+  imageUrl,
+}: {
+  imageClass: string;
+  imageUrl?: string | null;
+}) {
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt=""
+        className="h-16 w-full rounded-xl object-cover"
+      />
+    );
+  }
+
   return (
     <div
       className={[
@@ -52,18 +73,71 @@ function parseGoal(goal: string) {
 export default function DonorDonatePage() {
   const searchParams = useSearchParams();
   const initialCampaign = searchParams.get("campaign");
-  const [selectedId, setSelectedId] = useState(
-    campaigns.some((campaign) => campaign.id === initialCampaign)
-      ? initialCampaign ?? campaigns[0]?.id ?? ""
-      : campaigns[0]?.id ?? "",
-  );
+  const [campaigns, setCampaigns] = useState<DonorCampaign[]>([]);
+  const [campaignLoadError, setCampaignLoadError] = useState("");
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
+  const [selectedId, setSelectedId] = useState(initialCampaign ?? "");
   const [amount, setAmount] = useState("100");
   const [currency, setCurrency] = useState("MYR");
   const [isSubmitted, setIsSubmitted] = useState(false);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCampaigns() {
+      setIsLoadingCampaigns(true);
+      setCampaignLoadError("");
+
+      try {
+        const response = await fetch("/api/donor/campaigns", {
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message ?? "Unable to load campaigns.");
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        const liveCampaigns = Array.isArray(result.campaigns)
+          ? (result.campaigns as DonorCampaign[])
+          : [];
+
+        setCampaigns(liveCampaigns);
+        setSelectedId((current) =>
+          liveCampaigns.some((campaign) => campaign.id === current)
+            ? current
+            : liveCampaigns[0]?.id ?? "",
+        );
+      } catch (error) {
+        if (isMounted) {
+          setCampaigns([]);
+          setCampaignLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load active campaigns.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingCampaigns(false);
+        }
+      }
+    }
+
+    loadCampaigns();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const selectedCampaign = useMemo(
     () => campaigns.find((campaign) => campaign.id === selectedId) ?? campaigns[0],
-    [selectedId],
+    [campaigns, selectedId],
   );
 
   const numericAmount = Number(amount) || 0;
@@ -112,12 +186,31 @@ export default function DonorDonatePage() {
               </h2>
             </div>
             <p className="text-sm font-medium text-stone-500">
-              {campaigns.length} available
+              {isLoadingCampaigns
+                ? "Loading..."
+                : `${campaigns.length} active campaigns`}
             </p>
           </div>
 
           <div className="mt-4 max-h-[34rem] space-y-3 overflow-y-auto pr-1">
-            {campaigns.map((campaign) => (
+            {isLoadingCampaigns ? (
+              <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-5 text-center">
+                <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
+                <p className="mt-3 text-sm font-semibold text-stone-600">
+                  Loading active campaigns...
+                </p>
+              </div>
+            ) : campaignLoadError ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 p-5 text-center">
+                <p className="text-sm font-black text-red-800">
+                  Unable to load campaigns
+                </p>
+                <p className="mt-2 text-sm leading-6 text-red-700">
+                  {campaignLoadError}
+                </p>
+              </div>
+            ) : campaigns.length > 0 ? (
+            campaigns.map((campaign) => (
               <button
                 key={campaign.id}
                 type="button"
@@ -130,7 +223,10 @@ export default function DonorDonatePage() {
                     : "border-orange-100 bg-white hover:border-orange-200 hover:bg-orange-50/35",
                 ].join(" ")}
               >
-                <CampaignImage imageClass={campaign.imageClass} />
+                <CampaignImage
+                  imageClass={campaign.imageClass}
+                  imageUrl={campaign.imageUrl}
+                />
                 <div className="min-w-0">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -173,7 +269,23 @@ export default function DonorDonatePage() {
                   </div>
                 </div>
               </button>
-            ))}
+            ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
+                <p className="text-sm font-black text-stone-950">
+                  No active campaigns available
+                </p>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
+                  Donations can start after Admin approves at least one shelter campaign.
+                </p>
+                <Link
+                  href="/Donor/discover"
+                  className="mt-4 inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50"
+                >
+                  Back to Discover
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 

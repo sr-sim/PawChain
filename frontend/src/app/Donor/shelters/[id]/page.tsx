@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getShelters } from "../../campaignData";
+import { getDonorShelterById } from "@/lib/donor-campaigns";
+
+export const dynamic = "force-dynamic";
 
 function VerifiedBadge() {
   return (
@@ -24,9 +26,21 @@ function VerifiedBadge() {
 
 function ShelterImage({
   imageClass,
+  imageUrl,
 }: {
   imageClass: string;
+  imageUrl?: string | null;
 }) {
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt=""
+        className="min-h-52 w-full rounded-2xl object-cover"
+      />
+    );
+  }
+
   return (
     <div
       className={[
@@ -45,7 +59,7 @@ export default async function DonorShelterProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const shelter = getShelters().find((item) => item.id === id);
+  const shelter = await getDonorShelterById(id);
 
   if (!shelter) {
     notFound();
@@ -74,7 +88,7 @@ export default async function DonorShelterProfilePage({
       </Link>
 
       <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
-        <ShelterImage imageClass={shelter.imageClass} />
+        <ShelterImage imageClass={shelter.imageClass} imageUrl={shelter.imageUrl} />
         <div className="p-5 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -86,8 +100,18 @@ export default async function DonorShelterProfilePage({
                 <VerifiedBadge />
               </h1>
               <p className="mt-2 text-sm font-semibold text-[var(--color-orange)]">
-                {shelter.location}
+                {shelter.address ?? shelter.location}
               </p>
+              {shelter.websiteUrl ? (
+                <Link
+                  href={shelter.websiteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex text-sm font-semibold text-stone-600 underline-offset-4 hover:text-[var(--color-orange)] hover:underline"
+                >
+                  Visit shelter website
+                </Link>
+              ) : null}
             </div>
             <div className="grid grid-cols-3 gap-2 text-sm sm:min-w-96">
               <div className="rounded-xl bg-orange-50/50 p-3">
@@ -113,6 +137,32 @@ export default async function DonorShelterProfilePage({
               {shelter.story}
             </p>
           </div>
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+            <div className="rounded-xl bg-orange-50/50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                Registration
+              </p>
+              <p className="mt-1 break-all font-semibold text-stone-950">
+                {shelter.registrationId ?? "Verified profile"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-orange-50/50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                Contact
+              </p>
+              <p className="mt-1 break-all font-semibold text-stone-950">
+                {shelter.contactPhone ?? "Contact through PawChain"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-orange-50/50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                Address
+              </p>
+              <p className="mt-1 font-semibold text-stone-950">
+                {shelter.address ?? shelter.location}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -135,7 +185,12 @@ export default async function DonorShelterProfilePage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="text-lg font-black text-stone-950">
-                    {campaign.title}
+                    <Link
+                      href={`/Donor/campaigns/${campaign.id}`}
+                      className="transition hover:text-[var(--color-orange)]"
+                    >
+                      {campaign.title}
+                    </Link>
                   </h3>
                 </div>
                 <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
@@ -181,12 +236,20 @@ export default async function DonorShelterProfilePage({
                 </div>
               </div>
 
-              <Link
-                href="/Donor/donate"
-                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
-              >
-                Donate
-              </Link>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <Link
+                  href={`/Donor/campaigns/${campaign.id}`}
+                  className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-900 transition hover:border-[var(--color-orange)] hover:bg-orange-50"
+                >
+                  View details
+                </Link>
+                <Link
+                  href={`/Donor/donate?campaign=${campaign.id}`}
+                  className="inline-flex items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
+                >
+                  Donate
+                </Link>
+              </div>
             </article>
           ))}
         </div>
