@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
 import { getDonorDonations } from "@/lib/donor-donations";
+import { RefundClaimButton } from "./RefundClaimButton";
 
 type TrackingPageProps = {
   searchParams?: Promise<{
@@ -205,6 +206,10 @@ export default async function DonorTrackingPage({
                     >
                       View receipt
                     </Link>
+                    <RefundClaimButton
+                      campaignId={donation.campaignId}
+                      contractAddress={donation.contractAddress}
+                    />
                   </div>
                   <p className="font-black text-stone-950">
                     {formatAmount(donation.amount, donation.currency)}

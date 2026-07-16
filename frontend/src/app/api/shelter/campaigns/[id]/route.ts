@@ -13,6 +13,7 @@ type MilestonePayload = {
 const urgencyLevels: UrgencyLevel[] = ["medium", "high", "critical"];
 const durationOptions = [30, 60, 90];
 const minimumGoalAmount = 1000;
+const emergencyMilestonePercentage = 5;
 
 function isUrgencyLevel(value: string): value is UrgencyLevel {
   return urgencyLevels.includes(value as UrgencyLevel);
@@ -63,6 +64,10 @@ function validateMilestones(milestones: MilestonePayload[]) {
     return { message: "All milestone fields are required." };
   }
 
+  if (parsedMilestones[0].percentage !== emergencyMilestonePercentage) {
+    return { message: "Milestone 1 must be the fixed 5% emergency release." };
+  }
+
   const totalPercentage = parsedMilestones.reduce(
     (sum, milestone) => sum + milestone.percentage,
     0,
@@ -103,7 +108,7 @@ export async function GET(
     const { data: campaign, error } = await supabase
       .from("campaigns")
       .select(
-        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
+        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
       )
       .eq("id", id)
       .eq("shelter_id", profile.id)
@@ -123,10 +128,10 @@ export async function GET(
     const { data: milestones, error: milestoneError } = await supabase
       .from("campaign_milestones")
       .select(
-        "id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason",
+        "id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash",
       )
       .eq("campaign_id", campaign.id)
-      .order("percentage", { ascending: true });
+      .order("created_at", { ascending: true });
 
     if (milestoneError) {
       throw milestoneError;
@@ -259,7 +264,7 @@ export async function PATCH(
       })
       .eq("id", campaign.id)
       .select(
-        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
+        "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
       )
       .single();
 
@@ -281,7 +286,10 @@ export async function PATCH(
       .insert(
         milestoneValidation.milestones.map((milestone) => ({
           campaign_id: campaign.id,
-          title: milestone.title,
+          title:
+            milestone === milestoneValidation.milestones[0]
+              ? "Emergency Initial Release"
+              : milestone.title,
           description: milestone.description,
           requirement: milestone.requirement,
           percentage: milestone.percentage,

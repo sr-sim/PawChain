@@ -48,8 +48,13 @@ const initialCampaignForm: CampaignForm = {
 };
 
 const initialMilestones: MilestoneForm[] = [
-  { title: "", description: "", requirement: "", percentage: "50" },
-  { title: "", description: "", requirement: "", percentage: "50" },
+  {
+    title: "Emergency Initial Release",
+    description: "",
+    requirement: "",
+    percentage: "5",
+  },
+  { title: "", description: "", requirement: "", percentage: "95" },
 ];
 
 function ArrowIcon() {
@@ -292,6 +297,11 @@ export default function CreateCampaignPage() {
 
     if (hasEmptyMilestone) {
       setError("Complete every milestone field before submitting.");
+      return false;
+    }
+
+    if (Number(milestones[0]?.percentage) !== 5) {
+      setError("Milestone 1 must remain the fixed 5% emergency release.");
       return false;
     }
 
@@ -584,7 +594,8 @@ export default function CreateCampaignPage() {
                   Milestones
                 </h2>
                 <p className="text-sm font-bold text-stone-600">
-                  Add 2 to 5 milestones. Total percentage must equal 100%.
+                  Milestone 1 is a fixed 5% emergency release. Add up to four
+                  later milestones; all percentages must total 100%.
                 </p>
               </div>
               <span
@@ -615,7 +626,7 @@ export default function CreateCampaignPage() {
                         current.filter((_, milestoneIndex) => milestoneIndex !== index),
                       )
                     }
-                    disabled={milestones.length <= 2}
+                    disabled={index === 0 || milestones.length <= 2}
                     className="rounded-full border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Remove
@@ -630,6 +641,7 @@ export default function CreateCampaignPage() {
                         updateMilestone(index, "title", event.target.value)
                       }
                       className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
+                      readOnly={index === 0}
                       required
                     />
                   </FieldLabel>
@@ -645,6 +657,7 @@ export default function CreateCampaignPage() {
                       step="5"
                       type="number"
                       onWheel={preventWheelNumberChange}
+                      readOnly={index === 0}
                       className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
                       required
                     />

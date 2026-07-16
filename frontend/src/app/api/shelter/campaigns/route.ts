@@ -13,6 +13,7 @@ type MilestonePayload = {
 const urgencyLevels: UrgencyLevel[] = ["medium", "high", "critical"];
 const durationOptions = [30, 60, 90];
 const minimumGoalAmount = 1000;
+const emergencyMilestonePercentage = 5;
 
 function isUrgencyLevel(value: string): value is UrgencyLevel {
   return urgencyLevels.includes(value as UrgencyLevel);
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
     const { data: campaigns, error } = await supabase
       .from("campaigns")
       .select(
-        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
+        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
       )
       .eq("shelter_id", profile.id)
       .order("created_at", { ascending: false });
@@ -165,6 +166,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (parsedMilestones[0].percentage !== emergencyMilestonePercentage) {
+      return NextResponse.json(
+        { message: "Milestone 1 must be the fixed 5% emergency release." },
+        { status: 400 },
+      );
+    }
+
     const totalPercentage = parsedMilestones.reduce(
       (sum, milestone) => sum + milestone.percentage,
       0,
@@ -204,7 +212,7 @@ export async function POST(request: NextRequest) {
         rejection_reason: null,
       })
       .select(
-        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, rejection_reason, created_at, updated_at",
+        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
       )
       .single();
 
@@ -217,7 +225,10 @@ export async function POST(request: NextRequest) {
       .insert(
         parsedMilestones.map((milestone) => ({
           campaign_id: campaign.id,
-          title: milestone.title,
+          title:
+            milestone === parsedMilestones[0]
+              ? "Emergency Initial Release"
+              : milestone.title,
           description: milestone.description,
           requirement: milestone.requirement,
           percentage: milestone.percentage,

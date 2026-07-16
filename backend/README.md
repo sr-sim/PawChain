@@ -1,13 +1,16 @@
-# Sample Hardhat Project
+# PawChain smart contracts
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, and a Hardhat Ignition module that deploys that contract.
+- `RoleNFT.sol` identifies PawChain admins, shelters, and donors.
+- `CampaignFactory.sol` deploys one approved campaign per Supabase campaign key.
+- `Campaign.sol` holds donations and controls milestone withdrawals and refunds.
 
-Try running some of the following tasks:
+Useful commands:
 
-```shell
-npx hardhat help
-npx hardhat test
-REPORT_GAS=true npx hardhat test
-npx hardhat node
-npx hardhat ignition deploy ./ignition/modules/Lock.ts
+```powershell
+npm.cmd run compile
+npm.cmd test
+npm.cmd run node
+npm.cmd run deploy:local
 ```
+
+The deployment module is `ignition/modules/PawChain.ts`.
