@@ -133,9 +133,12 @@ function SelectField({
 
 export default function DonorDiscoverPage() {
   const searchParams = useSearchParams();
+  const walletAddress = searchParams.get("walletAddress") ?? "";
   const [campaigns, setCampaigns] = useState<DonorCampaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [campaignLoadError, setCampaignLoadError] = useState("");
+  const [savedLoadError, setSavedLoadError] = useState("");
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [urgency, setUrgency] = useState("All");
   const [location, setLocation] = useState("All");
@@ -197,18 +200,96 @@ export default function DonorDiscoverPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSavedCampaigns() {
+      setSavedLoadError("");
+
+      if (!walletAddress) {
+        setSavedIds([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/donor/saved-campaigns?walletAddress=${encodeURIComponent(walletAddress)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.message ?? "Unable to load saved campaigns.");
+        }
+
+        if (isMounted) {
+          setSavedIds(Array.isArray(result.campaignIds) ? result.campaignIds : []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setSavedIds([]);
+          setSavedLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load saved campaigns.",
+          );
+        }
+      }
+    }
+
+    loadSavedCampaigns();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [walletAddress]);
+
   function clearFilters() {
     setSearchTerm("");
     setUrgency("All");
     setLocation("All");
   }
 
-  function toggleSaved(campaignId: string) {
-    setSavedIds((current) =>
-      current.includes(campaignId)
-        ? current.filter((item) => item !== campaignId)
-        : [...current, campaignId],
-    );
+  async function toggleSaved(campaignId: string) {
+    if (!walletAddress || savingId) {
+      return;
+    }
+
+    const isSaved = savedIds.includes(campaignId);
+    const nextSavedIds = isSaved
+      ? savedIds.filter((item) => item !== campaignId)
+      : [...savedIds, campaignId];
+
+    setSavingId(campaignId);
+    setSavedLoadError("");
+    setSavedIds(nextSavedIds);
+
+    try {
+      const response = await fetch("/api/donor/saved-campaigns", {
+        method: isSaved ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          campaignId,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to update saved campaign.");
+      }
+    } catch (error) {
+      setSavedIds(savedIds);
+      setSavedLoadError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update saved campaign.",
+      );
+    } finally {
+      setSavingId(null);
+    }
   }
 
   const filteredCampaigns = useMemo(() => {
@@ -473,9 +554,11 @@ export default function DonorDiscoverPage() {
             onChange={setSortBy}
           />
         </div>
-        {isLoadingCampaigns || campaignLoadError ? (
+        {isLoadingCampaigns || campaignLoadError || savedLoadError ? (
           <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/35 px-3 py-2 text-xs font-semibold text-stone-500">
-            {isLoadingCampaigns ? "Loading active campaigns..." : campaignLoadError}
+            {isLoadingCampaigns
+              ? "Loading active campaigns..."
+              : campaignLoadError || savedLoadError}
           </div>
         ) : null}
         </div>
@@ -563,6 +646,7 @@ export default function DonorDiscoverPage() {
                   <button
                     type="button"
                     onClick={() => toggleSaved(campaign.id)}
+                    disabled={!walletAddress || savingId === campaign.id}
                     aria-label={
                       savedIds.includes(campaign.id)
                         ? "Remove saved campaign"
@@ -579,6 +663,9 @@ export default function DonorDiscoverPage() {
                       savedIds.includes(campaign.id)
                         ? "border-orange-200 text-[var(--color-orange)]"
                         : "border-white text-stone-500 hover:text-[var(--color-orange)]",
+                      !walletAddress || savingId === campaign.id
+                        ? "cursor-not-allowed opacity-60"
+                        : "",
                     ].join(" ")}
                   >
                     <svg

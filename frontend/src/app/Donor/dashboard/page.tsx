@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DonorRoleNFTCard } from "@/app/components/DonorRoleNFTCard";
 import { getDashboardProfile } from "@/lib/dashboard-access";
 import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
+import { getDonorDonations } from "@/lib/donor-donations";
 import { getShelters } from "../campaignData";
 
 type DashboardProps = {
@@ -50,6 +51,9 @@ const impactSteps = [
 function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
     Waiting: "border-slate-200 bg-slate-50 text-slate-600",
+    Confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    Failed: "border-red-200 bg-red-50 text-red-700",
+    Refunded: "border-sky-200 bg-sky-50 text-sky-700",
     "Under review": "border-amber-200 bg-amber-50 text-amber-700",
     "Funds released": "border-emerald-200 bg-emerald-50 text-emerald-700",
     "Pending proof": "border-slate-200 bg-slate-50 text-slate-600",
@@ -75,6 +79,25 @@ function IconBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
+function formatAmount(amount: number, currency: string) {
+  return `${currency} ${amount.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function shortHash(value: string) {
+  return `${value.slice(0, 10)}...${value.slice(-8)}`;
+}
+
 export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const params = await searchParams;
   const { userId, profile, accessMode, roleNFT } = await getDashboardProfile(
@@ -84,9 +107,20 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const displayName = profile?.full_name ?? "Anwen";
   const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? "-";
   let activeCampaigns: Awaited<ReturnType<typeof getActiveDonorCampaigns>> = [];
+  let donationData: Awaited<ReturnType<typeof getDonorDonations>> = {
+    donations: [],
+    summary: {
+      totalAmount: 0,
+      currency: "MYR",
+      donationCount: 0,
+      confirmedCount: 0,
+      latestDonation: null,
+    },
+  };
 
   try {
     activeCampaigns = await getActiveDonorCampaigns();
+    donationData = await getDonorDonations(walletAddress);
   } catch {
     activeCampaigns = [];
   }
@@ -118,14 +152,17 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     },
     {
       label: "Donation records",
-      value: "Pending",
+      value: String(donationData.summary.donationCount),
     },
   ];
   const summaryStats = [
     {
       label: "Total donated",
-      value: "Pending",
-      detail: "Needs donations table",
+      value: formatAmount(
+        donationData.summary.totalAmount,
+        donationData.summary.currency,
+      ),
+      detail: `${donationData.summary.confirmedCount} confirmed donations`,
     },
     {
       label: "Active campaigns",
@@ -153,7 +190,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
               Your donor profile and available verified campaigns are organized
-              here while donation records wait for the live payment connection.
+              here with real campaign records, donation history, and donor
+              notifications from Supabase.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <Link
@@ -420,6 +458,47 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             </Link>
           </div>
 
+          {donationData.donations.length > 0 ? (
+            <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
+              {donationData.donations.slice(0, 3).map((donation) => (
+                <article
+                  key={donation.id}
+                  className="grid gap-3 bg-orange-50/20 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
+                >
+                  <div>
+                    <Link
+                      href={`/Donor/campaigns/${donation.campaignId}`}
+                      className="text-sm font-semibold text-stone-950 transition hover:text-[var(--color-orange)]"
+                    >
+                      {donation.campaignTitle}
+                    </Link>
+                    <p className="mt-1 text-xs font-medium text-stone-500">
+                      {donation.shelterName} - {formatDate(donation.createdAt)}
+                    </p>
+                    <p className="mt-2 break-all text-xs font-semibold text-stone-500">
+                      Tx: {shortHash(donation.txHash)}
+                    </p>
+                    <Link
+                      href={`/Donor/receipt/${donation.id}${
+                        walletAddress && walletAddress !== "-"
+                          ? `?walletAddress=${encodeURIComponent(walletAddress)}`
+                          : ""
+                      }`}
+                      className="mt-2 inline-flex text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950"
+                    >
+                      View receipt
+                    </Link>
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-sm font-black text-stone-950">
+                      {formatAmount(donation.amount, donation.currency)}
+                    </p>
+                    <StatusPill status={donation.status} />
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
             <div className="mt-4 rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-[var(--color-orange)] shadow-sm">
                 <svg
@@ -440,7 +519,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               </h3>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-600">
                 Once you support a campaign, donation amount, transaction hash,
-                and confirmation status will appear here from the future donations table.
+                and confirmation status will appear here from Supabase.
               </p>
               <Link
                 href="/Donor/discover"
@@ -449,6 +528,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 Browse campaigns
               </Link>
             </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">

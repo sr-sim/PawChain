@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import DonorReportForm from "../../components/DonorReportForm";
+import { DonorSupportRequestList } from "@/app/components/DonorSupportRequestList";
 
 const helpTopics = [
   {
@@ -23,34 +24,19 @@ const helpTopics = [
 
 const faqs = [
   {
-    question: "Why is my donation shown as preview data?",
+    question: "Why is donation checkout still preview-only?",
     answer:
-      "The current donor UI is ready for presentation. Real donation records will appear after the donation smart contract and backend history are connected.",
+      "PawChain stores confirmed donation history in Supabase, but new checkout is kept preview-only until the smart contract returns a real transaction hash.",
   },
   {
     question: "Who checks milestone proof?",
     answer:
-      "Milestone proof is intended to be reviewed by admin before campaign funds are released.",
+      "Admin reviews shelter milestone proof before the milestone status and fund release information are reflected to donors.",
   },
   {
     question: "Can I report a shelter or campaign?",
     answer:
-      "Yes. The report flow is represented here as a donor support request and can later be connected to an admin review queue.",
-  },
-];
-
-const reportStatuses = [
-  {
-    id: "RPT-2026-014",
-    subject: "Medical Recovery Fund proof concern",
-    status: "Under admin review",
-    updated: "Today, 11:15 AM",
-  },
-  {
-    id: "RPT-2026-009",
-    subject: "Shelter spending clarification",
-    status: "Reply received",
-    updated: "24 Jun 2026",
+      "Yes. Reports are saved as donor support requests in Supabase so the admin side can review and respond.",
   },
 ];
 
@@ -91,7 +77,7 @@ export default function DonorHelpPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Ask questions, report campaign concerns, or check how donation and
-          milestone review should work once live data is connected.
+          milestone review works across PawChain records.
         </p>
       </section>
 
@@ -120,35 +106,10 @@ export default function DonorHelpPage() {
                 </h2>
               </div>
               <p className="text-xs font-medium text-stone-500">
-                Preview queue
+                Supabase queue
               </p>
             </div>
-            <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-              {reportStatuses.map((report) => (
-                <article
-                  key={report.id}
-                  className="grid gap-2 bg-orange-50/20 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-stone-950">
-                      {report.subject}
-                    </p>
-                    <p className="mt-1 text-xs font-medium text-stone-500">
-                      {report.id} - {report.updated}
-                    </p>
-                  </div>
-                  <span className="inline-flex min-w-32 justify-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                    {report.status}
-                  </span>
-                  <Link
-                    href={`/Donor/reports/${report.id}`}
-                    className="text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950 sm:col-span-2"
-                  >
-                    View report detail
-                  </Link>
-                </article>
-              ))}
-            </div>
+            <DonorSupportRequestList />
           </div>
 
           <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
