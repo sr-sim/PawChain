@@ -3,11 +3,22 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
+import { useChainId, usePublicClient, useWriteContract } from "wagmi";
+import { isAddress, parseEther } from "viem";
 import type { Campaign } from "../campaignData";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import {
+  demoEthMyrRate,
+  getPawChainId,
+} from "@/lib/campaign-blockchain";
 
 type DonorCampaign = Campaign & {
   imageUrl?: string | null;
   source?: "supabase";
+  contractAddress?: string | null;
+  goalWei?: string | null;
+  ethMyrRate?: number;
 };
 
 const quickAmountsMyr = [25, 50, 100, 250];
@@ -107,6 +118,11 @@ function EthIcon() {
 }
 
 export default function DonorDonatePage() {
+  const { open } = useAppKit();
+  const { address, isConnected } = useAppKitAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
   const searchParams = useSearchParams();
   const initialCampaign = searchParams.get("campaign");
   const walletAddress = searchParams.get("walletAddress") ?? "";
@@ -117,6 +133,9 @@ export default function DonorDonatePage() {
   const [amount, setAmount] = useState("0.0125");
   const [token, setToken] = useState("ETH");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [donationError, setDonationError] = useState("");
+  const [transactionHash, setTransactionHash] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -561,7 +580,7 @@ export default function DonorDonatePage() {
               {isSubmitted ? (
                 <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                   <p className="text-sm font-black text-emerald-800">
-                    Donation preview submitted
+                    Donation confirmed
                   </p>
                   <div className="mt-3 space-y-2">
                     {[
@@ -608,7 +627,11 @@ export default function DonorDonatePage() {
                     suppressHydrationWarning
                     className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-200"
                   >
-                    Connect wallet and confirm
+                    {isProcessing
+                      ? "Confirming transaction..."
+                      : isConnected
+                        ? `Donate approximately ${ethDonation.toFixed(6)} ETH`
+                        : "Connect wallet and confirm"}
                   </button>
                   <p className="mt-3 text-center text-xs font-medium text-stone-500">
                     Wallet confirmation, live balance check, and exact gas fee
@@ -616,6 +639,11 @@ export default function DonorDonatePage() {
                   </p>
                 </>
               )}
+              {donationError ? (
+                <p className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                  {donationError}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

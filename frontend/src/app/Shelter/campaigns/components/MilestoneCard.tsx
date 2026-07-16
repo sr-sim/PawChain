@@ -1,17 +1,22 @@
 "use client";
 
 import { ChangeEvent, useState } from "react";
+import { useChainId, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import { isAddress, keccak256, toBytes } from "viem";
 import type { CampaignMilestone } from "@/app/components/campaigns/campaign-types";
 import {
   MilestoneCard as SharedMilestoneCard,
   type ProofFile,
 } from "@/app/components/campaigns/MilestoneCard";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getPawChainId } from "@/lib/campaign-blockchain";
 
 type ShelterMilestoneCardProps = {
   milestone: CampaignMilestone;
   index: number;
   campaignId?: string;
   walletAddress?: string;
+  contractAddress?: string | null;
   canUploadProof?: boolean;
   onProofSubmitted?: (milestone: CampaignMilestone) => void;
 };
@@ -69,6 +74,7 @@ export function MilestoneCard({
   index,
   campaignId,
   walletAddress,
+  contractAddress,
   canUploadProof = false,
   onProofSubmitted,
 }: ShelterMilestoneCardProps) {
@@ -77,9 +83,42 @@ export function MilestoneCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+  const validContractAddress =
+    contractAddress && isAddress(contractAddress) ? contractAddress : undefined;
+  const onChainIndex = milestone.on_chain_index;
+  const {
+    data: onChainMilestone,
+    refetch: refetchOnChainMilestone,
+  } = useReadContract({
+    address: validContractAddress,
+    abi: campaignContractAbi,
+    functionName: "getMilestone",
+    args:
+      onChainIndex === null || onChainIndex === undefined
+        ? undefined
+        : [BigInt(onChainIndex)],
+    query: {
+      enabled:
+        Boolean(validContractAddress) &&
+        onChainIndex !== null &&
+        onChainIndex !== undefined,
+    },
+  });
+  const onChainStatus = onChainMilestone
+    ? Number(onChainMilestone.status)
+    : null;
+  const proofAllowedOnChain =
+    index === 0
+      ? onChainStatus === 6 || onChainStatus === 3
+      : onChainStatus === 1 || onChainStatus === 3;
   const showUploader =
     canUploadProof &&
+    proofAllowedOnChain &&
     (milestone.status === "pending" || milestone.status === "rejected");
+  const canWithdraw = canUploadProof && onChainStatus === 5;
 
   async function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -129,12 +168,39 @@ export function MilestoneCard({
       setError("Upload at least one proof file.");
       return;
     }
+    if (
+      !validContractAddress ||
+      onChainIndex === null ||
+      onChainIndex === undefined ||
+      !publicClient
+    ) {
+      setError("This milestone is not linked to an active contract.");
+      return;
+    }
+    if (chainId !== getPawChainId()) {
+      setError(`Switch your wallet to PawChain ${getPawChainId()}.`);
+      return;
+    }
 
     setIsSubmitting(true);
     setError("");
     setMessage("");
 
     try {
+      const proofCID = keccak256(toBytes(JSON.stringify(selectedFiles)));
+      const txHash = await writeContractAsync({
+        address: validContractAddress,
+        abi: campaignContractAbi,
+        functionName: "submitMilestoneProof",
+        args: [BigInt(onChainIndex), proofCID],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      if (receipt.status !== "success") {
+        throw new Error("Proof transaction failed.");
+      }
+
       const response = await fetch(
         `/api/shelter/campaigns/${campaignId}/milestones/${milestone.id}/proof`,
         {
@@ -145,6 +211,8 @@ export function MilestoneCard({
           body: JSON.stringify({
             walletAddress,
             proofFiles: selectedFiles,
+            proofCID,
+            txHash,
           }),
         },
       );
@@ -157,11 +225,77 @@ export function MilestoneCard({
       onProofSubmitted?.(result.milestone);
       setSelectedFiles([]);
       setMessage("Proof submitted for review.");
+      await refetchOnChainMilestone();
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
           : "Unable to submit proof.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleWithdraw() {
+    if (
+      !campaignId ||
+      !walletAddress ||
+      !validContractAddress ||
+      onChainIndex === null ||
+      onChainIndex === undefined ||
+      !publicClient
+    ) {
+      setError("This milestone is not ready for withdrawal.");
+      return;
+    }
+    if (chainId !== getPawChainId()) {
+      setError(`Switch your wallet to PawChain ${getPawChainId()}.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const txHash = await writeContractAsync({
+        address: validContractAddress,
+        abi: campaignContractAbi,
+        functionName: "withdrawMilestone",
+        args: [BigInt(onChainIndex)],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      if (receipt.status !== "success") {
+        throw new Error("Fund release transaction failed.");
+      }
+
+      const response = await fetch(
+        `/api/shelter/campaigns/${campaignId}/milestones/${milestone.id}/release`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ walletAddress, txHash }),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to record fund release.");
+      }
+
+      setMessage(
+        index === 0
+          ? "Emergency funds released. Upload proof to activate Milestone 2."
+          : "Milestone funds released successfully.",
+      );
+      await refetchOnChainMilestone();
+    } catch (withdrawError) {
+      setError(
+        withdrawError instanceof Error
+          ? withdrawError.message
+          : "Unable to release milestone funds.",
       );
     } finally {
       setIsSubmitting(false);
@@ -175,8 +309,20 @@ export function MilestoneCard({
         index={index}
         showProof
         proofAction={
-          showUploader ? (
+          showUploader || canWithdraw ? (
             <div className="mt-4 rounded-2xl border border-dashed border-orange-200 bg-white/72 p-4 text-stone-950">
+              {canWithdraw ? (
+                <button
+                  type="button"
+                  onClick={handleWithdraw}
+                  disabled={isSubmitting}
+                  className="mb-4 inline-flex items-center justify-center rounded-full bg-[var(--color-orange)] px-5 py-3 text-sm font-black text-white disabled:opacity-60"
+                >
+                  {isSubmitting ? "Confirming..." : `Withdraw Milestone ${index + 1} funds`}
+                </button>
+              ) : null}
+              {showUploader ? (
+                <>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-sm font-black">Submit proof</p>
@@ -236,6 +382,8 @@ export function MilestoneCard({
                     </span>
                   ))}
                 </div>
+              ) : null}
+                </>
               ) : null}
             </div>
           ) : null
