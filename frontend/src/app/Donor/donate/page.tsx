@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
-import { useChainId, usePublicClient, useWriteContract } from "wagmi";
+import {
+  useChainId,
+  usePublicClient,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 import { isAddress, parseEther } from "viem";
 import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
@@ -22,7 +27,6 @@ type DonorCampaign = Campaign & {
 };
 
 const quickAmountsMyr = [25, 50, 100, 250];
-const ethToMyrRate = 8000;
 const estimatedGasEth = 0.0002;
 
 function VerifiedBadge() {
@@ -122,6 +126,7 @@ export default function DonorDonatePage() {
   const { address, isConnected } = useAppKitAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
+  const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const searchParams = useSearchParams();
   const initialCampaign = searchParams.get("campaign");
@@ -136,6 +141,7 @@ export default function DonorDonatePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [donationError, setDonationError] = useState("");
   const [transactionHash, setTransactionHash] = useState("");
+  const [confirmedDonationId, setConfirmedDonationId] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -196,6 +202,7 @@ export default function DonorDonatePage() {
     [campaigns, selectedId],
   );
 
+  const ethToMyrRate = selectedCampaign?.ethMyrRate ?? demoEthMyrRate;
   const trimmedAmount = amount.trim();
   const parsedAmount = Number(trimmedAmount);
   const hasInvalidAmount =
@@ -209,9 +216,109 @@ export default function DonorDonatePage() {
       : selectedCampaign?.raised ?? 0;
   const requiredTotalEth = numericAmount + estimatedGasEth;
   const requiredTotalMyr = requiredTotalEth * ethToMyrRate;
-  const shortWallet = walletAddress
-    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+  const connectedWallet = address ?? walletAddress;
+  const shortWallet = connectedWallet
+    ? `${connectedWallet.slice(0, 6)}...${connectedWallet.slice(-4)}`
     : "Not connected";
+  const shortTxHash = transactionHash
+    ? `${transactionHash.slice(0, 10)}...${transactionHash.slice(-8)}`
+    : "";
+  const receiptHref = confirmedDonationId
+    ? `/Donor/receipt/${confirmedDonationId}?walletAddress=${encodeURIComponent(connectedWallet)}`
+    : `/Donor/tracking?walletAddress=${encodeURIComponent(connectedWallet)}`;
+
+  async function handleDonate() {
+    setDonationError("");
+    setTransactionHash("");
+    setConfirmedDonationId("");
+
+    if (!isConnected || !address) {
+      open();
+      return;
+    }
+
+    if (hasInvalidAmount) {
+      setDonationError("Please enter a valid ETH amount greater than 0.");
+      return;
+    }
+
+    if (!selectedCampaign) {
+      setDonationError("Please select an active campaign first.");
+      return;
+    }
+
+    if (chainId !== getPawChainId()) {
+      try {
+        await switchChainAsync({ chainId: getPawChainId() });
+        setDonationError("Network switched to Sepolia. Please click Donate again.");
+      } catch {
+        setDonationError(`Switch your wallet to PawChain ${getPawChainId()}. Detected chain: ${chainId ?? "not connected"}.`);
+      }
+      return;
+    }
+
+    if (!publicClient) {
+      setDonationError("Blockchain connection is unavailable. Reconnect your wallet and try again.");
+      return;
+    }
+
+    if (!selectedCampaign.contractAddress || !isAddress(selectedCampaign.contractAddress)) {
+      setDonationError("This campaign is not linked to an on-chain contract yet.");
+      return;
+    }
+
+    let donationValue: bigint;
+    try {
+      donationValue = parseEther(trimmedAmount);
+    } catch {
+      setDonationError("Please enter a valid ETH amount, for example 0.01.");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const txHash = await writeContractAsync({
+        address: selectedCampaign.contractAddress as `0x${string}`,
+        abi: campaignContractAbi,
+        functionName: "donate",
+        value: donationValue,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+
+      if (receipt.status !== "success") {
+        throw new Error("Donation transaction failed.");
+      }
+
+      const response = await fetch("/api/donor/donations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: address,
+          campaignId: selectedCampaign.id,
+          txHash,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to save donation record.");
+      }
+
+      setTransactionHash(txHash);
+      setConfirmedDonationId(result.donation?.id ?? "");
+      setIsSubmitted(true);
+    } catch (error) {
+      setDonationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to confirm donation.",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -584,10 +691,10 @@ export default function DonorDonatePage() {
                   </p>
                   <div className="mt-3 space-y-2">
                     {[
-                      ["Wallet confirmation", "Pending live connection"],
-                      ["Transaction hash", "Generated after contract call"],
+                      ["Wallet confirmation", "Confirmed on-chain"],
+                      ["Transaction hash", shortTxHash || "Recorded"],
                       ["Amount", `${formatEth(numericAmount)} ETH (${formatMyr(myrEstimate)})`],
-                      ["Tracking", "Ready to appear in donation history"],
+                      ["Tracking", "Saved into donation history"],
                     ].map(([label, value]) => (
                       <div
                         key={label}
@@ -604,14 +711,17 @@ export default function DonorDonatePage() {
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     <Link
-                      href="/Donor/tracking"
+                      href={receiptHref}
                       className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
                     >
-                      View tracking
+                      {confirmedDonationId ? "View receipt" : "View tracking"}
                     </Link>
                     <button
                       type="button"
-                      onClick={() => setIsSubmitted(false)}
+                      onClick={() => {
+                        setIsSubmitted(false);
+                        setDonationError("");
+                      }}
                       className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-white"
                     >
                       Edit donation
@@ -622,20 +732,20 @@ export default function DonorDonatePage() {
                 <>
                   <button
                     type="button"
-                    disabled={hasInvalidAmount}
-                    onClick={() => setIsSubmitted(true)}
+                    disabled={hasInvalidAmount || isProcessing || !selectedCampaign}
+                    onClick={() => void handleDonate()}
                     suppressHydrationWarning
                     className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-200"
                   >
                     {isProcessing
                       ? "Confirming transaction..."
                       : isConnected
-                        ? `Donate approximately ${ethDonation.toFixed(6)} ETH`
+                        ? `Donate approximately ${numericAmount.toFixed(6)} ETH`
                         : "Connect wallet and confirm"}
                   </button>
                   <p className="mt-3 text-center text-xs font-medium text-stone-500">
-                    Wallet confirmation, live balance check, and exact gas fee
-                    will be connected during Web3 integration.
+                    MetaMask will confirm the exact gas fee. After the transaction
+                    succeeds, PawChain saves the transaction hash into tracking.
                   </p>
                 </>
               )}

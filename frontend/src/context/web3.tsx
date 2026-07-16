@@ -1,11 +1,15 @@
 "use client";
 
 import { createAppKit } from "@reown/appkit/react";
-import { hardhat } from "@reown/appkit/networks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React, { type ReactNode } from "react";
 import { cookieToInitialState, WagmiProvider, type Config } from "wagmi";
-import { networks, projectId, wagmiAdapter } from "@/utils/web3config";
+import {
+  defaultNetwork,
+  networks,
+  projectId,
+  wagmiAdapter,
+} from "@/utils/web3config";
 
 const queryClient = new QueryClient();
 
@@ -13,7 +17,7 @@ createAppKit({
   adapters: [wagmiAdapter],
   projectId,
   networks,
-  defaultNetwork: hardhat,
+  defaultNetwork,
   enableCoinbase: false,
   features: {
     analytics: false,
