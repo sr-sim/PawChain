@@ -215,6 +215,11 @@ export default function EditCampaignPage() {
       return false;
     }
 
+    if (Number(milestones[0]?.percentage) !== 5) {
+      setError("Milestone 1 must remain the fixed 5% emergency release.");
+      return false;
+    }
+
     if (totalPercentage !== 100) {
       setError("Milestone percentages must total exactly 100%.");
       return false;
@@ -468,7 +473,8 @@ export default function EditCampaignPage() {
                   Milestones
                 </h2>
                 <p className="text-sm font-bold text-stone-600">
-                  Add 2 to 5 milestones. Total percentage must equal 100%.
+                  Milestone 1 is a fixed 5% emergency release. All milestone
+                  percentages must total 100%.
                 </p>
               </div>
               <span
@@ -502,7 +508,7 @@ export default function EditCampaignPage() {
                           ),
                         )
                       }
-                      disabled={milestones.length <= 2}
+                      disabled={index === 0 || milestones.length <= 2}
                       className="rounded-full border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Remove
@@ -517,6 +523,7 @@ export default function EditCampaignPage() {
                           updateMilestone(index, "title", event.target.value)
                         }
                         className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
+                        readOnly={index === 0}
                         required
                       />
                     </FieldLabel>
@@ -535,6 +542,7 @@ export default function EditCampaignPage() {
                         max="100"
                         step="5"
                         type="number"
+                        readOnly={index === 0}
                         onWheel={preventWheelNumberChange}
                         className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
                         required

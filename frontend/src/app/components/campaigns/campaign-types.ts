@@ -22,6 +22,12 @@ export type Campaign = {
   duration_days: number;
   image_url: string | null;
   contract_address: string | null;
+  goal_wei?: string | null;
+  chain_id?: number | null;
+  factory_address?: string | null;
+  deployment_tx_hash?: string | null;
+  on_chain_campaign_key?: string | null;
+  eth_myr_rate?: number | string | null;
   rejection_reason?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -37,4 +43,9 @@ export type CampaignMilestone = {
   status: MilestoneStatus;
   proof_url: string | null;
   rejection_reason: string | null;
+  on_chain_index?: number | null;
+  proof_cid?: string | null;
+  proof_tx_hash?: string | null;
+  review_tx_hash?: string | null;
+  release_tx_hash?: string | null;
 };

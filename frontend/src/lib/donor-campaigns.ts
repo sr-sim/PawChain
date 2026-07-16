@@ -13,6 +13,9 @@ type CampaignRow = {
   campaign_status: string;
   duration_days: number;
   image_url: string | null;
+  contract_address?: string | null;
+  goal_wei?: string | null;
+  eth_myr_rate?: number | string | null;
   created_at?: string | null;
 };
 
@@ -57,6 +60,9 @@ export type DonorCampaign = (typeof previewCampaigns)[number] & {
     percentage: number;
     status: string;
   }[];
+  contractAddress?: string | null;
+  goalWei?: string | null;
+  ethMyrRate?: number;
 };
 
 export type DonorShelter = ReturnType<typeof import("@/app/Donor/campaignData").getShelters>[number] & {
@@ -270,6 +276,9 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
               status: "Pending",
             })),
       source: "supabase",
+      contractAddress: campaign.contract_address ?? null,
+      goalWei: campaign.goal_wei ?? null,
+      ethMyrRate: Number(campaign.eth_myr_rate ?? 0) || undefined,
     };
   });
 }
@@ -280,7 +289,7 @@ export async function getActiveDonorCampaigns(): Promise<DonorCampaign[]> {
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, created_at",
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, eth_myr_rate, created_at",
     )
     .eq("campaign_status", "active")
     .order("created_at", { ascending: false });
@@ -300,7 +309,7 @@ export async function getDonorCampaignById(id: string): Promise<DonorCampaign | 
   const { data, error } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, created_at",
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, eth_myr_rate, created_at",
     )
     .eq("id", id)
     .eq("campaign_status", "active")
@@ -325,7 +334,7 @@ export async function getDonorShelterById(id: string): Promise<DonorShelter | nu
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, created_at",
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, eth_myr_rate, created_at",
     )
     .eq("shelter_id", id)
     .eq("campaign_status", "active")

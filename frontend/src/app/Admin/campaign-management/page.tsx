@@ -2,8 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
+import { useChainId, usePublicClient, useWriteContract } from "wagmi";
+import { isAddress } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
+import { campaignFactoryAbi } from "@/lib/campaign-factory-abi";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import {
+  campaignKeyFromId,
+  demoEthMyrRate,
+  getCampaignFactoryAddress,
+  getPawChainId,
+  myrToWei,
+} from "@/lib/campaign-blockchain";
 
 type Milestone = {
   id: string;
@@ -14,6 +25,7 @@ type Milestone = {
   status: string;
   proof_url: string | null;
   rejection_reason: string | null;
+  on_chain_index: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,6 +33,7 @@ type Campaign = {
   id: string;
   shelter_id: string;
   shelter_name: string | null;
+  shelter_wallet: string | null;
   title: string;
   description: string;
   location: string;
@@ -31,6 +44,7 @@ type Campaign = {
   duration_days: number;
   image_url: string | null;
   contract_address: string | null;
+  blockchain_deadline: string | null;
   created_at: string;
   updated_at: string;
   rejection_reason: string | null;
@@ -153,6 +167,9 @@ function Modal({
 
 export default function CampaignManagementPage() {
   const { address, isConnected } = useAppKitAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(false);
@@ -327,6 +344,62 @@ export default function CampaignManagementPage() {
     if (!address) return;
     setBusy(true);
     try {
+      let txHash: `0x${string}` | "" = "";
+      let goalWei = "";
+      let deadline = 0;
+
+      if (action === "approve") {
+        if (!publicClient) {
+          throw new Error("Blockchain connection is unavailable.");
+        }
+        if (chainId !== getPawChainId()) {
+          throw new Error(`Switch your wallet to PawChain ${getPawChainId()}.`);
+        }
+        if (!campaign.shelter_wallet || !isAddress(campaign.shelter_wallet)) {
+          throw new Error("The shelter wallet address is missing.");
+        }
+
+        const percentages = campaign.campaign_milestones.map(
+          (milestone) => Number(milestone.percentage) * 100,
+        );
+        if (
+          percentages.length < 2 ||
+          percentages.length > 5 ||
+          percentages[0] !== 500 ||
+          percentages.reduce((sum, value) => sum + value, 0) !== 10_000
+        ) {
+          throw new Error(
+            "Milestones must start with 5% and total exactly 100%.",
+          );
+        }
+
+        const calculatedGoalWei = myrToWei(
+          Number(campaign.goal_amount),
+          demoEthMyrRate,
+        );
+        deadline =
+          Math.floor(Date.now() / 1000) + campaign.duration_days * 24 * 60 * 60;
+        goalWei = calculatedGoalWei.toString();
+        txHash = await writeContractAsync({
+          address: getCampaignFactoryAddress(),
+          abi: campaignFactoryAbi,
+          functionName: "createApprovedCampaign",
+          args: [
+            campaignKeyFromId(campaign.id),
+            campaign.shelter_wallet,
+            calculatedGoalWei,
+            BigInt(deadline),
+            percentages,
+          ],
+        });
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: txHash,
+        });
+        if (receipt.status !== "success") {
+          throw new Error("Campaign deployment failed.");
+        }
+      }
+
       const response = await fetch("/api/admin/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -335,6 +408,10 @@ export default function CampaignManagementPage() {
           campaignId: campaign.id,
           action,
           rejectionReason: reason.trim(),
+          txHash,
+          goalWei,
+          ethMyrRate: demoEthMyrRate,
+          deadline,
         }),
       });
       const result = await response.json();
@@ -364,6 +441,38 @@ export default function CampaignManagementPage() {
     if (!address) return;
     setBusy(true);
     try {
+      if (!publicClient) {
+        throw new Error("Blockchain connection is unavailable.");
+      }
+      if (chainId !== getPawChainId()) {
+        throw new Error(`Switch your wallet to PawChain ${getPawChainId()}.`);
+      }
+
+      const relatedCampaign = campaigns.find((campaign) =>
+        campaign.campaign_milestones.some((item) => item.id === milestone.id),
+      );
+      if (
+        !relatedCampaign?.contract_address ||
+        !isAddress(relatedCampaign.contract_address) ||
+        milestone.on_chain_index === null
+      ) {
+        throw new Error("This milestone is not linked to a contract.");
+      }
+
+      const txHash = await writeContractAsync({
+        address: relatedCampaign.contract_address,
+        abi: campaignContractAbi,
+        functionName:
+          action === "approve" ? "approveMilestone" : "rejectMilestone",
+        args: [BigInt(milestone.on_chain_index)],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      if (receipt.status !== "success") {
+        throw new Error("Milestone review transaction failed.");
+      }
+
       const response = await fetch("/api/admin/milestones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -372,6 +481,7 @@ export default function CampaignManagementPage() {
           milestoneId: milestone.id,
           action,
           rejectionReason: milestoneReason.trim(),
+          txHash,
         }),
       });
       const result = await response.json();
@@ -405,6 +515,132 @@ export default function CampaignManagementPage() {
     } catch (reviewError) {
       setToast(
         reviewError instanceof Error ? reviewError.message : "Review failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelActiveCampaign = async (campaign: Campaign) => {
+    if (
+      !address ||
+      !campaign.contract_address ||
+      !isAddress(campaign.contract_address)
+    ) {
+      setToast("Campaign contract is unavailable.");
+      return;
+    }
+    if (!window.confirm("Cancel this campaign and enable refunds for all locked funds?")) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (!publicClient) {
+        throw new Error("Blockchain connection is unavailable.");
+      }
+      if (chainId !== getPawChainId()) {
+        throw new Error(`Switch your wallet to PawChain ${getPawChainId()}.`);
+      }
+      const txHash = await writeContractAsync({
+        address: campaign.contract_address,
+        abi: campaignContractAbi,
+        functionName: "cancelCampaign",
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      if (receipt.status !== "success") {
+        throw new Error("Campaign cancellation failed.");
+      }
+
+      const response = await fetch("/api/admin/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: address,
+          campaignId: campaign.id,
+          action: "cancel",
+          txHash,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to record cancellation.");
+      }
+
+      setToast("Campaign cancelled. Locked funds are available for refunds.");
+      await load();
+    } catch (cancelError) {
+      setToast(
+        cancelError instanceof Error
+          ? cancelError.message
+          : "Unable to cancel campaign.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finalizeExpiredCampaign = async (campaign: Campaign) => {
+    if (
+      !address ||
+      !campaign.contract_address ||
+      !isAddress(campaign.contract_address)
+    ) {
+      setToast("Campaign contract is unavailable.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Finalize this expired underfunded campaign and enable refunds?",
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    try {
+      if (!publicClient) {
+        throw new Error("Blockchain connection is unavailable.");
+      }
+      if (chainId !== getPawChainId()) {
+        throw new Error(`Switch your wallet to PawChain ${getPawChainId()}.`);
+      }
+      const txHash = await writeContractAsync({
+        address: campaign.contract_address,
+        abi: campaignContractAbi,
+        functionName: "finalizeExpired",
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
+      if (receipt.status !== "success") {
+        throw new Error("Campaign expiry finalization failed.");
+      }
+
+      const response = await fetch("/api/admin/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: address,
+          campaignId: campaign.id,
+          action: "finalize_expired",
+          txHash,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to record campaign expiry.");
+      }
+
+      setToast("Expired campaign finalized. Locked funds can now be refunded.");
+      await load();
+    } catch (finalizeError) {
+      setToast(
+        finalizeError instanceof Error
+          ? finalizeError.message
+          : "Unable to finalize expired campaign.",
       );
     } finally {
       setBusy(false);
@@ -774,12 +1010,34 @@ export default function CampaignManagementPage() {
                               </>
                             ) : null}
                             {isApproved(campaign.campaign_status) ? (
-                              <button
-                                onClick={() => setMilestoneCampaign(campaign)}
-                                className="rounded-xl bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
-                              >
-                                Milestone management
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => setMilestoneCampaign(campaign)}
+                                  className="rounded-xl bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
+                                >
+                                  Milestone management
+                                </button>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => void cancelActiveCampaign(campaign)}
+                                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-black text-red-700 disabled:opacity-50"
+                                >
+                                  Cancel & refund
+                                </button>
+                                {campaign.blockchain_deadline &&
+                                new Date(campaign.blockchain_deadline).getTime() <=
+                                  Date.now() ? (
+                                  <button
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void finalizeExpiredCampaign(campaign)
+                                    }
+                                    className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-black text-sky-700 disabled:opacity-50"
+                                  >
+                                    Finalize expiry
+                                  </button>
+                                ) : null}
+                              </>
                             ) : null}
                           </div>
                           {false ? (

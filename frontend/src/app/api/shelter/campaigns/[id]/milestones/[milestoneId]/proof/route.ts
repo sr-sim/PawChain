@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { isAddress, type Address, type Hash } from "viem";
 
 type ProofFile = {
   name?: unknown;
@@ -57,6 +60,8 @@ export async function PATCH(
     const { id, milestoneId } = await context.params;
     const walletAddress = String(body.walletAddress ?? "").trim();
     const proofFiles = parseProofFiles(body.proofFiles);
+    const proofCID = String(body.proofCID ?? "").trim();
+    const txHash = String(body.txHash ?? "").trim();
 
     if (!walletAddress) {
       return NextResponse.json(
@@ -68,6 +73,13 @@ export async function PATCH(
     if (proofFiles.length < 1) {
       return NextResponse.json(
         { message: "Upload at least one proof file." },
+        { status: 400 },
+      );
+    }
+
+    if (!proofCID || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+      return NextResponse.json(
+        { message: "Confirmed on-chain proof details are required." },
         { status: 400 },
       );
     }
@@ -91,7 +103,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
-      .select("id, campaign_status")
+      .select("id, campaign_status, contract_address")
       .eq("id", id)
       .eq("shelter_id", profile.id)
       .maybeSingle();
@@ -114,9 +126,16 @@ export async function PATCH(
       );
     }
 
+    if (!campaign.contract_address || !isAddress(campaign.contract_address)) {
+      return NextResponse.json(
+        { message: "Campaign contract is not configured." },
+        { status: 409 },
+      );
+    }
+
     const { data: milestone, error: milestoneError } = await supabase
       .from("campaign_milestones")
-      .select("id, status")
+      .select("id, status, on_chain_index")
       .eq("id", milestoneId)
       .eq("campaign_id", campaign.id)
       .maybeSingle();
@@ -132,6 +151,13 @@ export async function PATCH(
       );
     }
 
+    if (milestone.on_chain_index === null) {
+      return NextResponse.json(
+        { message: "Milestone is not linked to the campaign contract." },
+        { status: 409 },
+      );
+    }
+
     if (milestone.status === "approved") {
       return NextResponse.json(
         { message: "Approved milestones cannot be changed." },
@@ -139,10 +165,43 @@ export async function PATCH(
       );
     }
 
+    const publicClient = getPawChainPublicClient();
+    const receipt = await publicClient.getTransactionReceipt({
+      hash: txHash as Hash,
+    });
+    if (
+      receipt.status !== "success" ||
+      receipt.from.toLowerCase() !== walletAddress.toLowerCase() ||
+      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
+    ) {
+      return NextResponse.json(
+        { message: "The proof transaction does not match this campaign." },
+        { status: 409 },
+      );
+    }
+
+    const onChainMilestone = await publicClient.readContract({
+      address: campaign.contract_address as Address,
+      abi: campaignContractAbi,
+      functionName: "getMilestone",
+      args: [BigInt(milestone.on_chain_index)],
+    });
+    if (
+      Number(onChainMilestone.status) !== 2 ||
+      onChainMilestone.proofCID !== proofCID
+    ) {
+      return NextResponse.json(
+        { message: "On-chain proof does not match the submitted proof." },
+        { status: 409 },
+      );
+    }
+
     const { data: updatedMilestone, error: updateError } = await supabase
       .from("campaign_milestones")
       .update({
         proof_url: JSON.stringify(proofFiles),
+        proof_cid: proofCID,
+        proof_tx_hash: txHash,
         status: "submitted",
         rejection_reason: null,
       })

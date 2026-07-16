@@ -297,6 +297,7 @@ export default function CampaignDetailPage() {
                   index={index}
                   campaignId={campaign.id}
                   walletAddress={address}
+                  contractAddress={campaign.contract_address}
                   canUploadProof={campaign.campaign_status === "active"}
                   onProofSubmitted={(updatedMilestone) =>
                     setMilestones((current) =>
