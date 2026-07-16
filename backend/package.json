@@ -7,6 +7,7 @@
     "compile": "hardhat compile",
     "node": "hardhat node",
     "deploy:local": "hardhat ignition deploy ignition/modules/PawChain.ts --network localhost",
+    "deploy:factory:sepolia": "hardhat ignition deploy ignition/modules/CampaignFactorySepolia.ts --network sepolia --parameters ignition/parameters/sepolia-campaign-factory.json",
     "test": "hardhat test",
     "upload:role-metadata": "node scripts/upload-role-nft-metadata.mjs"
   },
