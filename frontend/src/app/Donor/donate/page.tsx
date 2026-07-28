@@ -14,6 +14,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { formatEther, isAddress, parseEther } from "viem";
+import { formatEther, isAddress, parseEther } from "viem";
 import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
@@ -480,6 +481,29 @@ export default function DonorDonatePage() {
     !Number.isFinite(parsedAmount) ||
     parsedAmount <= 0;
   const numericAmount = hasInvalidAmount ? 0 : parsedAmount;
+  const milestoneDonationStateLoaded =
+    currentMilestone !== undefined && onChainTotalRaised !== undefined;
+  const currentMilestoneRemainingWei =
+    currentMilestone &&
+    onChainTotalRaised !== undefined &&
+    Number(currentMilestone.status) === 1 &&
+    currentMilestone.cumulativeThreshold > onChainTotalRaised
+      ? currentMilestone.cumulativeThreshold - onChainTotalRaised
+      : BigInt(0);
+  const maximumDonationEth = Number(formatEther(currentMilestoneRemainingWei));
+  const parsedAmountWei = useMemo(() => {
+    if (hasInvalidAmount) return null;
+    try {
+      return parseEther(trimmedAmount);
+    } catch {
+      return null;
+    }
+  }, [hasInvalidAmount, trimmedAmount]);
+  const amountExceedsCurrentMilestone =
+    isSequentialFlow &&
+    milestoneDonationStateLoaded &&
+    parsedAmountWei !== null &&
+    parsedAmountWei > currentMilestoneRemainingWei;
   const myrEstimate = numericAmount * ethToMyrRate;
   const walletBalanceEth = walletBalance
     ? Number(formatEther(walletBalance.value))

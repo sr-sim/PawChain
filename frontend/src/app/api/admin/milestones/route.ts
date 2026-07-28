@@ -75,9 +75,21 @@ export async function POST(request: NextRequest) {
       args: [BigInt(milestone.on_chain_index)],
     });
     const onChainStatus = Number(onChainMilestone.status);
-    const expectedStatus =
-      action === "reject"
-        ? onChainStatus === 3
+    let isSequentialFlow = false;
+    try {
+      const flowVersion = await publicClient.readContract({
+        address: campaign.contract_address as Address,
+        abi: campaignContractAbi,
+        functionName: "FLOW_VERSION",
+      });
+      isSequentialFlow = flowVersion === BigInt(2);
+    } catch {
+      // Contracts deployed before flow version 2 do not expose FLOW_VERSION.
+    }
+    const expectedStatus = action === "reject"
+      ? onChainStatus === 3
+      : isSequentialFlow
+        ? onChainStatus === 7
         : milestone.on_chain_index === 0
           ? onChainStatus === 7
           : onChainStatus === 4 || onChainStatus === 5;
@@ -85,9 +97,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "The on-chain milestone status does not match this review." }, { status: 409 });
     }
 
-    const { error } = await supabase.from("campaign_milestones").update({ status: action === "approve" ? "approved" : "rejected", rejection_reason: action === "approve" ? null : reason, review_tx_hash: txHash, updated_at: new Date().toISOString() }).eq("id", milestoneId);
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("campaign_milestones").update({ status: action === "approve" ? "approved" : "rejected", rejection_reason: action === "approve" ? null : reason, review_tx_hash: txHash, updated_at: updatedAt }).eq("id", milestoneId);
     if (error) throw error;
-    return NextResponse.json({ status: action === "approve" ? "approved" : "rejected", onChainStatus });
+
+    let campaignCompleted = false;
+    if (action === "approve") {
+      const onChainCampaignStatus = Number(
+        await publicClient.readContract({
+          address: campaign.contract_address as Address,
+          abi: campaignContractAbi,
+          functionName: "campaignStatus",
+        }),
+      );
+
+      // CampaignStatus.Completed is enum value 1. The contract is the source
+      // of truth, so Supabase is marked completed only after the confirmed
+      // final approval transaction has completed the campaign on-chain.
+      if (onChainCampaignStatus === 1) {
+        const { error: campaignUpdateError } = await supabase
+          .from("campaigns")
+          .update({ campaign_status: "completed", updated_at: updatedAt })
+          .eq("id", milestone.campaign_id)
+          .eq("contract_address", campaign.contract_address);
+        if (campaignUpdateError) throw campaignUpdateError;
+        campaignCompleted = true;
+      }
+    }
+
+    return NextResponse.json({
+      status: action === "approve" ? "approved" : "rejected",
+      onChainStatus,
+      campaignCompleted,
+    });
   } catch (error) {
     const denied = error instanceof Error && error.message === "ADMIN_DENIED";
     return NextResponse.json({ message: denied ? "Access denied." : error instanceof Error ? error.message : "Unable to review milestone." }, { status: denied ? 403 : 500 });
