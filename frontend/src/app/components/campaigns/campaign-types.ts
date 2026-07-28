@@ -48,4 +48,5 @@ export type CampaignMilestone = {
   proof_tx_hash?: string | null;
   review_tx_hash?: string | null;
   release_tx_hash?: string | null;
+  created_at?: string;
 };

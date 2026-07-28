@@ -1,5 +1,12 @@
 export const campaignFactoryAbi = [
   {
+    type: "function",
+    name: "FLOW_VERSION",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     type: "event",
     name: "CampaignCreated",
     inputs: [

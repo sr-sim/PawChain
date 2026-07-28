@@ -121,6 +121,7 @@ describe("Campaign and CampaignFactory", function () {
       campaignAddress,
     );
     expect(await factory.read.getCampaignCount()).to.equal(1n);
+    expect(await factory.read.FLOW_VERSION()).to.equal(2n);
     expect(await factory.read.getAllCampaigns()).to.deep.equal([
       campaignAddress,
     ]);
@@ -128,6 +129,7 @@ describe("Campaign and CampaignFactory", function () {
       await factory.read.getCampaignsByShelter([shelter.account.address]),
     ).to.deep.equal([campaignAddress]);
     expect(await campaign.read.getMilestoneCount()).to.equal(4n);
+    expect(await campaign.read.FLOW_VERSION()).to.equal(2n);
     expect(await campaign.read.campaignStatus()).to.equal(
       CampaignStatus.Funding,
     );
@@ -231,7 +233,7 @@ describe("Campaign and CampaignFactory", function () {
     );
   });
 
-  it("records donations, caps the goal, and unlocks milestone one at 5%", async function () {
+  it("records donations, caps the current stage, and unlocks milestone one at 5%", async function () {
     const {
       campaign,
       campaignAsDonorOne,
@@ -263,8 +265,8 @@ describe("Campaign and CampaignFactory", function () {
     );
 
     await expectRevert(
-      campaignAsDonorOne.write.donate([], { value: parseEther("9.51") }),
-      "Donation exceeds goal",
+      campaignAsDonorOne.write.donate([], { value: parseEther("0.01") }),
+      "Current milestone not accepting donations",
     );
     await expectRevert(
       campaignAsDonorOne.write.donate([], { value: 0n }),
@@ -281,6 +283,11 @@ describe("Campaign and CampaignFactory", function () {
     } = await loadFixture(deployFixture);
 
     await campaignAsDonorOne.write.donate([], { value: parseEther("0.5") });
+
+    await expectRevert(
+      campaignAsShelter.write.submitMilestoneProof([0n, "too-early"]),
+      "Milestone funds must be withdrawn first",
+    );
 
     await expectRevert(
       campaignAsOutsider.write.withdrawMilestone([0n]),
@@ -317,7 +324,7 @@ describe("Campaign and CampaignFactory", function () {
     );
   });
 
-  it("requires proof approval and cumulative funding for later milestones", async function () {
+  it("requires stage funding and withdrawal before proof for later milestones", async function () {
     const { campaign, campaignAsShelter, campaignAsDonorOne } =
       await loadFixture(deployFixture);
 
@@ -327,15 +334,17 @@ describe("Campaign and CampaignFactory", function () {
     await campaign.write.approveMilestone([0n]);
 
     await campaignAsDonorOne.write.donate([], { value: parseEther("2.4") });
-    await campaignAsShelter.write.submitMilestoneProof([1n, "proof-1"]);
-    await campaign.write.approveMilestone([1n]);
-
-    expect((await campaign.read.getMilestone([1n])).status).to.equal(
-      MilestoneStatus.Approved,
-    );
     await expectRevert(
       campaignAsShelter.write.withdrawMilestone([1n]),
       "Funds not withdrawable",
+    );
+    await expectRevert(
+      campaignAsShelter.write.submitMilestoneProof([1n, "proof-too-early"]),
+      "Milestone funds must be withdrawn first",
+    );
+    await expectRevert(
+      campaignAsDonorOne.write.donate([], { value: parseEther("0.11") }),
+      "Donation exceeds current milestone target",
     );
 
     await campaignAsDonorOne.write.donate([], { value: parseEther("0.1") });
@@ -346,9 +355,20 @@ describe("Campaign and CampaignFactory", function () {
     await campaignAsShelter.write.withdrawMilestone([1n]);
     expect(await campaign.read.totalReleased()).to.equal(parseEther("3"));
     expect((await campaign.read.getMilestone([1n])).status).to.equal(
+      MilestoneStatus.Released,
+    );
+    expect(await campaign.read.currentMilestoneIndex()).to.equal(1n);
+
+    await campaignAsShelter.write.submitMilestoneProof([1n, "proof-1"]);
+    await campaign.write.approveMilestone([1n]);
+
+    expect((await campaign.read.getMilestone([1n])).status).to.equal(
       MilestoneStatus.Completed,
     );
     expect(await campaign.read.currentMilestoneIndex()).to.equal(2n);
+    expect((await campaign.read.getMilestone([2n])).status).to.equal(
+      MilestoneStatus.Active,
+    );
   });
 
   it("allows rejected proof to be resubmitted", async function () {
@@ -367,6 +387,55 @@ describe("Campaign and CampaignFactory", function () {
     await campaignAsShelter.write.submitMilestoneProof([0n, "fixed-proof"]);
     expect((await campaign.read.getMilestone([0n])).proofCID).to.equal(
       "fixed-proof",
+    );
+  });
+
+  it("allows only an admin to review proof", async function () {
+    const {
+      campaign,
+      campaignAsShelter,
+      campaignAsDonorOne,
+      campaignAsOutsider,
+    } = await loadFixture(deployFixture);
+
+    await campaignAsDonorOne.write.donate([], { value: parseEther("0.5") });
+    await campaignAsShelter.write.withdrawMilestone([0n]);
+    await campaignAsShelter.write.submitMilestoneProof([0n, "proof-0"]);
+
+    await expectRevert(
+      campaignAsOutsider.write.approveMilestone([0n]),
+      "Only admin",
+    );
+    await expectRevert(
+      campaignAsOutsider.write.rejectMilestone([0n]),
+      "Only admin",
+    );
+  });
+
+  it("completes the campaign only after final withdrawal and proof approval", async function () {
+    const { campaign, campaignAsShelter, campaignAsDonorOne } =
+      await loadFixture(deployFixture);
+    const allocations = ["0.5", "2.5", "3", "4"] as const;
+
+    for (let index = 0; index < allocations.length; index++) {
+      await campaignAsDonorOne.write.donate([], {
+        value: parseEther(allocations[index]),
+      });
+      await campaignAsShelter.write.withdrawMilestone([BigInt(index)]);
+      await campaignAsShelter.write.submitMilestoneProof([
+        BigInt(index),
+        `proof-${index}`,
+      ]);
+      await campaign.write.approveMilestone([BigInt(index)]);
+    }
+
+    expect(await campaign.read.totalRaised()).to.equal(parseEther("10"));
+    expect(await campaign.read.totalReleased()).to.equal(parseEther("10"));
+    expect(await campaign.read.campaignStatus()).to.equal(
+      CampaignStatus.Completed,
+    );
+    expect((await campaign.read.getMilestone([3n])).status).to.equal(
+      MilestoneStatus.Completed,
     );
   });
 
@@ -402,6 +471,8 @@ describe("Campaign and CampaignFactory", function () {
     await campaignAsDonorOne.write.donate([], { value: parseEther("0.3") });
     await campaignAsDonorTwo.write.donate([], { value: parseEther("0.2") });
     await campaignAsShelter.write.withdrawMilestone([0n]);
+    await campaignAsShelter.write.submitMilestoneProof([0n, "proof-0"]);
+    await campaign.write.approveMilestone([0n]);
     await campaignAsDonorOne.write.donate([], { value: parseEther("1") });
     await campaignAsDonorTwo.write.donate([], { value: parseEther("1") });
 
@@ -440,8 +511,8 @@ describe("Campaign and CampaignFactory", function () {
       deadline,
     } = await loadFixture(deployFixture);
 
-    await campaignAsDonorOne.write.donate([], { value: parseEther("1") });
-    await campaignAsDonorTwo.write.donate([], { value: parseEther("2") });
+    await campaignAsDonorOne.write.donate([], { value: parseEther("0.1") });
+    await campaignAsDonorTwo.write.donate([], { value: parseEther("0.2") });
     await time.increaseTo(deadline);
     await campaign.write.finalizeExpired();
 
@@ -450,10 +521,10 @@ describe("Campaign and CampaignFactory", function () {
     );
     expect(
       await campaign.read.getRefundableAmount([donorOne.account.address]),
-    ).to.equal(parseEther("1"));
+    ).to.equal(parseEther("0.1"));
     expect(
       await campaign.read.getRefundableAmount([donorTwo.account.address]),
-    ).to.equal(parseEther("2"));
+    ).to.equal(parseEther("0.2"));
     await expectRevert(
       campaignAsDonorOne.write.donate([], { value: parseEther("0.1") }),
       "Not funding",

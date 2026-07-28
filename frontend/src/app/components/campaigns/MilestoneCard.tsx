@@ -118,10 +118,17 @@ export function MilestoneCard({
     [milestone.proof_url],
   );
   const proofState = getProofState(milestone, existingProofFiles.length > 0);
+  const chainTransactions = [
+    ["Proof", milestone.proof_tx_hash],
+    ["Review", milestone.review_tx_hash],
+    ["Release", milestone.release_tx_hash],
+  ].filter((item): item is [string, string] => Boolean(item[1]));
+  const emergency = milestone.on_chain_index === 0 ||
+    (Number(milestone.percentage) === 5 && /emergency|initial release/i.test(milestone.title));
 
   return (
     <>
-      <article className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,var(--color-white),rgba(var(--color-cream-rgb),0.42))] shadow-sm shadow-orange-100">
+      <article className={`overflow-hidden rounded-2xl border shadow-sm shadow-orange-100 ${emergency ? "border-[#FFCD80] bg-[linear-gradient(135deg,#FFFCC9,#FFFFFF)]" : "border-orange-100 bg-[linear-gradient(135deg,var(--color-white),rgba(var(--color-cream-rgb),0.42))]"}`}>
         <div className="p-4 sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex gap-3">
@@ -132,6 +139,7 @@ export function MilestoneCard({
                 <h3 className="text-lg font-black text-stone-950">
                   {milestone.title}
                 </h3>
+                {emergency ? <span className="mt-1 inline-flex rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-orange-700">Emergency initial release · first</span> : null}
                 <p className="mt-1 text-sm font-bold leading-6 text-stone-600">
                   {milestone.description}
                 </p>
@@ -211,6 +219,15 @@ export function MilestoneCard({
           ) : null}
 
           {children}
+
+          {chainTransactions.length ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-orange-100 pt-4">
+              <span className="mr-1 text-[10px] font-black uppercase tracking-wide text-stone-500">On-chain evidence</span>
+              {chainTransactions.map(([label, hash]) => (
+                <a key={label} href={`https://sepolia.etherscan.io/tx/${hash}`} target="_blank" rel="noreferrer" className="rounded-full border border-orange-100 bg-white px-3 py-1.5 text-xs font-black text-[var(--color-orange)] hover:border-[var(--color-orange)]">{label} tx ↗</a>
+              ))}
+            </div>
+          ) : null}
         </div>
       </article>
 

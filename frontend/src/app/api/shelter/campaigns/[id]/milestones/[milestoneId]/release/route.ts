@@ -81,8 +81,20 @@ export async function POST(
       functionName: "getMilestone",
       args: [BigInt(milestone.on_chain_index)],
     });
-    const expectedStatus =
-      milestone.on_chain_index === 0
+    let isSequentialFlow = false;
+    try {
+      const flowVersion = await publicClient.readContract({
+        address: campaign.contract_address as Address,
+        abi: campaignContractAbi,
+        functionName: "FLOW_VERSION",
+      });
+      isSequentialFlow = flowVersion === BigInt(2);
+    } catch {
+      // Contracts deployed before flow version 2 do not expose FLOW_VERSION.
+    }
+    const expectedStatus = isSequentialFlow
+      ? Number(onChainMilestone.status) === 6
+      : milestone.on_chain_index === 0
         ? Number(onChainMilestone.status) === 6
         : Number(onChainMilestone.status) === 7;
     if (!expectedStatus) {
