@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getDonorDonations } from "@/lib/donor-donations";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export async function GET(request: NextRequest) {
         { status: 404 },
       );
     }
+
+    await getDonorDonations(walletAddress);
 
     const { data, error } = await donor.supabase
       .from("donor_notifications")

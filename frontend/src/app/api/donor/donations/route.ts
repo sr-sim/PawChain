@@ -7,6 +7,8 @@ import {
   demoEthMyrRate,
   getPawChainPublicClient,
 } from "@/lib/campaign-blockchain";
+import { createDonorNotification } from "@/lib/donor-notifications";
+import { getLatestEthMyrRate } from "@/lib/currency";
 import {
   decodeEventLog,
   formatEther,
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
-      .select("id, campaign_status, contract_address, eth_myr_rate")
+      .select("id, title, campaign_status, contract_address, eth_myr_rate")
       .eq("id", campaignId)
       .single();
     if (campaignError) throw campaignError;
@@ -152,7 +154,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rate = Number(campaign.eth_myr_rate ?? demoEthMyrRate);
+    const latestRate = await getLatestEthMyrRate();
+    const rate = Number.isFinite(latestRate.rate)
+      ? latestRate.rate
+      : Number(campaign.eth_myr_rate ?? demoEthMyrRate);
     const amountMyr = Number(formatEther(donationAmount)) * rate;
     const raisedMyr = Number(formatEther(totalRaised)) * rate;
     const { data: donation, error: insertError } = await supabase
@@ -179,6 +184,14 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", campaignId);
     if (updateError) throw updateError;
+
+    await createDonorNotification({
+      donorId: donor.id,
+      campaignId,
+      title: "Donation confirmed",
+      message: `Your ${Number(formatEther(donationAmount)).toFixed(6)} ETH donation to ${campaign.title} was confirmed on-chain.`,
+      status: "success",
+    });
 
     return NextResponse.json({ donation }, { status: 201 });
   } catch (error) {

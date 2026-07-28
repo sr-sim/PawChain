@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { campaigns as previewCampaigns } from "@/app/Donor/campaignData";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { formatEther, isAddress, type Address } from "viem";
 
 type CampaignRow = {
   id: string;
@@ -15,6 +18,7 @@ type CampaignRow = {
   image_url: string | null;
   contract_address?: string | null;
   goal_wei?: string | null;
+  deployment_tx_hash?: string | null;
   eth_myr_rate?: number | string | null;
   created_at?: string | null;
 };
@@ -26,6 +30,10 @@ type MilestoneRow = {
   requirement?: string | null;
   percentage: number | string;
   status?: string | null;
+  proof_url?: string | null;
+  proof_tx_hash?: string | null;
+  review_tx_hash?: string | null;
+  release_tx_hash?: string | null;
 };
 
 type ShelterProfileRow = {
@@ -49,6 +57,13 @@ type ShelterVisualRow = {
   shelter_image_url?: string | null;
 };
 
+type OnChainCampaignSnapshot = {
+  totalRaisedEth: number;
+  goalEth: number;
+  status: string;
+  progress: number;
+};
+
 export type DonorCampaign = (typeof previewCampaigns)[number] & {
   source?: "supabase" | "preview";
   imageUrl?: string | null;
@@ -59,10 +74,19 @@ export type DonorCampaign = (typeof previewCampaigns)[number] & {
     requirement: string;
     percentage: number;
     status: string;
+    proofUrl?: string | null;
+    proofTxHash?: string | null;
+    reviewTxHash?: string | null;
+    releaseTxHash?: string | null;
   }[];
+  goalAmount?: number;
+  currentAmount?: number;
   contractAddress?: string | null;
   goalWei?: string | null;
+  deploymentTxHash?: string | null;
   ethMyrRate?: number;
+  onChainGoalEth?: number;
+  onChainTotalRaisedEth?: number;
 };
 
 export type DonorShelter = ReturnType<typeof import("@/app/Donor/campaignData").getShelters>[number] & {
@@ -97,6 +121,13 @@ function formatGoal(value: number | string) {
   }).format(amount);
 }
 
+function formatEthGoal(value: number) {
+  return `${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  })} ETH`;
+}
+
 function getProgress(currentAmount: number | string | null, goalAmount: number | string) {
   const current = Number(currentAmount ?? 0);
   const goal = Number(goalAmount);
@@ -106,6 +137,83 @@ function getProgress(currentAmount: number | string | null, goalAmount: number |
   }
 
   return Math.min(100, Math.round((current / goal) * 100));
+}
+
+function getOnChainStatusLabel(status: number) {
+  if (status === 0) return "Active";
+  if (status === 1) return "Completed";
+  if (status === 2) return "Refunding";
+  if (status === 3) return "Closed";
+  return "On-chain";
+}
+
+function getCampaignStatusLabel(status: string) {
+  if (status === "active") return "Active";
+  if (status === "completed") return "Completed";
+  if (status === "closed") return "Closed";
+  if (status === "pending_approval") return "Pending approval";
+  if (status === "rejected") return "Rejected";
+  return toTitleCase(status);
+}
+
+async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
+  const contractCampaigns = campaigns.filter(
+    (campaign) =>
+      campaign.contract_address && isAddress(campaign.contract_address),
+  );
+
+  if (contractCampaigns.length === 0) {
+    return new Map<string, OnChainCampaignSnapshot>();
+  }
+
+  const publicClient = getPawChainPublicClient();
+  const entries = await Promise.all(
+    contractCampaigns.map(async (campaign) => {
+      try {
+        const address = campaign.contract_address as Address;
+        const [totalRaisedWei, goalWei, campaignStatus] = await Promise.all([
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "totalRaised",
+          }),
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "goal",
+          }),
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "campaignStatus",
+          }),
+        ]);
+        const totalRaisedEth = Number(formatEther(totalRaisedWei));
+        const goalEth = Number(formatEther(goalWei));
+        const status = getOnChainStatusLabel(Number(campaignStatus));
+        const progress =
+          status === "Completed"
+            ? 100
+            : goalEth > 0
+              ? Math.min(100, Math.round((totalRaisedEth / goalEth) * 100))
+              : 0;
+
+        return [
+          campaign.id,
+          {
+            totalRaisedEth,
+            goalEth,
+            status,
+            progress,
+          },
+        ] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return new Map(entries.filter(Boolean) as [string, OnChainCampaignSnapshot][]);
 }
 
 function getDaysLeft(createdAt: string | null | undefined, durationDays: number) {
@@ -166,7 +274,7 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
 
   const { data: milestoneRows } = await supabase
     .from("campaign_milestones")
-    .select("campaign_id, title, description, requirement, percentage, status")
+    .select("campaign_id, title, description, requirement, percentage, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash")
     .in("campaign_id", campaignIds)
     .order("created_at", { ascending: true });
 
@@ -219,9 +327,11 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       visual.shelter_image_url ?? null,
     ]),
   );
+  const onChainSnapshots = await getOnChainCampaignSnapshots(campaigns);
 
   return campaigns.map((campaign) => {
     const milestones = milestonesByCampaign.get(campaign.id) ?? [];
+    const onChainSnapshot = onChainSnapshots.get(campaign.id);
     const fallbackMilestones = [
       { title: "Initial proof submission", percentage: 40 },
       { title: "Progress update", percentage: 35 },
@@ -242,10 +352,18 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       shelter: getShelterName(campaign.shelter_id, profileNames, applicationNames),
       location: campaign.location,
       urgency: toTitleCase(campaign.urgency_level),
-      status: "Active",
+      status: onChainSnapshot?.status ?? getCampaignStatusLabel(campaign.campaign_status),
       duration: `${campaign.duration_days} days`,
-      raised: getProgress(campaign.current_amount, campaign.goal_amount),
-      goal: formatGoal(campaign.goal_amount),
+      raised:
+        onChainSnapshot?.progress ??
+        getProgress(campaign.current_amount, campaign.goal_amount),
+      goal: onChainSnapshot
+        ? formatEthGoal(onChainSnapshot.goalEth)
+        : formatGoal(campaign.goal_amount),
+      goalAmount: Number(campaign.goal_amount) || 0,
+      currentAmount: Number(campaign.current_amount ?? 0) || 0,
+      onChainGoalEth: onChainSnapshot?.goalEth,
+      onChainTotalRaisedEth: onChainSnapshot?.totalRaisedEth,
       donors: 0,
       daysLeft: getDaysLeft(campaign.created_at, campaign.duration_days),
       verifiedSince: campaign.created_at
@@ -268,16 +386,25 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
               requirement: milestone.requirement ?? "",
               percentage: Number(milestone.percentage) || 0,
               status: toTitleCase(milestone.status ?? "pending"),
+              proofUrl: milestone.proof_url ?? null,
+              proofTxHash: milestone.proof_tx_hash ?? null,
+              reviewTxHash: milestone.review_tx_hash ?? null,
+              releaseTxHash: milestone.release_tx_hash ?? null,
             }))
           : mappedMilestones.map((milestone) => ({
               ...milestone,
               description: "",
               requirement: "",
               status: "Pending",
+              proofUrl: null,
+              proofTxHash: null,
+              reviewTxHash: null,
+              releaseTxHash: null,
             })),
       source: "supabase",
       contractAddress: campaign.contract_address ?? null,
       goalWei: campaign.goal_wei ?? null,
+      deploymentTxHash: campaign.deployment_tx_hash ?? null,
       ethMyrRate: Number(campaign.eth_myr_rate ?? 0) || undefined,
     };
   });
@@ -289,7 +416,7 @@ export async function getActiveDonorCampaigns(): Promise<DonorCampaign[]> {
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .eq("campaign_status", "active")
     .order("created_at", { ascending: false });
@@ -303,16 +430,34 @@ export async function getActiveDonorCampaigns(): Promise<DonorCampaign[]> {
   return mapCampaignRows(campaigns);
 }
 
+export async function getBrowsableDonorCampaigns(): Promise<DonorCampaign[]> {
+  const supabase = createAdminClient();
+
+  const { data: campaignRows, error: campaignError } = await supabase
+    .from("campaigns")
+    .select(
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+    )
+    .in("campaign_status", ["active", "completed", "closed"])
+    .order("created_at", { ascending: false });
+
+  if (campaignError) {
+    throw campaignError;
+  }
+
+  return mapCampaignRows((campaignRows ?? []) as CampaignRow[]);
+}
+
 export async function getDonorCampaignById(id: string): Promise<DonorCampaign | null> {
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .eq("id", id)
-    .eq("campaign_status", "active")
+    .in("campaign_status", ["active", "completed", "closed"])
     .maybeSingle();
 
   if (error) {
@@ -328,13 +473,39 @@ export async function getDonorCampaignById(id: string): Promise<DonorCampaign | 
   return campaign ?? null;
 }
 
+export async function getDonorCampaignsByIds(
+  ids: string[],
+): Promise<DonorCampaign[]> {
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select(
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+    )
+    .in("id", uniqueIds)
+    .in("campaign_status", ["active", "completed", "closed"]);
+
+  if (error) {
+    throw error;
+  }
+
+  return mapCampaignRows((data ?? []) as CampaignRow[]);
+}
+
 export async function getDonorShelterById(id: string): Promise<DonorShelter | null> {
   const supabase = createAdminClient();
 
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .eq("shelter_id", id)
     .eq("campaign_status", "active")

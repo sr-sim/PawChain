@@ -4,26 +4,6 @@ import { getDonorShelterById } from "@/lib/donor-campaigns";
 
 export const dynamic = "force-dynamic";
 
-function VerifiedBadge() {
-  return (
-    <span className="inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-orange-100 text-[var(--color-orange)] ring-1 ring-orange-200">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="h-4 w-4"
-        aria-hidden="true"
-      >
-        <path d="m8 12 2.5 2.5L16 9" />
-        <path d="M12 3 4.5 6v5c0 4.7 3.2 8.1 7.5 10 4.3-1.9 7.5-5.3 7.5-10V6L12 3Z" />
-      </svg>
-    </span>
-  );
-}
-
 function ShelterImage({
   imageClass,
   imageUrl,
@@ -97,7 +77,6 @@ export default async function DonorShelterProfilePage({
               </p>
               <h1 className="mt-2 flex items-center gap-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
                 <span>{shelter.name}</span>
-                <VerifiedBadge />
               </h1>
               <p className="mt-2 text-sm font-semibold text-[var(--color-orange)]">
                 {shelter.address ?? shelter.location}
