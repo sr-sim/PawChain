@@ -116,6 +116,13 @@ export const campaignContractAbi = [
   },
   {
     type: "function",
+    name: "currentMilestoneIndex",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "getMilestone",
     stateMutability: "view",
     inputs: [{ name: "milestoneIndex", type: "uint256" }],

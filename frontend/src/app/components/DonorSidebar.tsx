@@ -89,6 +89,16 @@ const navigationSections = [
           </svg>
         ),
       },
+      {
+        label: "NFT Badges",
+        href: "/Donor/badges",
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3 4.5 6v5c0 4.7 3.2 8.1 7.5 10 4.3-1.9 7.5-5.3 7.5-10V6L12 3Z" />
+            <path d="M9 12.5 11 14l4-5" />
+          </svg>
+        ),
+      },
     ],
   },
 ];
@@ -118,7 +128,7 @@ export function DonorSidebar({
     <aside
       aria-label="Donor navigation"
       className={[
-        "fixed bottom-0 left-0 top-16 z-40 overflow-hidden border-r border-orange-100 bg-white/95 shadow-[14px_0_36px_rgba(155,86,20,0.05)] transition-[width] duration-300",
+        "donor-chain-sidebar fixed bottom-0 left-0 top-16 z-40 overflow-hidden border-r border-orange-100 bg-white/94 shadow-[14px_0_36px_rgba(155,86,20,0.06)] backdrop-blur-2xl transition-[width] duration-300",
         isOpen ? "w-64" : "w-0",
       ].join(" ")}
     >
@@ -140,10 +150,10 @@ export function DonorSidebar({
                       aria-current={isActive ? "page" : undefined}
                       onClick={onNavigate}
                       className={[
-                        "donor-nav-row flex min-h-10 items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium",
+                        "donor-nav-row flex min-h-10 items-center gap-3 rounded-lg border px-3 py-2 text-sm font-semibold",
                         "focus:outline-none focus-visible:ring-1 focus-visible:ring-orange-200",
                         isActive
-                          ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]"
+                          ? "border-orange-200 bg-orange-50/65 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange),0_10px_24px_rgba(255,138,0,0.10)]"
                           : "border-transparent text-slate-700 hover:border-orange-100 hover:bg-orange-50/60 hover:text-stone-950",
                       ].join(" ")}
                     >

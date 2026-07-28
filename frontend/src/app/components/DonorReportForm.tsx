@@ -164,7 +164,7 @@ export default function DonorReportForm() {
           </p>
           <p className="mt-2 text-sm leading-6 text-emerald-700">
             Reference {submittedRequestId || reportReference} has been saved in
-            Supabase and is ready for admin review.
+            PawChain and is ready for admin review.
           </p>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             <div>
@@ -342,7 +342,7 @@ export default function DonorReportForm() {
             />
             <span className="text-sm leading-6 text-stone-600">
               I understand this report will be reviewed by admin and may require
-              follow-up proof after backend connection.
+              follow-up proof.
             </span>
           </label>
 
@@ -365,7 +365,7 @@ export default function DonorReportForm() {
             </p>
           ) : null}
           <p className="text-center text-xs font-medium text-stone-500">
-            Saved to Supabase donor_support_requests for admin review.
+            Saved for admin review.
           </p>
         </form>
       )}

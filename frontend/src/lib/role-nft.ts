@@ -4,6 +4,7 @@ import {
   http,
   isAddress,
   publicActions,
+  formatEther,
   type Address,
   type PublicClient,
 } from "viem";
@@ -27,6 +28,8 @@ export type RoleNFTDisplay = {
   metadata: RoleNFTMetadata | null;
   imageUrl: string | null;
   metadataError: string | null;
+  donorTotalContributedWei?: string | null;
+  donorTotalContributedEth?: number;
 };
 
 const ipfsGateway = "https://ipfs.io/ipfs/";
@@ -259,6 +262,17 @@ async function getRoleNFTDisplay(
           )
         ] ?? null
       : null;
+  const donorTotalContributed =
+    contractRole === "Donor"
+      ? await publicClient
+          .readContract({
+            address: contractAddress,
+            abi: roleNFTAbi,
+            functionName: "donorTotalContributed",
+            args: [wallet],
+          })
+          .catch(() => null)
+      : null;
 
   try {
     const metadataResult = await fetchMetadataWithFallback(tokenURI);
@@ -270,6 +284,11 @@ async function getRoleNFTDisplay(
       metadata: metadataResult.metadata,
       imageUrl: metadataResult.imageUrl,
       metadataError: null,
+      donorTotalContributedWei: donorTotalContributed?.toString() ?? null,
+      donorTotalContributedEth:
+        donorTotalContributed !== null
+          ? Number(formatEther(donorTotalContributed))
+          : undefined,
     };
   } catch (error) {
     return {
@@ -282,6 +301,11 @@ async function getRoleNFTDisplay(
         error instanceof Error
           ? error.message
           : "NFT metadata unavailable.",
+      donorTotalContributedWei: donorTotalContributed?.toString() ?? null,
+      donorTotalContributedEth:
+        donorTotalContributed !== null
+          ? Number(formatEther(donorTotalContributed))
+          : undefined,
     };
   }
 }

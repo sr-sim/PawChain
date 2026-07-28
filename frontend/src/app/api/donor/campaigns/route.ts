@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
+import { getBrowsableDonorCampaigns } from "@/lib/donor-campaigns";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const campaigns = await getActiveDonorCampaigns();
+    const campaigns = await getBrowsableDonorCampaigns();
 
     return NextResponse.json({
       campaigns,

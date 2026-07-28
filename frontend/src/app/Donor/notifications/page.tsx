@@ -165,7 +165,7 @@ export default function DonorNotificationsPage() {
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
               Read donor-specific milestone updates, report replies, and admin
-              messages saved in Supabase.
+              messages from PawChain.
             </p>
           </div>
           <Link
@@ -175,29 +175,6 @@ export default function DonorNotificationsPage() {
             View tracking
           </Link>
         </div>
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-3">
-        {[
-          ["All notifications", notifications.length],
-          ["Unread", unreadCount],
-          ["Read", readCount],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-              {label}
-            </p>
-            <p className="mt-2 text-2xl font-black text-stone-950">
-              {value}
-            </p>
-            <p className="mt-1 text-xs font-medium text-stone-500">
-              From donor_notifications
-            </p>
-          </div>
-        ))}
       </section>
 
       <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">

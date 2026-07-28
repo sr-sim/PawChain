@@ -77,7 +77,7 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
         notificationHref={notificationHref}
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
       />
-      <div className="flex min-h-screen bg-[var(--color-cream)] pt-16 text-stone-950">
+      <div className="donor-chain-bg flex min-h-screen bg-[var(--color-cream)] pt-16 text-stone-950">
         <DonorSidebar
           isOpen={isSidebarOpen}
           onNavigate={() => setIsSidebarOpen(false)}
@@ -89,7 +89,9 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
             isSidebarOpen ? "lg:ml-64" : "ml-0",
           ].join(" ")}
         >
-          <section className="donor-motion mx-auto max-w-7xl">{children}</section>
+          <section className="donor-motion donor-chain-shell mx-auto max-w-7xl">
+            {children}
+          </section>
         </main>
       </div>
     </>
