@@ -43,6 +43,41 @@ export const roleNFTAbi = [
   },
   {
     type: "function",
+    name: "donorTotalContributed",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "BRONZE_DONOR_THRESHOLD",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "SILVER_DONOR_THRESHOLD",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "GOLD_DONOR_THRESHOLD",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "HERO_DONOR_THRESHOLD",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "safeMintDonor",
     stateMutability: "nonpayable",
     inputs: [

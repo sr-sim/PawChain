@@ -6,6 +6,7 @@ import "./interfaces/IRoleNFT.sol";
 contract Campaign {
     uint16 public constant BASIS_POINTS = 10_000;
     uint16 public constant EMERGENCY_RELEASE_BPS = 500;
+    uint256 public constant FLOW_VERSION = 2;
 
     enum CampaignStatus {
         Funding,
@@ -170,7 +171,16 @@ contract Campaign {
         require(_isVerifiedShelter(shelter), "Shelter role inactive");
         require(block.timestamp < deadline, "Campaign expired");
         require(msg.value > 0, "Donation required");
-        require(totalRaised + msg.value <= goal, "Donation exceeds goal");
+
+        Milestone storage milestone = _milestones[currentMilestoneIndex];
+        require(
+            milestone.status == MilestoneStatus.Active,
+            "Current milestone not accepting donations"
+        );
+        require(
+            totalRaised + msg.value <= milestone.cumulativeThreshold,
+            "Donation exceeds current milestone target"
+        );
 
         donorContributions[msg.sender] += msg.value;
         totalRaised += msg.value;
@@ -195,19 +205,11 @@ contract Campaign {
 
         Milestone storage milestone = _milestones[milestoneIndex];
 
-        if (milestoneIndex == 0) {
-            require(
-                milestone.status == MilestoneStatus.Released ||
-                    milestone.status == MilestoneStatus.Rejected,
-                "Emergency funds must be released first"
-            );
-        } else {
-            require(
-                milestone.status == MilestoneStatus.Active ||
-                    milestone.status == MilestoneStatus.Rejected,
-                "Milestone not accepting proof"
-            );
-        }
+        require(
+            milestone.status == MilestoneStatus.Released ||
+                milestone.status == MilestoneStatus.Rejected,
+            "Milestone funds must be withdrawn first"
+        );
 
         milestone.proofCID = proofCID;
         milestone.status = MilestoneStatus.PendingReview;
@@ -229,19 +231,12 @@ contract Campaign {
             "Proof not pending"
         );
 
-        if (milestoneIndex == 0) {
-            milestone.status = MilestoneStatus.Completed;
-            emit MilestoneStatusChanged(
-                milestoneIndex,
-                MilestoneStatus.Completed
-            );
-            _activateNextMilestone();
-            return;
-        }
-
-        milestone.status = MilestoneStatus.Approved;
-        emit MilestoneStatusChanged(milestoneIndex, MilestoneStatus.Approved);
-        _refreshCurrentMilestone();
+        milestone.status = MilestoneStatus.Completed;
+        emit MilestoneStatusChanged(
+            milestoneIndex,
+            MilestoneStatus.Completed
+        );
+        _activateNextMilestone();
     }
 
     function rejectMilestone(uint256 milestoneIndex) external onlyAdmin {
@@ -275,9 +270,7 @@ contract Campaign {
         require(address(this).balance >= amount, "Insufficient contract balance");
 
         totalReleased += amount;
-        milestone.status = milestoneIndex == 0
-            ? MilestoneStatus.Released
-            : MilestoneStatus.Completed;
+        milestone.status = MilestoneStatus.Released;
 
         (bool sent, ) = payable(shelter).call{value: amount}("");
         require(sent, "Fund transfer failed");
@@ -285,9 +278,6 @@ contract Campaign {
         emit FundsReleased(milestoneIndex, shelter, amount);
         emit MilestoneStatusChanged(milestoneIndex, milestone.status);
 
-        if (milestoneIndex > 0) {
-            _activateNextMilestone();
-        }
     }
 
     function finalizeExpired() external {
@@ -356,9 +346,7 @@ contract Campaign {
 
         if (
             totalRaised >= milestone.cumulativeThreshold &&
-            (milestone.status == MilestoneStatus.Approved ||
-                (currentMilestoneIndex == 0 &&
-                    milestone.status == MilestoneStatus.Active))
+            milestone.status == MilestoneStatus.Active
         ) {
             milestone.status = MilestoneStatus.Withdrawable;
             emit MilestoneStatusChanged(

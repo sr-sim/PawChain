@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
+import { parseEther } from "viem";
 
 type UrgencyLevel = "medium" | "high" | "critical";
 type MilestonePayload = {
@@ -12,7 +13,6 @@ type MilestonePayload = {
 
 const urgencyLevels: UrgencyLevel[] = ["medium", "high", "critical"];
 const durationOptions = [30, 60, 90];
-const minimumGoalAmount = 1000;
 const emergencyMilestonePercentage = 5;
 
 function isUrgencyLevel(value: string): value is UrgencyLevel {
@@ -163,7 +163,10 @@ export async function PATCH(
     const description = String(body.description ?? "").trim();
     const location = String(body.location ?? "").trim();
     const imageUrl = String(body.imageUrl ?? "").trim();
-    const goalAmount = Number(body.goalAmount);
+    const goalEth = String(body.goalEth ?? "").trim();
+    const ethMyrRate = Number(body.ethMyrRate);
+    const validGoalEth = /^\d+(?:\.\d{1,18})?$/.test(goalEth) && parseEther(goalEth) > BigInt(0);
+    const goalAmount = Number(goalEth) * ethMyrRate;
     const durationDays = Number(body.durationDays);
     const urgencyLevel = String(body.urgencyLevel ?? "medium");
     const milestones: MilestonePayload[] = Array.isArray(body.milestones)
@@ -184,9 +187,9 @@ export async function PATCH(
       );
     }
 
-    if (!Number.isFinite(goalAmount) || goalAmount < minimumGoalAmount) {
+    if (!validGoalEth || !Number.isFinite(ethMyrRate) || ethMyrRate <= 0 || !Number.isFinite(goalAmount)) {
       return NextResponse.json(
-        { message: "Goal amount must be at least RM 1,000." },
+        { message: "Enter a valid ETH goal and conversion rate." },
         { status: 400 },
       );
     }
@@ -256,6 +259,8 @@ export async function PATCH(
         description,
         location,
         goal_amount: goalAmount,
+        goal_wei: parseEther(goalEth).toString(),
+        eth_myr_rate: ethMyrRate,
         urgency_level: urgencyLevel,
         duration_days: durationDays,
         image_url: imageUrl || null,
@@ -286,10 +291,7 @@ export async function PATCH(
       .insert(
         milestoneValidation.milestones.map((milestone) => ({
           campaign_id: campaign.id,
-          title:
-            milestone === milestoneValidation.milestones[0]
-              ? "Emergency Initial Release"
-              : milestone.title,
+          title: milestone.title,
           description: milestone.description,
           requirement: milestone.requirement,
           percentage: milestone.percentage,
@@ -309,6 +311,69 @@ export async function PATCH(
           error instanceof Error ? error.message : "Unable to update campaign.",
       },
       { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const body = await request.json();
+    const walletAddress = String(body.walletAddress ?? "").trim();
+    const { id } = await context.params;
+
+    if (!walletAddress) {
+      return NextResponse.json({ message: "Wallet address is required." }, { status: 400 });
+    }
+
+    const profile = await requireActiveShelter(walletAddress);
+    const supabase = createAdminClient();
+    const { data: campaign, error: campaignError } = await supabase
+      .from("campaigns")
+      .select("id, campaign_status, contract_address, deployment_tx_hash")
+      .eq("id", id)
+      .eq("shelter_id", profile.id)
+      .maybeSingle();
+
+    if (campaignError) throw campaignError;
+    if (!campaign) return NextResponse.json({ message: "Campaign not found." }, { status: 404 });
+
+    const canDelete = ["pending_approval", "rejected"].includes(campaign.campaign_status) &&
+      !campaign.contract_address && !campaign.deployment_tx_hash;
+    if (!canDelete) {
+      return NextResponse.json(
+        { message: "Only campaigns that have not been approved or deployed can be deleted." },
+        { status: 403 },
+      );
+    }
+
+    const { error: milestoneError } = await supabase
+      .from("campaign_milestones")
+      .delete()
+      .eq("campaign_id", campaign.id);
+    if (milestoneError) throw milestoneError;
+
+    const { data: deletedCampaign, error: deleteError } = await supabase
+      .from("campaigns")
+      .delete()
+      .eq("id", campaign.id)
+      .eq("shelter_id", profile.id)
+      .in("campaign_status", ["pending_approval", "rejected"])
+      .is("contract_address", null)
+      .select("id")
+      .maybeSingle();
+    if (deleteError) throw deleteError;
+    if (!deletedCampaign) {
+      return NextResponse.json({ message: "Campaign status changed and it was not deleted." }, { status: 409 });
+    }
+
+    return NextResponse.json({ deleted: true, campaignId: campaign.id });
+  } catch (error) {
+    return NextResponse.json(
+      { message: error instanceof Error ? error.message : "Unable to delete campaign." },
+      { status: error instanceof ShelterAccessError ? error.status : 500 },
     );
   }
 }

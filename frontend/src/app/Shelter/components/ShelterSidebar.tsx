@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type ReactNode, useEffect, useState } from "react";
-
-const SIDEBAR_EXPANDED_WIDTH = "18rem";
-const SIDEBAR_COLLAPSED_WIDTH = "5.5rem";
+import { type ReactNode, useState } from "react";
 
 const shelterNavigation = [
   { name: "Dashboard", href: "/Shelter/dashboard", icon: DashboardIcon },
+  { name: "Campaigns", href: "/Shelter/campaigns", icon: CampaignsIcon },
   { name: "Create Campaign", href: "/Shelter/campaigns/create", icon: PlusIcon },
-  { name: "Campaign Hub", href: "/Shelter/campaigns", icon: CampaignsIcon },
+  { name: "Donations", href: "/Shelter/donations", icon: CoinsIcon },
+  { name: "Withdraw Funds", href: "/Shelter/withdrawals", icon: WalletIcon },
+  { name: "Refunds", href: "/Shelter/refunds", icon: RefundIcon },
   { name: "Profile", href: "/Shelter/profile", icon: ProfileIcon },
 ];
 
@@ -106,6 +106,37 @@ function ProfileIcon() {
   );
 }
 
+function CoinsIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+        <ellipse cx="10" cy="6" rx="5.5" ry="2.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M4.5 6v4c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V6m-11 4v4c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5v-4" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    </NavIcon>
+  );
+}
+
+function WalletIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+        <path d="M3.5 5.5h12.8v10H3.5v-10Zm0 2h12.8M13 10h4v3h-4a1.5 1.5 0 0 1 0-3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    </NavIcon>
+  );
+}
+
+function RefundIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+        <path d="M5.3 7.1H2.8V4.6M3.2 7a7 7 0 1 1-.1 5.8M6.8 9.5h6.4M10 6.8v6.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </NavIcon>
+  );
+}
+
 function ToggleIcon({ open }: { open: boolean }) {
   return (
     <span className="relative h-5 w-5" aria-hidden="true">
@@ -144,26 +175,11 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       <div
         className={[
-          "min-h-[105px] border-b border-orange-100 py-5 transition-all duration-300 ease-out",
+          "min-h-[88px] border-b border-orange-100 py-4 transition-all duration-300 ease-out",
           collapsed ? "px-3 text-center" : "px-5",
         ].join(" ")}
       >
-        <p
-          className={[
-            "text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)] transition-opacity duration-200",
-            collapsed ? "sr-only" : "opacity-100",
-          ].join(" ")}
-        >
-          Shelter Portal
-        </p>
-        <h2
-          className={[
-            "mt-1 overflow-hidden text-xl font-black text-stone-950 transition-all duration-300 ease-out",
-            collapsed ? "max-h-0 opacity-0" : "max-h-14 opacity-100",
-          ].join(" ")}
-        >
-          Manage your shelter
-        </h2>
+        {!collapsed ? <div className="flex items-center gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-orange-50 ring-1 ring-orange-100"><img src="/images/logo.png" alt="PawChain" className="h-full w-full object-contain" /></span><div><p className="text-sm font-black uppercase leading-4 tracking-[0.12em] text-[var(--color-orange)]">Shelter</p><p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--color-orange)]">Portal</p></div></div> : null}
         {collapsed ? (
           <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-sm font-black text-[var(--color-orange)] ring-1 ring-orange-100">
             SP
@@ -194,7 +210,7 @@ function SidebarContent({
                 "group relative flex min-h-11 items-center rounded-2xl text-sm font-black transition-all duration-300 ease-out",
                 collapsed ? "justify-center px-0 py-3" : "gap-3 px-4 py-3",
                 active
-                  ? "bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200/70"
+                  ? "bg-orange-50 text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100"
                   : "text-stone-800 hover:bg-orange-50 hover:text-stone-950",
               ].join(" ")}
             >
@@ -224,17 +240,6 @@ export function ShelterSidebar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--shelter-sidebar-width",
-      collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH,
-    );
-
-    return () => {
-      document.documentElement.style.removeProperty("--shelter-sidebar-width");
-    };
-  }, [collapsed]);
-
   return (
     <>
       <button
@@ -242,15 +247,15 @@ export function ShelterSidebar() {
         aria-label="Open shelter navigation"
         aria-expanded={drawerOpen}
         onClick={() => setDrawerOpen(true)}
-        className="fixed left-4 top-20 z-40 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-orange-100 bg-white text-stone-950 shadow-lg shadow-orange-200/50 transition hover:-translate-y-0.5 hover:bg-orange-50 lg:hidden"
+        className="fixed left-4 top-20 z-[90] inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-orange-100 bg-white text-stone-950 shadow-lg shadow-orange-200/50 transition hover:-translate-y-0.5 hover:bg-orange-50 md:hidden"
       >
         <ToggleIcon open={drawerOpen} />
       </button>
 
       <aside
         className={[
-          "fixed bottom-0 left-0 top-[65px] z-30 hidden overflow-visible border-r border-orange-100 bg-white/90 shadow-[18px_0_46px_rgba(155,86,20,0.08)] backdrop-blur-xl transition-[width] duration-300 ease-out lg:block",
-          collapsed ? "w-[5.5rem]" : "w-72",
+          "sticky top-16 z-30 hidden h-[calc(100vh-4rem)] shrink-0 self-start overflow-visible border-r border-orange-100 bg-white shadow-[18px_0_46px_rgba(155,86,20,0.08)] transition-[width] duration-300 ease-out md:block",
+          collapsed ? "w-[5.5rem]" : "w-56",
         ].join(" ")}
       >
         <div className="flex justify-end px-3 pt-4">
@@ -277,7 +282,7 @@ export function ShelterSidebar() {
 
       <div
         className={[
-          "fixed inset-0 z-[60] transition lg:hidden",
+          "fixed inset-0 z-[60] transition md:hidden",
           drawerOpen ? "pointer-events-auto" : "pointer-events-none",
         ].join(" ")}
         aria-hidden={!drawerOpen}

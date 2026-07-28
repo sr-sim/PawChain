@@ -213,7 +213,7 @@ export default function DonorSettingsPage() {
           Donor settings
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-          Manage the donor profile stored in Supabase for your connected wallet.
+          Manage the donor profile linked to your connected wallet.
         </p>
       </section>
 
@@ -242,7 +242,7 @@ export default function DonorSettingsPage() {
           <SettingsPanel
             defaultOpen
             title="Personal profile"
-            description="Update the donor details saved in Supabase."
+            description="Update your donor details."
           >
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
@@ -297,8 +297,8 @@ export default function DonorSettingsPage() {
 
           <SettingsPanel
             defaultOpen
-            title="Supabase account record"
-            description="Read-only donor account values from your current tables."
+            title="Account record"
+            description="Read-only donor account values linked to your wallet."
           >
             <div className="divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
               {[
@@ -341,7 +341,7 @@ export default function DonorSettingsPage() {
 
           <SettingsPanel
             title="Notification preferences"
-            description="Preview only until donor notification tables are added."
+            description="Choose how PawChain should contact you."
           >
             <div className="space-y-2">
               {communicationPrefs.map((pref) => (

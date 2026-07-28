@@ -186,6 +186,28 @@ export async function POST(request: NextRequest) {
 
     const factoryAddress = getCampaignFactoryAddress();
     const publicClient = getPawChainPublicClient();
+    let factoryFlowVersion: bigint;
+    try {
+      factoryFlowVersion = await publicClient.readContract({
+        address: factoryAddress,
+        abi: campaignFactoryAbi,
+        functionName: "FLOW_VERSION",
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          message:
+            "The configured factory is not the sequential flow factory. Deploy it and update NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS first.",
+        },
+        { status: 409 },
+      );
+    }
+    if (factoryFlowVersion !== BigInt(2)) {
+      return NextResponse.json(
+        { message: "CampaignFactory flow version 2 is required." },
+        { status: 409 },
+      );
+    }
     const receipt = await publicClient.getTransactionReceipt({ hash: txHash as Hash });
     if (receipt.status !== "success" || receipt.from.toLowerCase() !== walletAddress.toLowerCase()) {
       return NextResponse.json({ message: "The deployment transaction was not sent successfully by this admin." }, { status: 409 });

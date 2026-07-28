@@ -1,5 +1,12 @@
 export const campaignContractAbi = [
   {
+    type: "function",
+    name: "FLOW_VERSION",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     type: "event",
     name: "DonationReceived",
     inputs: [
@@ -116,6 +123,13 @@ export const campaignContractAbi = [
   },
   {
     type: "function",
+    name: "currentMilestoneIndex",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "getMilestone",
     stateMutability: "view",
     inputs: [{ name: "milestoneIndex", type: "uint256" }],
@@ -150,6 +164,13 @@ export const campaignContractAbi = [
   {
     type: "function",
     name: "totalRaised",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "currentMilestoneIndex",
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],

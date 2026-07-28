@@ -18,6 +18,8 @@ import type {
   UrgencyLevel,
 } from "@/app/components/campaigns/campaign-types";
 import { malaysianStates } from "@/app/components/campaigns/campaign-utils";
+import { demoEthMyrRate } from "@/lib/campaign-blockchain";
+import { formatEther } from "viem";
 
 type CampaignForm = {
   title: string;
@@ -36,8 +38,6 @@ type MilestoneForm = {
   percentage: string;
 };
 
-const minimumGoalAmount = 1000;
-const goalAmountStep = 100;
 const blankMilestone: MilestoneForm = {
   title: "",
   description: "",
@@ -88,13 +88,28 @@ function preventWheelNumberChange(event: WheelEvent<HTMLInputElement>) {
   event.currentTarget.blur();
 }
 
+function normalizeEthInput(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const [wholePart = "", ...decimalParts] = cleaned.split(".");
+
+  if (decimalParts.length === 0) {
+    return wholePart;
+  }
+
+  return `${wholePart || "0"}.${decimalParts.join("").slice(0, 18)}`;
+}
+
 function toCampaignForm(campaign: Campaign): CampaignForm {
+  const rate = Number(campaign.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
+  const goalEth = campaign.goal_wei
+    ? formatEther(BigInt(campaign.goal_wei))
+    : String(Number(campaign.goal_amount || 0) / rate);
   return {
     title: campaign.title,
     description: campaign.description,
     location: campaign.location,
     urgencyLevel: campaign.urgency_level,
-    goalAmount: String(campaign.goal_amount),
+    goalAmount: goalEth,
     durationDays: String(campaign.duration_days) as CampaignForm["durationDays"],
     imageUrl: campaign.image_url ?? "",
   };
@@ -107,6 +122,16 @@ function toMilestoneForm(milestone: CampaignMilestone): MilestoneForm {
     requirement: milestone.requirement,
     percentage: String(milestone.percentage),
   };
+}
+
+function orderMilestones(items: CampaignMilestone[]) {
+  return [...items].sort((left, right) => {
+    if (left.on_chain_index != null && right.on_chain_index != null) return left.on_chain_index - right.on_chain_index;
+    const leftEmergency = left.on_chain_index === 0 || (Number(left.percentage) === 5 && /emergency|initial release/i.test(left.title));
+    const rightEmergency = right.on_chain_index === 0 || (Number(right.percentage) === 5 && /emergency|initial release/i.test(right.title));
+    if (leftEmergency !== rightEmergency) return leftEmergency ? -1 : 1;
+    return String(left.created_at ?? "").localeCompare(String(right.created_at ?? ""));
+  });
 }
 
 export default function EditCampaignPage() {
@@ -153,7 +178,7 @@ export default function EditCampaignPage() {
         }
 
         setForm(toCampaignForm(result.campaign));
-        setMilestones((result.milestones ?? []).map(toMilestoneForm));
+        setMilestones(orderMilestones(result.milestones ?? []).map(toMilestoneForm));
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -190,9 +215,9 @@ export default function EditCampaignPage() {
       !form.title.trim() ||
       !form.description.trim() ||
       !form.location ||
-      Number(form.goalAmount) < minimumGoalAmount
+      Number(form.goalAmount) <= 0
     ) {
-      setError("Complete campaign info with a goal amount of at least RM 1,000.");
+      setError("Complete campaign info and enter a positive ETH goal. Values below 1 ETH are allowed.");
       return false;
     }
 
@@ -281,7 +306,9 @@ export default function EditCampaignPage() {
           description: form.description,
           location: form.location,
           urgencyLevel: form.urgencyLevel,
-          goalAmount: form.goalAmount,
+          goalAmount: Number(form.goalAmount) * demoEthMyrRate,
+          goalEth: form.goalAmount,
+          ethMyrRate: demoEthMyrRate,
           durationDays: Number(form.durationDays),
           imageUrl: form.imageUrl,
           milestones: milestones.map((milestone) => ({
@@ -417,18 +444,21 @@ export default function EditCampaignPage() {
               </select>
             </FieldLabel>
 
-            <FieldLabel label="Goal Amount">
+            <FieldLabel label="Goal Amount (ETH)">
               <input
                 value={form.goalAmount}
                 onChange={(event) =>
-                  setForm({ ...form, goalAmount: event.target.value })
+                  setForm({
+                    ...form,
+                    goalAmount: normalizeEthInput(event.target.value),
+                  })
                 }
-                min={minimumGoalAmount}
-                step={goalAmountStep}
-                type="number"
+                inputMode="decimal"
+                type="text"
                 className="w-full rounded-2xl border border-orange-100 bg-orange-50/40 px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:bg-white focus:ring-4 focus:ring-orange-100"
                 required
               />
+              <p className="mt-2 text-xs font-bold text-stone-500">Approximately {new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(Number(form.goalAmount || 0) * demoEthMyrRate)} at the current demo rate.</p>
             </FieldLabel>
 
             <FieldLabel label="Duration">
@@ -467,14 +497,13 @@ export default function EditCampaignPage() {
           ) : null}
 
           <div className="border-t border-orange-100 pt-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,#FFFDF8,#FFFCC9)] p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-xl font-black text-stone-950">
-                  Milestones
-                </h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Fund release plan</p>
+                <h2 className="mt-1 text-2xl font-black text-stone-950">Set Milestones</h2>
                 <p className="text-sm font-bold text-stone-600">
-                  Milestone 1 is a fixed 5% emergency release. All milestone
-                  percentages must total 100%.
+                  Milestones unlock one by one. Milestone 2 cannot start until Milestone 1 is completed. Milestone 1 always receives 5% of the campaign goal.
                 </p>
               </div>
               <span
@@ -485,20 +514,25 @@ export default function EditCampaignPage() {
                     : "border-amber-200 bg-amber-50 text-amber-700",
                 ].join(" ")}
               >
-                Total {totalPercentage}%
+                Allocation used: {totalPercentage}%
               </span>
+              </div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white ring-1 ring-orange-100"><div className={`h-full rounded-full transition-all ${totalPercentage === 100 ? "bg-emerald-500" : "bg-[var(--color-orange)]"}`} style={{ width: `${Math.min(100, totalPercentage)}%` }} /></div>
+              <div className="mt-3 flex flex-col gap-1 text-[11px] font-black text-stone-500 sm:flex-row sm:justify-between"><span>Emergency milestone: 5% of goal</span><span>Remaining milestones: {Math.max(0, totalPercentage - 5)}% of 95%</span></div>
+              <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-semibold leading-5 text-stone-600">The milestone percentages must add up to 100% because together they divide the campaign's full funding goal.</p>
             </div>
 
             <div className="mt-5 space-y-4">
               {milestones.map((milestone, index) => (
                 <div
                   key={index}
-                  className="rounded-2xl border border-orange-100 bg-orange-50/35 p-4"
+                  className={`relative overflow-hidden rounded-2xl border p-5 transition focus-within:border-[var(--color-orange)] focus-within:shadow-[0_12px_30px_rgba(255,138,0,0.12)] ${index === 0 ? "border-[#FFCD80] bg-[linear-gradient(135deg,#FFFCC9,#FFFFFF)]" : "border-orange-100 bg-white shadow-[0_8px_24px_rgba(111,69,20,0.05)]"}`}
                 >
+                  <span className={`absolute inset-y-0 left-0 w-1.5 ${index === 0 ? "bg-[var(--color-orange)]" : "bg-[#F4B738]"}`} />
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-black text-stone-950">
-                      Milestone {index + 1}
-                    </h3>
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-50 text-sm font-black text-[var(--color-orange)] ring-1 ring-orange-200">{index + 1}</span>
+                    <div className="min-w-0 flex-1"><h3 className="text-sm font-black text-stone-950">{milestone.title || (index === 0 ? "Name your emergency milestone" : `Milestone ${index + 1}`)}</h3><p className="mt-1 text-xs font-semibold text-stone-500">{index === 0 ? "The title is editable; only the 5% allocation and first position are fixed." : "Released after proof approval and funding threshold"}</p></div>
+                    {index === 0 ? <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Locked 5%</span> : <span className="rounded-full bg-orange-50 px-2.5 py-1 text-xs font-black text-[var(--color-orange)]">{milestone.percentage || 0}%</span>}
                     <button
                       type="button"
                       onClick={() =>
@@ -511,7 +545,7 @@ export default function EditCampaignPage() {
                       disabled={index === 0 || milestones.length <= 2}
                       className="rounded-full border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Remove
+                      {index === 0 ? "Fixed" : "Remove"}
                     </button>
                   </div>
 
@@ -523,7 +557,7 @@ export default function EditCampaignPage() {
                           updateMilestone(index, "title", event.target.value)
                         }
                         className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
-                        readOnly={index === 0}
+                        placeholder={index === 0 ? "e.g. Emergency Veterinary Deposit" : `Enter title for Milestone ${index + 1}`}
                         required
                       />
                     </FieldLabel>

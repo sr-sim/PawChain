@@ -1,422 +1,213 @@
-import Link from 'next/link';
-import type { ReactNode } from 'react';
-import { DashboardTopBar } from '@/app/components/DashboardTopBar';
-import { RoleNFTBadge } from '@/app/components/RoleNFTBadge';
-import { getDashboardProfile } from '@/lib/dashboard-access';
+import Link from "next/link";
+import { formatEther, isAddress, type Address } from "viem";
+import { RoleNFTBadge } from "@/app/components/RoleNFTBadge";
+import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getDashboardProfile } from "@/lib/dashboard-access";
+import { formatMYR, getShelterPortalData, shortAddress } from "@/lib/shelter-portal";
 
-type DashboardProps = {
-  searchParams?: Promise<{
-    walletAddress?: string;
-  }>;
+type DashboardProps = { searchParams?: Promise<{ walletAddress?: string }> };
+
+type CampaignChainState = {
+  goalEth: string;
+  raisedEth: string;
+  progress: number;
+  campaignStatus: number;
 };
 
-type DashboardStat = {
-  label: string;
-  value: string;
-  icon: ReactNode;
-  accent: string;
-};
-
-type PlaceholderItem = {
-  id: string;
-  title: string;
-  description: string;
-};
-
-const dashboardStats: DashboardStat[] = [
-  {
-    label: 'Total Funds Released',
-    value: 'RM 0',
-    icon: <CoinsIcon />,
-    accent: 'from-[var(--color-gold)] to-[var(--color-orange)]',
-  },
-  {
-    label: 'Active Campaigns',
-    value: '0',
-    icon: <MegaphoneIcon />,
-    accent: 'from-[var(--color-orange)] to-[var(--color-peach)]',
-  },
-  {
-    label: 'Pending Milestone Reviews',
-    value: '0',
-    icon: <ClockIcon />,
-    accent: 'from-[var(--color-peach)] to-[var(--color-gold)]',
-  },
-  {
-    label: 'Rejected Milestones',
-    value: '0',
-    icon: <XCircleIcon />,
-    accent: 'from-red-400 to-[var(--color-orange)]',
-  },
-];
-
-const recentNotifications: PlaceholderItem[] = [];
-const recentMilestoneSubmissions: PlaceholderItem[] = [];
-
-function IconFrame({ children }: { children: ReactNode }) {
-  return (
-    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-[var(--color-orange)] shadow-inner shadow-orange-100 ring-1 ring-orange-100">
-      {children}
-    </span>
-  );
+function formatETH(value: string | number) {
+  return `${Number(value).toLocaleString("en-MY", {
+    maximumFractionDigits: 8,
+  })} ETH`;
 }
 
-function CoinsIcon() {
+function ProgressRing({ value }: { value: number }) {
+  const safeValue = Math.min(100, Math.max(0, value));
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M7 7.5c0-1.4 2.2-2.5 5-2.5s5 1.1 5 2.5S14.8 10 12 10 7 8.9 7 7.5Zm0 0v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7 11.5v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5v-4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function MegaphoneIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M5 14V9l10-3v11L5 14Zm10-6h2a3 3 0 0 1 0 6h-2M7 14l1.5 4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v5l3 2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function XCircleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-3-12 6 6m0-6-6 6"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M18 10a6 6 0 0 0-12 0c0 7-2 7-2 7h16s-2 0-2-7Zm-4.3 10a2 2 0 0 1-3.4 0"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function FlagIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M6 21V4m0 0h11l-2.5 4L17 12H6V4Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PawIcon({ className = 'h-5 w-5' }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M8.2 10.2c1.1 0 2-1.2 2-2.7s-.9-2.7-2-2.7-2 1.2-2 2.7.9 2.7 2 2.7Zm7.6 0c1.1 0 2-1.2 2-2.7s-.9-2.7-2-2.7-2 1.2-2 2.7.9 2.7 2 2.7ZM5 14.2c1 0 1.8-.9 1.8-2s-.8-2-1.8-2-1.8.9-1.8 2 .8 2 1.8 2Zm14 0c1 0 1.8-.9 1.8-2s-.8-2-1.8-2-1.8.9-1.8 2 .8 2 1.8 2Zm-7 6c2.8 0 5-1.2 5-3 0-1.6-2-4.2-5-4.2s-5 2.6-5 4.2c0 1.8 2.2 3 5 3Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden="true">
-      <path
-        d="M12 5v14m-7-7h14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function EmptyState({
-  title,
-  message,
-  icon,
-}: {
-  title: string;
-  message: string;
-  icon: ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-dashed border-orange-200 bg-[linear-gradient(135deg,rgba(var(--color-cream-rgb),0.72),rgba(var(--color-peach-rgb),0.22))] p-6 text-center shadow-inner shadow-orange-100/70">
-      <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-white text-[var(--color-orange)] shadow-lg shadow-orange-200/50 ring-1 ring-orange-100">
-        {icon}
-      </span>
-      <p className="text-sm font-black text-stone-950">{title}</p>
-      <p className="mt-2 text-sm font-bold leading-6 text-stone-600">
-        {message}
-      </p>
+    <div className="relative grid h-36 w-36 place-items-center rounded-full" style={{ background: `conic-gradient(#FF8A00 ${safeValue * 3.6}deg, #FFF0D8 0deg)` }}>
+      <div className="grid h-28 w-28 place-items-center rounded-full bg-white text-center shadow-inner">
+        <div><p className="text-3xl font-black text-stone-950">{safeValue}%</p><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">goal achieved</p></div>
+      </div>
     </div>
   );
 }
 
-function SectionCard({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(155,86,20,0.08)] sm:p-6">
-      <div className="flex items-center gap-3">
-        <IconFrame>{icon}</IconFrame>
-        <h2 className="text-xl font-black text-stone-950">{title}</h2>
-      </div>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
-export default async function ShelterDashboard({
-  searchParams,
-}: DashboardProps) {
+export default async function ShelterDashboard({ searchParams }: DashboardProps) {
   const params = await searchParams;
-  const { userId, profile, accessMode, roleNFT } = await getDashboardProfile(
-    'shelter',
-    params?.walletAddress,
-  );
+  const { userId, profile, roleNFT } = await getDashboardProfile("shelter", params?.walletAddress);
+  const { campaigns, milestones, donations } = await getShelterPortalData(userId);
+  const shelterName = profile?.full_name ?? "Shelter";
+  const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? null;
 
-  const shelterName = profile?.full_name ?? 'Shelter';
-  const shelterRole = profile?.role ?? 'Shelter';
-  const walletAddress = profile?.wallet_address ?? 'Not connected';
-  const shelterImageUrl =
-    typeof profile?.shelter_image_url === 'string'
-      ? profile.shelter_image_url
-      : null;
-  const quickActions = [
-    {
-      label: 'Create Campaign',
-      href: '/Shelter/campaigns/create',
-      icon: <PlusIcon />,
-    },
-    {
-      label: 'Campaign Hub',
-      href: '/Shelter/campaigns',
-      icon: <FlagIcon />,
-    },
-    {
-      label: 'Update Profile',
-      href: '/Shelter/profile',
-      icon: <PawIcon />,
-    },
+  const publicClient = getPawChainPublicClient();
+  const chainStateEntries = await Promise.all(
+    campaigns.map(async (campaign) => {
+      if (!campaign.contract_address || !isAddress(campaign.contract_address)) {
+        return null;
+      }
+
+      try {
+        const contractAddress = campaign.contract_address as Address;
+        const [goalWei, raisedWei, campaignStatus] = await Promise.all([
+          publicClient.readContract({
+            address: contractAddress,
+            abi: campaignContractAbi,
+            functionName: "goal",
+          }),
+          publicClient.readContract({
+            address: contractAddress,
+            abi: campaignContractAbi,
+            functionName: "totalRaised",
+          }),
+          publicClient.readContract({
+            address: contractAddress,
+            abi: campaignContractAbi,
+            functionName: "campaignStatus",
+          }),
+        ]);
+        const progress = goalWei > BigInt(0)
+          ? Number((raisedWei * BigInt(100_000)) / goalWei) / 1_000
+          : 0;
+
+        return [
+          campaign.id,
+          {
+            goalEth: formatEther(goalWei),
+            raisedEth: formatEther(raisedWei),
+            progress: Math.min(100, progress),
+            campaignStatus: Number(campaignStatus),
+          } satisfies CampaignChainState,
+        ] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const chainStateByCampaignId = new Map(
+    chainStateEntries.filter(
+      (entry): entry is NonNullable<typeof entry> => entry !== null,
+    ),
+  );
+  const displayedCampaigns = campaigns.map((campaign) => {
+    const chainState = chainStateByCampaignId.get(campaign.id);
+    return {
+      ...campaign,
+      campaign_status:
+        chainState?.campaignStatus === 1
+          ? "completed"
+          : campaign.campaign_status,
+      chainState,
+    };
+  });
+
+  const activeCampaigns = displayedCampaigns.filter((campaign) => campaign.campaign_status === "active");
+  const pendingReviews = milestones.filter((milestone) => milestone.status === "submitted");
+  const releasedMilestones = milestones.filter((milestone) => milestone.release_tx_hash);
+  const totalDonations = donations
+    .filter((donation) => !["failed", "refunded"].includes(donation.status.toLowerCase()))
+    .reduce((sum, donation) => sum + Number(donation.amount || 0), 0);
+  const totalReleased = releasedMilestones.reduce((sum, milestone) => {
+    const campaign = displayedCampaigns.find((item) => item.id === milestone.campaign_id);
+    return sum + Number(campaign?.goal_amount || 0) * Number(milestone.percentage || 0) / 100;
+  }, 0);
+  const allActiveCampaignsHaveChainState = activeCampaigns.every(
+    (campaign) => Boolean(campaign.chainState),
+  );
+  const totalGoal = activeCampaigns.reduce(
+    (sum, campaign) =>
+      sum + Number(
+        allActiveCampaignsHaveChainState
+          ? campaign.chainState?.goalEth ?? 0
+          : campaign.goal_amount || 0,
+      ),
+    0,
+  );
+  const totalRaised = activeCampaigns.reduce(
+    (sum, campaign) =>
+      sum + Number(
+        allActiveCampaignsHaveChainState
+          ? campaign.chainState?.raisedEth ?? 0
+          : campaign.current_amount || 0,
+      ),
+    0,
+  );
+  const progress = totalGoal > 0 ? Math.round((totalRaised / totalGoal) * 100) : 0;
+
+  const stats = [
+    ["Total funds released", formatMYR(totalReleased), "Available milestone funds"],
+    ["Active campaigns", String(activeCampaigns.length), "Currently fundraising"],
+    ["Pending reviews", String(pendingReviews.length), "Awaiting admin review"],
+    ["Total donations", formatMYR(totalDonations), `${donations.length} transactions received`],
   ];
 
   return (
-    <div className="space-y-6">
-      <DashboardTopBar role="Shelter" />
-      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,rgba(var(--color-white-rgb),0.98),rgba(var(--color-cream-rgb),0.9)_48%,rgba(var(--color-peach-rgb),0.5))] p-5 shadow-[0_22px_60px_rgba(155,86,20,0.12)] sm:p-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative z-10">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
-              Shelter Dashboard
-            </p>
-            <h1 className="mt-2 text-3xl font-black text-stone-950 sm:text-4xl">
-              Welcome back, {shelterName}
-            </h1>
-            <p className="mt-3 max-w-2xl text-base font-bold leading-7 text-stone-700">
-              Track campaign progress, milestone reviews, and released funds
-              from your PawChain shelter portal.
-            </p>
-          </div>
-
-          <div className="relative grid min-h-52 overflow-hidden rounded-2xl border border-white/80 bg-white/55 text-[var(--color-orange)] shadow-inner shadow-orange-100/80 lg:w-72">
-            {shelterImageUrl ? (
-              <img
-                src={shelterImageUrl}
-                alt=""
-                className="h-full min-h-52 w-full object-cover"
-              />
-            ) : (
-              <div className="relative grid h-full min-h-52 place-items-center p-5">
-                <div className="absolute right-5 top-5 h-12 w-12 rounded-full bg-[var(--color-gold)]/25" />
-                <div className="absolute bottom-5 left-6 h-8 w-8 rounded-full bg-[var(--color-orange)]/15" />
-                <PawIcon className="relative h-24 w-24 drop-shadow-sm" />
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-orange-100 bg-white/78 p-4 text-sm font-bold text-stone-800 shadow-lg shadow-orange-200/30 backdrop-blur lg:min-w-72">
-            <p>
-              Role:{' '}
-              <span className="font-black text-stone-950">{shelterRole}</span>
-            </p>
-            <div className="mt-3">
-              <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-[var(--color-orange)]">
-                Wallet
-              </p>
-              <span className="inline-flex max-w-full rounded-full border border-orange-200 bg-[var(--color-cream)] px-3 py-1.5 text-xs font-black text-stone-950 shadow-inner shadow-orange-100">
-                <span className="break-all">{walletAddress}</span>
-              </span>
-            </div>
-            <p className="mt-2 break-all">
-              Email:{' '}
-              <span className="font-black text-stone-950">
-                {profile?.email ?? '-'}
-              </span>
-            </p>
-            <div className="mt-4 border-t border-orange-100 pt-4">
-              <RoleNFTBadge role="Shelter" roleNFT={roleNFT} />
-            </div>
-          </div>
+    <div className="space-y-6 py-6">
+      <section className="grid gap-5 rounded-3xl border border-[#FFCD80] bg-[linear-gradient(135deg,#FFFFFF,#FFFCC9_140%)] p-5 shadow-[0_18px_45px_rgba(111,69,20,0.08)] lg:grid-cols-[1fr_19rem] lg:items-center sm:p-7">
+        <div>
+          <p className="text-sm font-black text-stone-600">Welcome back,</p>
+          <h1 className="mt-1 text-4xl font-black tracking-tight text-stone-950">{shelterName}! <span aria-hidden="true">🐾</span></h1>
+          <p className="mt-2 text-sm font-semibold text-stone-600">Here is what is happening with your shelter today.</p>
+        </div>
+        <div className="rounded-2xl border border-orange-200 bg-white/90 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Shelter wallet</p><span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Sepolia</span></div>
+          <p className="mt-2 font-mono text-sm font-black text-stone-950" title={walletAddress ?? undefined}>{shortAddress(walletAddress)}</p>
+          {walletAddress ? <a href={`https://sepolia.etherscan.io/address/${walletAddress}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-black text-[var(--color-orange)] hover:underline">View on Sepolia Etherscan ↗</a> : null}
         </div>
       </section>
 
-      <section
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-        aria-label="Shelter dashboard stats"
-      >
-        {dashboardStats.map((stat) => (
-          <article
-            key={stat.label}
-            className="group flex min-h-36 flex-col justify-center overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-[0_16px_42px_rgba(155,86,20,0.08)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_58px_rgba(155,86,20,0.16)]"
-          >
-            <div
-              className={['h-1.5 bg-gradient-to-r', stat.accent].join(' ')}
-            />
-            <div className="flex flex-1 items-center gap-4 p-5">
-              <IconFrame>{stat.icon}</IconFrame>
-              <div>
-                <p className="text-sm font-black text-stone-600">
-                  {stat.label}
-                </p>
-                <p className="mt-2 text-3xl font-black text-stone-950">
-                  {stat.value}
-                </p>
-              </div>
-            </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Shelter summary">
+        {stats.map(([label, value, hint]) => (
+          <article key={label} className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_10px_30px_rgba(111,69,20,0.06)]">
+            <p className="text-xs font-black uppercase tracking-wide text-stone-500">{label}</p>
+            <p className="mt-3 text-2xl font-black text-stone-950">{value}</p>
+            <p className="mt-1 text-xs font-semibold text-stone-500">{hint}</p>
           </article>
         ))}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <SectionCard title="Recent Notifications" icon={<BellIcon />}>
-          {recentNotifications.length > 0 ? (
-            <div className="space-y-3">
-              {recentNotifications.map((notification) => (
-                <article
-                  key={notification.id}
-                  className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4"
-                >
-                  <h3 className="text-sm font-black text-stone-950">
-                    {notification.title}
-                  </h3>
-                  <p className="mt-2 text-sm font-bold leading-6 text-stone-600">
-                    {notification.description}
-                  </p>
-                </article>
-              ))}
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+        <article className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6">
+          <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">Funding overview</p><h2 className="mt-1 text-xl font-black text-stone-950">Active campaign progress</h2></div><Link href="/Shelter/campaigns" className="text-xs font-black text-[var(--color-orange)] hover:underline">View all campaigns →</Link></div>
+          <div className="mt-6 grid gap-7 sm:grid-cols-[9rem_1fr] sm:items-center">
+            <ProgressRing value={progress} />
+            <div className="space-y-4">
+              <div><div className="flex justify-between text-xs font-black"><span>Raised</span><span>{allActiveCampaignsHaveChainState ? formatETH(totalRaised) : formatMYR(totalRaised)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${Math.min(100, progress)}%` }} /></div></div>
+              <div className="flex justify-between border-t border-orange-100 pt-4 text-sm"><span className="font-bold text-stone-500">Combined goal</span><span className="font-black">{allActiveCampaignsHaveChainState ? formatETH(totalGoal) : formatMYR(totalGoal)}</span></div>
+              <div className="flex justify-between text-sm"><span className="font-bold text-stone-500">Campaigns running</span><span className="font-black">{activeCampaigns.length}</span></div>
             </div>
-          ) : (
-            <EmptyState
-              title="No notifications yet"
-              message="Campaign and milestone updates will appear here when backend notification data is available."
-              icon={<BellIcon />}
-            />
-          )}
-        </SectionCard>
+          </div>
+        </article>
 
-        <SectionCard title="Recent Milestone Submissions" icon={<FlagIcon />}>
-          {recentMilestoneSubmissions.length > 0 ? (
-            <div className="space-y-3">
-              {recentMilestoneSubmissions.map((milestone) => (
-                <article
-                  key={milestone.id}
-                  className="rounded-2xl border border-orange-100 bg-orange-50/50 p-4"
-                >
-                  <h3 className="text-sm font-black text-stone-950">
-                    {milestone.title}
-                  </h3>
-                  <p className="mt-2 text-sm font-bold leading-6 text-stone-600">
-                    {milestone.description}
-                  </p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No milestone submissions"
-              message="Recent submissions will show here once milestone tracking is connected."
-              icon={<FlagIcon />}
-            />
-          )}
-        </SectionCard>
-      </div>
+        <article className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6">
+          <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">Recent campaigns</p><h2 className="mt-1 text-xl font-black text-stone-950">Latest activity</h2></div><Link href="/Shelter/campaigns/create" className="rounded-xl bg-[var(--color-orange)] px-3 py-2 text-xs font-black text-white">+ Create</Link></div>
+          <div className="mt-5 space-y-3">
+            {displayedCampaigns.slice(0, 4).map((campaign) => {
+              const itemProgress = campaign.chainState?.progress ?? (
+                Number(campaign.goal_amount) > 0
+                  ? Math.round(Number(campaign.current_amount || 0) / Number(campaign.goal_amount) * 100)
+                  : 0
+              );
+              const raisedAmount = campaign.chainState
+                ? formatETH(campaign.chainState.raisedEth)
+                : formatMYR(campaign.current_amount);
+              return <Link key={campaign.id} href={`/Shelter/campaigns/${campaign.id}`} className="block rounded-2xl border border-orange-100 p-4 transition hover:bg-orange-50/50"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-black text-stone-950">{campaign.title}</p><span className="text-xs font-black text-[var(--color-orange)]">{itemProgress}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full bg-[var(--color-orange)]" style={{ width: `${Math.min(100, itemProgress)}%` }} /></div><p className="mt-2 text-xs font-semibold capitalize text-stone-500">{campaign.campaign_status.replaceAll("_", " ")} · {raisedAmount} raised</p></Link>;
+            })}
+            {!displayedCampaigns.length ? <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/40 p-6 text-center text-sm font-bold text-stone-500">No campaigns yet. Create your first campaign to begin.</div> : null}
+          </div>
+        </article>
+      </section>
 
-      <SectionCard title="Quick Actions" icon={<PawIcon />}>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {quickActions.map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              className="group flex min-h-28 flex-col items-center justify-center gap-3 rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,var(--color-white),rgba(var(--color-cream-rgb),0.68))] px-4 py-5 text-center text-sm font-black text-stone-950 shadow-sm shadow-orange-100 transition duration-300 hover:-translate-y-1 hover:border-[var(--color-orange)] hover:shadow-[0_18px_42px_rgba(255,138,0,0.22)]"
-            >
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-orange-50 text-[var(--color-orange)] shadow-inner shadow-orange-100 ring-1 ring-orange-100 transition duration-300 group-hover:bg-[var(--color-orange)] group-hover:text-white">
-                {action.icon}
-              </span>
-              <span>{action.label}</span>
-            </Link>
-          ))}
-        </div>
-      </SectionCard>
+      <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
+        <article className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6">
+          <h2 className="text-xl font-black text-stone-950">Current actions</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Link href="/Shelter/campaigns" className="rounded-2xl border border-orange-100 bg-[#FFFCC9]/35 p-4 text-sm font-black hover:border-[var(--color-orange)]">Manage campaigns <span className="block mt-2 text-xs font-semibold text-stone-500">Review progress and proofs</span></Link>
+            <Link href="/Shelter/withdrawals" className="rounded-2xl border border-orange-100 bg-[#FFFCC9]/35 p-4 text-sm font-black hover:border-[var(--color-orange)]">Withdraw funds <span className="block mt-2 text-xs font-semibold text-stone-500">Claim withdrawable milestones</span></Link>
+            <Link href="/Shelter/donations" className="rounded-2xl border border-orange-100 bg-[#FFFCC9]/35 p-4 text-sm font-black hover:border-[var(--color-orange)]">View donations <span className="block mt-2 text-xs font-semibold text-stone-500">Inspect confirmed transactions</span></Link>
+          </div>
+        </article>
+        <RoleNFTBadge role="Shelter" roleNFT={roleNFT} />
+      </section>
     </div>
   );
 }

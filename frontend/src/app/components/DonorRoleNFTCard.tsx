@@ -201,7 +201,7 @@ export function DonorRoleNFTCard({
               </span>
             )}
             {roleNFT?.metadataError ? (
-              <span className="text-amber-700">Metadata preview unavailable</span>
+              <span className="text-amber-700">Metadata unavailable</span>
             ) : null}
           </div>
         </div>

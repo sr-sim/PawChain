@@ -24,9 +24,9 @@ const helpTopics = [
 
 const faqs = [
   {
-    question: "Why is donation checkout still preview-only?",
+    question: "How does donation checkout work?",
     answer:
-      "PawChain stores confirmed donation history in Supabase, but new checkout is kept preview-only until the smart contract returns a real transaction hash.",
+      "PawChain confirms the wallet transaction first, then saves the donation history and transaction hash for tracking.",
   },
   {
     question: "Who checks milestone proof?",
@@ -36,7 +36,7 @@ const faqs = [
   {
     question: "Can I report a shelter or campaign?",
     answer:
-      "Yes. Reports are saved as donor support requests in Supabase so the admin side can review and respond.",
+      "Yes. Reports are sent to Admin for review and response.",
   },
 ];
 
@@ -106,7 +106,7 @@ export default function DonorHelpPage() {
                 </h2>
               </div>
               <p className="text-xs font-medium text-stone-500">
-                Supabase queue
+                Admin review queue
               </p>
             </div>
             <DonorSupportRequestList />

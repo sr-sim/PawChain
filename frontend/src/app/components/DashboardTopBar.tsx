@@ -19,7 +19,7 @@ export function DashboardTopBar({
   notificationCount,
 }: DashboardTopBarProps) {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-orange-100 bg-white/95 shadow-[0_10px_32px_rgba(80,48,12,0.08)] backdrop-blur-2xl">
+    <header className="donor-chain-topbar fixed inset-x-0 top-0 z-50 border-b border-orange-100 bg-white/92 shadow-[0_10px_32px_rgba(80,48,12,0.08)] backdrop-blur-2xl">
       <div className="flex min-h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-4">
           {onMenuClick ? (
@@ -30,9 +30,11 @@ export function DashboardTopBar({
               aria-expanded={isMenuOpen}
               suppressHydrationWarning
               className={[
-                "grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-slate-600 transition",
-                "hover:bg-orange-50 hover:text-[var(--color-orange)] focus:outline-none focus:ring-2 focus:ring-[var(--color-orange)] focus:ring-offset-2",
-                isMenuOpen ? "bg-orange-50 text-[var(--color-orange)]" : "",
+                "grid h-10 w-10 shrink-0 place-items-center rounded-2xl border text-slate-600 transition",
+                "hover:border-orange-200 hover:bg-orange-50 hover:text-[var(--color-orange)] focus:outline-none focus:ring-2 focus:ring-[var(--color-orange)] focus:ring-offset-2",
+                isMenuOpen
+                  ? "border-orange-200 bg-orange-50 text-[var(--color-orange)]"
+                  : "border-transparent",
               ].join(" ")}
             >
               <svg
@@ -69,7 +71,7 @@ export function DashboardTopBar({
             </span>
           ) : null}
 
-          <p className="truncate text-lg font-semibold tracking-normal text-slate-950">
+          <p className="truncate text-lg font-black tracking-normal text-slate-950">
             PawChain
           </p>
         </div>

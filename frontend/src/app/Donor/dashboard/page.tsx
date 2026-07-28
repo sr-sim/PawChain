@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { DonorRoleNFTCard } from "@/app/components/DonorRoleNFTCard";
 import { getDashboardProfile } from "@/lib/dashboard-access";
-import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
+import {
+  getActiveDonorCampaigns,
+  getDonorCampaignsByIds,
+} from "@/lib/donor-campaigns";
 import { getDonorDonations } from "@/lib/donor-donations";
+import {
+  getExplorerNetworkName,
+  getTransactionExplorerUrl,
+} from "@/lib/block-explorer";
 import { getShelters } from "../campaignData";
 
 type DashboardProps = {
@@ -19,7 +26,7 @@ const quickActions = [
   },
   {
     title: "Make donation",
-    description: "Select a campaign and review the preview.",
+    description: "Select a campaign and confirm your support.",
     href: "/Donor/donate",
   },
   {
@@ -107,10 +114,12 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const displayName = profile?.full_name ?? "Anwen";
   const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? "-";
   let activeCampaigns: Awaited<ReturnType<typeof getActiveDonorCampaigns>> = [];
+  let supportedCampaigns: Awaited<ReturnType<typeof getActiveDonorCampaigns>> = [];
   let donationData: Awaited<ReturnType<typeof getDonorDonations>> = {
     donations: [],
     summary: {
       totalAmount: 0,
+      totalEth: 0,
       currency: "MYR",
       donationCount: 0,
       confirmedCount: 0,
@@ -119,14 +128,32 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   };
 
   try {
-    activeCampaigns = await getActiveDonorCampaigns();
     donationData = await getDonorDonations(walletAddress);
+    const [activeRows, supportedRows] = await Promise.all([
+      getActiveDonorCampaigns(),
+      getDonorCampaignsByIds(
+        donationData.donations.map((donation) => donation.campaignId),
+      ),
+    ]);
+    activeCampaigns = activeRows;
+    supportedCampaigns = supportedRows;
   } catch {
     activeCampaigns = [];
+    supportedCampaigns = [];
   }
 
   const shelters = getShelters(activeCampaigns);
+  const completedSupportedCampaigns = supportedCampaigns.filter(
+    (campaign) => campaign.status === "Completed",
+  );
   const latestCampaigns = activeCampaigns.slice(0, 2);
+  const contractConnectedCampaigns = activeCampaigns.filter(
+    (campaign) => Boolean(campaign.contractAddress),
+  );
+  const latestDonationTx = donationData.summary.latestDonation?.txHash ?? "";
+  const latestDonationTxUrl = latestDonationTx
+    ? getTransactionExplorerUrl(latestDonationTx)
+    : "";
   const milestoneCount = activeCampaigns.reduce(
     (total, campaign) => total + campaign.milestones.length,
     0,
@@ -137,37 +164,27 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     status: "Active",
     description: `${campaign.shelter} has ${campaign.milestones.length} planned milestone releases for this campaign.`,
   }));
-  const transparencyOverview = [
-    {
-      label: "Active campaigns",
-      value: String(activeCampaigns.length),
-    },
-    {
-      label: "Verified shelters",
-      value: String(shelters.length),
-    },
-    {
-      label: "Milestone plans",
-      value: String(milestoneCount),
-    },
-    {
-      label: "Donation records",
-      value: String(donationData.summary.donationCount),
-    },
-  ];
   const summaryStats = [
     {
       label: "Total donated",
-      value: formatAmount(
+      value: `${donationData.summary.totalEth.toLocaleString("en-MY", {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 6,
+      })} ETH`,
+      detail: `${formatAmount(
         donationData.summary.totalAmount,
         donationData.summary.currency,
-      ),
-      detail: `${donationData.summary.confirmedCount} confirmed donations`,
+      )} estimated value`,
     },
     {
       label: "Active campaigns",
       value: String(activeCampaigns.length),
       detail: `${shelters.length} verified shelters available`,
+    },
+    {
+      label: "Completed impact",
+      value: String(completedSupportedCampaigns.length),
+      detail: "Supported campaigns completed",
     },
     {
       label: "Role access",
@@ -179,7 +196,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
 
   return (
     <div className="space-y-5">
-      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+      <section className="donor-tech-hero overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
         <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.08fr_0.92fr] lg:items-center">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
@@ -189,9 +206,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               Welcome back, {displayName}.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Your donor profile and available verified campaigns are organized
-              here with real campaign records, donation history, and donor
-              notifications from Supabase.
+              Manage your donor profile, follow active campaigns, and review
+              donation history from one place.
             </p>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <Link
@@ -219,11 +235,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-4">
         {summaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
+            className="donor-tech-metric rounded-2xl border border-orange-100 bg-white p-4 shadow-sm ring-1 ring-white/70"
           >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
               {stat.label}
@@ -239,7 +255,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
+        <div className="donor-gradient-card rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
             Quick actions
           </p>
@@ -264,7 +280,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
+        <div className="donor-gradient-card rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
@@ -286,7 +302,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             latestCampaigns.map((campaign) => (
               <article
                 key={campaign.id}
-                className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"
+                className="donor-gradient-card rounded-xl border border-orange-100 bg-orange-50/25 p-3"
               >
                 <Link
                   href={`/Donor/campaigns/${campaign.id}`}
@@ -315,126 +331,98 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               </div>
             )}
           </div>
+          {completedSupportedCampaigns.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-black text-emerald-900">
+                  Completed impact
+                </p>
+                <Link
+                  href="/Donor/tracking"
+                  className="text-xs font-black text-emerald-800 transition hover:text-stone-950"
+                >
+                  View tracking
+                </Link>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {completedSupportedCampaigns.slice(0, 2).map((campaign) => (
+                  <Link
+                    key={campaign.id}
+                    href={`/Donor/campaigns/${campaign.id}`}
+                    className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-stone-950 ring-1 ring-emerald-100 transition hover:text-[var(--color-orange)]"
+                  >
+                    <span className="block truncate">{campaign.title}</span>
+                    <span className="mt-1 block text-xs font-semibold text-emerald-700">
+                      Completed - 100%
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="flex items-start gap-4">
-            <IconBadge>
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 3v18" />
-                <path d="M5 7h14" />
-                <path d="M7 12h10" />
-                <path d="M9 17h6" />
-              </svg>
-            </IconBadge>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
-                Trust overview
-              </p>
-              <h2 className="mt-1 text-xl font-black text-stone-950">
-                Donation transparency
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-stone-600">
-                One compact view for on-chain records and milestone release
-                status.
-              </p>
-            </div>
+      <section className="donor-gradient-card rounded-2xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
+              Proof & release
+            </p>
+            <h2 className="mt-1 text-xl font-black text-stone-950">
+              Campaign transparency
+            </h2>
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {transparencyOverview.map((stat) => (
+          <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+            {getExplorerNetworkName()}
+          </span>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-2 sm:grid-cols-4">
+            {[
+              ["Verified tx", String(donationData.summary.confirmedCount)],
+              ["Contracts", String(contractConnectedCampaigns.length)],
+              ["Shelters", String(shelters.length)],
+              ["Milestones", String(milestoneCount)],
+            ].map(([label, value]) => (
               <div
-                key={stat.label}
+                key={label}
                 className="rounded-xl border border-orange-100 bg-orange-50/30 px-3 py-2.5"
               >
-                <p className="text-lg font-black text-stone-950">
-                  {stat.value}
-                </p>
+                <p className="text-lg font-black text-stone-950">{value}</p>
                 <p className="mt-0.5 text-xs font-medium text-stone-500">
-                  {stat.label}
+                  {label}
                 </p>
               </div>
             ))}
           </div>
-          <div className="mt-4 rounded-xl border border-orange-100 bg-white p-3">
+          <div className="rounded-xl border border-orange-100 bg-orange-50/25 px-3 py-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-stone-950">
-                Campaign readiness
-              </p>
-              <p className="text-xs font-medium text-stone-500">
-                Supabase data
-              </p>
-            </div>
-            <div className="mt-3 flex h-32 items-end gap-3">
-              {activeCampaigns.slice(0, 3).map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-1 flex-col items-center gap-2"
+              <p className="text-sm font-semibold text-stone-950">Latest tx</p>
+              {latestDonationTxUrl ? (
+                <a
+                  href={latestDonationTxUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all text-xs font-black text-[var(--color-orange)] transition hover:text-stone-950"
                 >
-                  <div className="flex h-24 w-full items-end rounded-lg bg-orange-50">
-                    <div
-                      className="donor-progress-fill w-full rounded-lg bg-[var(--color-orange)]"
-                      style={{
-                        height: `${Math.max(18, item.raised)}%`,
-                      }}
-                    />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs font-black text-stone-950">
-                      {item.raised}%
-                    </p>
-                    <p className="text-[0.68rem] font-semibold text-stone-400">
-                      {item.urgency}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {activeCampaigns.length === 0 ? (
-                <div className="grid h-full flex-1 place-items-center rounded-xl border border-dashed border-orange-200 bg-orange-50/25 text-center text-sm font-semibold text-stone-600">
-                  Waiting for approved campaigns.
-                </div>
-              ) : null}
+                  {shortHash(latestDonationTx)}
+                </a>
+              ) : (
+                <p className="text-xs font-semibold text-stone-500">No tx yet</p>
+              )}
             </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
-                Verification flow
-              </p>
-              <h2 className="mt-1 text-xl font-black text-stone-950">
-                From donation to release
-              </h2>
-            </div>
-            <Link
-              href="/Donor/tracking"
-              className="text-sm font-semibold text-[var(--color-orange)] transition hover:text-stone-950"
-            >
-              Track details
-            </Link>
-          </div>
-          <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-            {impactSteps.map((step, index) => (
-              <div
-                key={step.title}
-                className="grid gap-3 bg-orange-50/20 px-3 py-3 sm:grid-cols-[2rem_1fr] sm:items-start"
-              >
-                <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
-                  {index + 1}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {impactSteps.map((step) => (
+                <span
+                  key={step.title}
+                  className="donor-chain-node rounded-full bg-white px-3 py-1 text-xs font-semibold text-stone-600 ring-1 ring-orange-100"
+                  title={step.description}
+                >
+                  {step.title}
                 </span>
-                <div>
-                  <h3 className="text-sm font-semibold text-stone-950">
-                    {step.title}
-                  </h3>
-                  <p className="mt-1 text-xs leading-5 text-stone-600">
-                    {step.description}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -463,7 +451,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               {donationData.donations.slice(0, 3).map((donation) => (
                 <article
                   key={donation.id}
-                  className="grid gap-3 bg-orange-50/20 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
+                  className="donor-ledger-row grid gap-3 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
                 >
                   <div>
                     <Link
@@ -491,8 +479,18 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   </div>
                   <div className="text-left sm:text-right">
                     <p className="text-sm font-black text-stone-950">
-                      {formatAmount(donation.amount, donation.currency)}
+                      {donation.amountEth > 0
+                        ? `${donation.amountEth.toLocaleString("en-MY", {
+                            minimumFractionDigits: 4,
+                            maximumFractionDigits: 6,
+                          })} ETH`
+                        : formatAmount(donation.amount, donation.currency)}
                     </p>
+                    {donation.amountEth > 0 ? (
+                      <p className="text-xs font-semibold text-stone-500">
+                        Approx. {formatAmount(donation.amount, donation.currency)}
+                      </p>
+                    ) : null}
                     <StatusPill status={donation.status} />
                   </div>
                 </article>
@@ -519,7 +517,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               </h3>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-stone-600">
                 Once you support a campaign, donation amount, transaction hash,
-                and confirmation status will appear here from Supabase.
+                and confirmation status will appear here automatically.
               </p>
               <Link
                 href="/Donor/discover"
@@ -554,7 +552,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             activeCampaignMilestones.map((notification) => (
               <article
                 key={`${notification.campaign}-${notification.milestone}`}
-                className="rounded-xl border border-orange-100 bg-orange-50/30 p-3"
+                className="donor-ledger-row rounded-xl border border-orange-100 p-3"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>

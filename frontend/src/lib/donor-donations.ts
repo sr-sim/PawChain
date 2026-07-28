@@ -1,10 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ensureCampaignCompletedNotification } from "@/lib/donor-notifications";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { formatEther, isAddress, type Address } from "viem";
 
 type DonationRow = {
   id: string;
   donor_id: string;
   campaign_id: string;
   amount: number | string;
+  amount_wei?: string | null;
   currency: string;
   tx_hash: string;
   contract_address?: string | null;
@@ -21,6 +26,12 @@ type CampaignRow = {
   goal_amount: number | string;
   current_amount: number | string;
   campaign_status: string;
+  contract_address?: string | null;
+};
+
+type OnChainCampaignSnapshot = {
+  progress: number;
+  status: string;
 };
 
 type ShelterRow = {
@@ -36,6 +47,8 @@ export type DonorDonation = {
   shelterName: string;
   location: string;
   amount: number;
+  amountEth: number;
+  amountWei: string | null;
   currency: string;
   txHash: string;
   contractAddress: string | null;
@@ -43,10 +56,12 @@ export type DonorDonation = {
   createdAt: string;
   updatedAt: string;
   campaignProgress: number;
+  campaignStatus: string;
 };
 
 export type DonorDonationSummary = {
   totalAmount: number;
+  totalEth: number;
   currency: string;
   donationCount: number;
   confirmedCount: number;
@@ -65,9 +80,21 @@ function normalizeStatus(status: string) {
     .join(" ");
 }
 
+function getOnChainStatusLabel(status: number) {
+  if (status === 0) return "Active";
+  if (status === 1) return "Completed";
+  if (status === 2) return "Refunding";
+  if (status === 3) return "Closed";
+  return "On-chain";
+}
+
 function getCampaignProgress(campaign?: CampaignRow) {
   if (!campaign) {
     return 0;
+  }
+
+  if (campaign.campaign_status === "completed") {
+    return 100;
   }
 
   const goal = toNumber(campaign.goal_amount);
@@ -80,11 +107,64 @@ function getCampaignProgress(campaign?: CampaignRow) {
   return Math.min(100, Math.round((current / goal) * 100));
 }
 
+async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
+  const contractCampaigns = campaigns.filter(
+    (campaign) =>
+      campaign.contract_address && isAddress(campaign.contract_address),
+  );
+
+  if (contractCampaigns.length === 0) {
+    return new Map<string, OnChainCampaignSnapshot>();
+  }
+
+  const publicClient = getPawChainPublicClient();
+  const entries = await Promise.all(
+    contractCampaigns.map(async (campaign) => {
+      try {
+        const address = campaign.contract_address as Address;
+        const [totalRaisedWei, goalWei, campaignStatus] = await Promise.all([
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "totalRaised",
+          }),
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "goal",
+          }),
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "campaignStatus",
+          }),
+        ]);
+        const totalRaisedEth = Number(formatEther(totalRaisedWei));
+        const goalEth = Number(formatEther(goalWei));
+        const status = getOnChainStatusLabel(Number(campaignStatus));
+        const progress =
+          status === "Completed"
+            ? 100
+            : goalEth > 0
+              ? Math.min(100, Math.round((totalRaisedEth / goalEth) * 100))
+              : 0;
+
+        return [campaign.id, { progress, status }] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return new Map(entries.filter(Boolean) as [string, OnChainCampaignSnapshot][]);
+}
+
 export async function getDonorDonations(walletAddress?: string) {
   const empty = {
     donations: [] as DonorDonation[],
     summary: {
       totalAmount: 0,
+      totalEth: 0,
       currency: "MYR",
       donationCount: 0,
       confirmedCount: 0,
@@ -111,7 +191,7 @@ export async function getDonorDonations(walletAddress?: string) {
   const { data: donationRows, error: donationError } = await supabase
     .from("donations")
     .select(
-      "id, donor_id, campaign_id, amount, currency, tx_hash, contract_address, status, created_at, updated_at",
+      "id, donor_id, campaign_id, amount, amount_wei, currency, tx_hash, contract_address, status, created_at, updated_at",
     )
     .eq("donor_id", profile.id)
     .order("created_at", { ascending: false });
@@ -125,7 +205,7 @@ export async function getDonorDonations(walletAddress?: string) {
   const { data: campaignRows } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, location, goal_amount, current_amount, campaign_status",
+      "id, shelter_id, title, location, goal_amount, current_amount, campaign_status, contract_address",
     )
     .in("id", campaignIds);
 
@@ -150,10 +230,19 @@ export async function getDonorDonations(walletAddress?: string) {
     (map, shelter) => map.set(shelter.user_id, shelter.shelter_name),
     new Map<string, string>(),
   );
+  const onChainSnapshots = await getOnChainCampaignSnapshots([
+    ...campaigns.values(),
+  ]);
 
   const donations = donationsData.map((donation) => {
     const campaign = campaigns.get(donation.campaign_id);
+    const onChainSnapshot = campaign
+      ? onChainSnapshots.get(campaign.id)
+      : undefined;
     const amount = toNumber(donation.amount);
+    const amountEth = donation.amount_wei
+      ? Number(formatEther(BigInt(donation.amount_wei)))
+      : 0;
 
     return {
       id: donation.id,
@@ -165,15 +254,37 @@ export async function getDonorDonations(walletAddress?: string) {
         : "Verified shelter",
       location: campaign?.location ?? "-",
       amount,
+      amountEth,
+      amountWei: donation.amount_wei ?? null,
       currency: donation.currency ?? "MYR",
       txHash: donation.tx_hash,
       contractAddress: donation.contract_address ?? null,
       status: normalizeStatus(donation.status),
       createdAt: donation.created_at,
       updatedAt: donation.updated_at,
-      campaignProgress: getCampaignProgress(campaign),
+      campaignProgress: onChainSnapshot?.progress ?? getCampaignProgress(campaign),
+      campaignStatus:
+        onChainSnapshot?.status ??
+        (campaign ? normalizeStatus(campaign.campaign_status) : "Unavailable"),
     };
   });
+
+  await Promise.all(
+    donations
+      .filter(
+        (donation) =>
+          donation.campaignStatus === "Completed" &&
+          !["Failed", "Refunded"].includes(donation.status),
+      )
+      .map((donation) =>
+        ensureCampaignCompletedNotification({
+          donorId: profile.id,
+          campaignId: donation.campaignId,
+          campaignTitle: donation.campaignTitle,
+        }),
+      ),
+  );
+
   const confirmedDonations = donations.filter(
     (donation) => !["Failed", "Refunded"].includes(donation.status),
   );
@@ -181,11 +292,16 @@ export async function getDonorDonations(walletAddress?: string) {
     (total, donation) => total + donation.amount,
     0,
   );
+  const totalEth = confirmedDonations.reduce(
+    (total, donation) => total + donation.amountEth,
+    0,
+  );
 
   return {
     donations,
     summary: {
       totalAmount,
+      totalEth,
       currency: donations[0]?.currency ?? "MYR",
       donationCount: donations.length,
       confirmedCount: confirmedDonations.length,

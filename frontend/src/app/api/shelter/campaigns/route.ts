@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
+import { parseEther } from "viem";
 
 type UrgencyLevel = "medium" | "high" | "critical";
 type MilestonePayload = {
@@ -12,7 +13,6 @@ type MilestonePayload = {
 
 const urgencyLevels: UrgencyLevel[] = ["medium", "high", "critical"];
 const durationOptions = [30, 60, 90];
-const minimumGoalAmount = 1000;
 const emergencyMilestonePercentage = 5;
 
 function isUrgencyLevel(value: string): value is UrgencyLevel {
@@ -94,7 +94,10 @@ export async function POST(request: NextRequest) {
     const description = String(body.description ?? "").trim();
     const location = String(body.location ?? "").trim();
     const imageUrl = String(body.imageUrl ?? "").trim();
-    const goalAmount = Number(body.goalAmount);
+    const goalEth = String(body.goalEth ?? "").trim();
+    const ethMyrRate = Number(body.ethMyrRate);
+    const validGoalEth = /^\d+(?:\.\d{1,18})?$/.test(goalEth) && parseEther(goalEth) > BigInt(0);
+    const goalAmount = Number(goalEth) * ethMyrRate;
     const durationDays = Number(body.durationDays);
     const urgencyLevel = String(body.urgencyLevel ?? "medium");
     const milestones: MilestonePayload[] = Array.isArray(body.milestones)
@@ -115,9 +118,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!Number.isFinite(goalAmount) || goalAmount < minimumGoalAmount) {
+    if (!validGoalEth || !Number.isFinite(ethMyrRate) || ethMyrRate <= 0 || !Number.isFinite(goalAmount)) {
       return NextResponse.json(
-        { message: "Goal amount must be at least RM 1,000." },
+        { message: "Enter a valid ETH goal and conversion rate." },
         { status: 400 },
       );
     }
@@ -203,6 +206,8 @@ export async function POST(request: NextRequest) {
         description,
         location,
         goal_amount: goalAmount,
+        goal_wei: parseEther(goalEth).toString(),
+        eth_myr_rate: ethMyrRate,
         current_amount: 0,
         urgency_level: urgencyLevel,
         campaign_status: "pending_approval",
@@ -225,10 +230,7 @@ export async function POST(request: NextRequest) {
       .insert(
         parsedMilestones.map((milestone) => ({
           campaign_id: campaign.id,
-          title:
-            milestone === parsedMilestones[0]
-              ? "Emergency Initial Release"
-              : milestone.title,
+          title: milestone.title,
           description: milestone.description,
           requirement: milestone.requirement,
           percentage: milestone.percentage,

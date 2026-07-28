@@ -17,8 +17,14 @@ type ShelterMilestoneCardProps = {
   campaignId?: string;
   walletAddress?: string;
   contractAddress?: string | null;
+  goalEth?: number;
+  ethMyrRate?: number;
+  cumulativePercentage?: number;
   canUploadProof?: boolean;
+  showProofUpload?: boolean;
+  showWithdrawAction?: boolean;
   onProofSubmitted?: (milestone: CampaignMilestone) => void;
+  onWithdrawalCompleted?: () => void;
 };
 
 function UploadIcon() {
@@ -75,8 +81,14 @@ export function MilestoneCard({
   campaignId,
   walletAddress,
   contractAddress,
+  goalEth = 0,
+  ethMyrRate = 0,
+  cumulativePercentage = 0,
   canUploadProof = false,
+  showProofUpload = true,
+  showWithdrawAction = false,
   onProofSubmitted,
+  onWithdrawalCompleted,
 }: ShelterMilestoneCardProps) {
   const [selectedFiles, setSelectedFiles] = useState<ProofFile[]>([]);
   const [previewFile, setPreviewFile] = useState<ProofFile | null>(null);
@@ -105,20 +117,22 @@ export function MilestoneCard({
         Boolean(validContractAddress) &&
         onChainIndex !== null &&
         onChainIndex !== undefined,
-    },
+      },
   });
   const onChainStatus = onChainMilestone
     ? Number(onChainMilestone.status)
     : null;
-  const proofAllowedOnChain =
-    index === 0
-      ? onChainStatus === 6 || onChainStatus === 3
-      : onChainStatus === 1 || onChainStatus === 3;
+  // Proof is valid only after the milestone funds have been withdrawn
+  // (Released), or when the admin rejected an earlier proof submission.
+  // Never fall back to the older rule that allowed an Active milestone to
+  // upload proof while it was still collecting funds.
+  const proofAllowedOnChain = onChainStatus === 6 || onChainStatus === 3;
   const showUploader =
     canUploadProof &&
-    proofAllowedOnChain &&
-    (milestone.status === "pending" || milestone.status === "rejected");
-  const canWithdraw = canUploadProof && onChainStatus === 5;
+    showProofUpload &&
+    proofAllowedOnChain;
+  const canWithdraw =
+    canUploadProof && showWithdrawAction && onChainStatus === 5;
 
   async function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -285,12 +299,9 @@ export function MilestoneCard({
         throw new Error(result.message ?? "Unable to record fund release.");
       }
 
-      setMessage(
-        index === 0
-          ? "Emergency funds released. Upload proof to activate Milestone 2."
-          : "Milestone funds released successfully.",
-      );
+      setMessage("Milestone funds released successfully.");
       await refetchOnChainMilestone();
+      onWithdrawalCompleted?.();
     } catch (withdrawError) {
       setError(
         withdrawError instanceof Error
@@ -307,27 +318,17 @@ export function MilestoneCard({
       <SharedMilestoneCard
         milestone={milestone}
         index={index}
-        showProof
+        showProof={showProofUpload}
         proofAction={
-          showUploader || canWithdraw ? (
+          showProofUpload && canUploadProof ? (
             <div className="mt-4 rounded-2xl border border-dashed border-orange-200 bg-white/72 p-4 text-stone-950">
-              {canWithdraw ? (
-                <button
-                  type="button"
-                  onClick={handleWithdraw}
-                  disabled={isSubmitting}
-                  className="mb-4 inline-flex items-center justify-center rounded-full bg-[var(--color-orange)] px-5 py-3 text-sm font-black text-white disabled:opacity-60"
-                >
-                  {isSubmitting ? "Confirming..." : `Withdraw Milestone ${index + 1} funds`}
-                </button>
-              ) : null}
               {showUploader ? (
                 <>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-sm font-black">Submit proof</p>
                   <p className="mt-1 text-sm font-bold leading-6 text-stone-600">
-                    Choose one or more image/PDF files. Select again to add more.
+                    Choose one or more image/PDF files. Every selected file can be previewed before submission.
                   </p>
                 </div>
                 <button
@@ -337,7 +338,11 @@ export function MilestoneCard({
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-stone-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-orange-200/70 transition hover:-translate-y-0.5 hover:bg-[var(--color-orange)] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <UploadIcon />
-                  {isSubmitting ? "Submitting..." : "Submit Proof"}
+                  {isSubmitting
+                    ? "Submitting..."
+                    : selectedFiles.length > 1
+                      ? `Submit ${selectedFiles.length} Proofs`
+                      : "Submit Proof"}
                 </button>
               </div>
 
@@ -350,45 +355,187 @@ export function MilestoneCard({
               />
 
               {selectedFiles.length > 0 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-xs font-black text-stone-500">
+                      {selectedFiles.length} selected file{selectedFiles.length === 1 ? "" : "s"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFiles([]);
+                        setPreviewFile(null);
+                        setError("");
+                      }}
+                      className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-black text-red-600 transition hover:bg-red-50"
+                    >
+                      Discard all uploads
+                    </button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {selectedFiles.map((file, fileIndex) => (
-                    <span
+                    <div
                       key={`${file.name}-${fileIndex}`}
-                      className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-white px-2 py-1.5 text-xs font-black text-stone-700"
+                      className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm"
                     >
                       <button
                         type="button"
                         onClick={() => setPreviewFile(file)}
-                        className="inline-flex items-center gap-2 rounded-full px-1 transition hover:text-[var(--color-orange)]"
+                        className="group block w-full text-left"
                         aria-label={`Preview ${file.name}`}
                       >
-                        <FileIcon />
-                        {file.name}
+                        <span className="grid h-28 place-items-center overflow-hidden bg-stone-50">
+                          {isPdfProof(file) ? (
+                            <span className="flex flex-col items-center gap-2 text-stone-500">
+                              <FileIcon />
+                              <span className="text-xs font-black">PDF document</span>
+                            </span>
+                          ) : (
+                            <img
+                              src={file.dataUrl}
+                              alt={file.name}
+                              className="h-full w-full object-cover transition group-hover:scale-105"
+                            />
+                          )}
+                        </span>
+                        <span className="block truncate px-3 py-2 text-xs font-black text-stone-700 group-hover:text-[var(--color-orange)]">
+                          {file.name}
+                        </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedFiles((current) =>
-                            current.filter(
-                              (_, currentIndex) => currentIndex !== fileIndex,
-                            ),
-                          )
-                        }
-                        className="rounded-full px-1 text-stone-400 transition hover:bg-orange-50 hover:text-red-600"
-                        aria-label={`Remove ${file.name}`}
-                      >
-                        x
-                      </button>
-                    </span>
+                      <div className="flex items-center justify-between gap-2 border-t border-orange-100 px-3 py-2">
+                        <button type="button" onClick={() => setPreviewFile(file)} className="text-xs font-black text-[var(--color-orange)]">Preview</button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedFiles((current) =>
+                              current.filter(
+                                (_, currentIndex) => currentIndex !== fileIndex,
+                              ),
+                            )
+                          }
+                          className="text-xs font-black text-red-600"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
                   ))}
+                  </div>
                 </div>
               ) : null}
                 </>
+              ) : showProofUpload && canUploadProof ? (
+                <div className="rounded-xl bg-stone-50 px-4 py-3 text-sm font-bold leading-6 text-stone-600">
+                  {onChainStatus === 5
+                    ? "Proof submission is locked until you withdraw this fully funded milestone from the Withdraw Funds page."
+                    : onChainStatus === 1
+                      ? `Proof submission is locked until this milestone reaches its ${cumulativePercentage}% funding target and its funds are withdrawn.`
+                      : onChainStatus === 0
+                        ? "Proof submission is locked until the previous milestone is completed and this milestone is fully funded and withdrawn."
+                        : onChainStatus === 2
+                          ? "Proof has been submitted and is waiting for admin review."
+                          : onChainStatus === 7
+                            ? "This milestone and its proof review are complete."
+                            : "Checking the on-chain milestone status before enabling proof submission."}
+                </div>
               ) : null}
             </div>
           ) : null
         }
       >
+        {showWithdrawAction ? (
+          <div
+            className={`mt-4 overflow-hidden rounded-2xl border p-4 sm:p-5 ${
+              canWithdraw
+                ? "border-emerald-200 bg-[linear-gradient(135deg,#ECFDF5,#FFFFFF)] shadow-sm shadow-emerald-100"
+                : "border-orange-100 bg-white"
+            }`}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-lg font-black ${
+                    canWithdraw
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-orange-50 text-[var(--color-orange)]"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {canWithdraw ? "✓" : "↗"}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-400">
+                    Withdrawal status
+                  </p>
+                  <h4 className="mt-1 text-lg font-black text-stone-950">
+                    {canWithdraw
+                      ? "Milestone funds are ready"
+                      : onChainStatus === 6
+                        ? "Funds already withdrawn"
+                        : onChainStatus === 1
+                          ? "Milestone is still collecting funds"
+                          : onChainStatus === 0
+                            ? "Milestone is locked"
+                            : onChainStatus === 2
+                              ? "Proof is under admin review"
+                              : onChainStatus === 3
+                                ? "Revised proof is required"
+                                : onChainStatus === 7
+                                  ? "Milestone completed"
+                                  : "Checking withdrawal availability"}
+                  </h4>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-stone-500">
+                    {canWithdraw
+                      ? `Withdraw Milestone ${index + 1}'s allocation to the verified shelter wallet.`
+                      : onChainStatus === 6
+                        ? "The allocation was transferred. Continue from Campaign Details to submit proof."
+                        : onChainStatus === 1
+                          ? `Withdrawal unlocks when donations reach the ${cumulativePercentage}% cumulative target.`
+                          : onChainStatus === 0
+                            ? "Complete the previous milestone before this allocation can be funded."
+                            : "The smart contract has not marked this allocation as withdrawable."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-col gap-2 lg:items-end">
+                <div className="rounded-xl border border-current/10 bg-white/80 px-4 py-2 text-left lg:text-right">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-stone-400">
+                    Milestone allocation
+                  </p>
+                  <p className="mt-1 text-sm font-black text-stone-950">
+                    {(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH
+                  </p>
+                  {walletAddress ? (
+                    <p className="mt-1 font-mono text-[10px] font-bold text-stone-400">
+                      To {walletAddress.slice(0, 7)}...{walletAddress.slice(-5)}
+                    </p>
+                  ) : null}
+                </div>
+                {canWithdraw ? (
+                  <button
+                    type="button"
+                    onClick={handleWithdraw}
+                    disabled={isSubmitting}
+                    className="inline-flex min-w-52 items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-200 transition hover:-translate-y-0.5 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isSubmitting
+                      ? "Confirming withdrawal..."
+                      : `Withdraw Milestone ${index + 1}`}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Funds (ETH)</p><p className="mt-1 text-sm font-black text-stone-950">{(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH</p></div>
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Approx. value (MYR)</p><p className="mt-1 text-sm font-black text-stone-950">{new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(goalEth * Number(milestone.percentage || 0) / 100 * ethMyrRate)}</p></div>
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Required funding</p><p className="mt-1 text-sm font-black text-stone-950">{cumulativePercentage}%</p></div>
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Proof state</p><p className="mt-1 text-sm font-black capitalize text-stone-950">{milestone.status.replaceAll("_", " ")}</p></div>
+        </div>
         {error ? (
           <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             {error}

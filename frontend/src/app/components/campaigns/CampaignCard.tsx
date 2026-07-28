@@ -1,13 +1,20 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useReadContract } from "wagmi";
 import type { Campaign } from "./campaign-types";
 import { formatCurrency, getProgress } from "./campaign-utils";
 import { StatusBadge } from "./StatusBadge";
+import { formatEther, isAddress } from "viem";
+import { demoEthMyrRate } from "@/lib/campaign-blockchain";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 
 type CampaignCardProps = {
   campaign: Campaign;
   href: string;
   actions?: ReactNode;
+  milestoneCount?: number;
 };
 
 function CampaignIcon() {
@@ -24,62 +31,77 @@ function CampaignIcon() {
   );
 }
 
-function CampaignCardContent({ campaign }: { campaign: Campaign }) {
-  const progress = getProgress(campaign.current_amount, campaign.goal_amount);
+function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign; milestoneCount?: number }) {
+  const rate = Number(campaign.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
+  const contractAddress = campaign.contract_address && isAddress(campaign.contract_address)
+    ? campaign.contract_address
+    : undefined;
+  const { data: onChainGoal } = useReadContract({
+    address: contractAddress,
+    abi: campaignContractAbi,
+    functionName: "goal",
+    query: { enabled: Boolean(contractAddress) },
+  });
+  const { data: onChainRaised } = useReadContract({
+    address: contractAddress,
+    abi: campaignContractAbi,
+    functionName: "totalRaised",
+    query: { enabled: Boolean(contractAddress) },
+  });
+  const goalEth = onChainGoal !== undefined
+    ? Number(formatEther(onChainGoal))
+    : campaign.goal_wei
+      ? Number(formatEther(BigInt(campaign.goal_wei)))
+      : Number(campaign.goal_amount || 0) / rate;
+  const raisedEth = onChainRaised !== undefined
+    ? Number(formatEther(onChainRaised))
+    : Number(campaign.current_amount || 0) / rate;
+  const progress = getProgress(raisedEth, goalEth);
+  const createdAt = campaign.created_at ? new Date(campaign.created_at).getTime() : Date.now();
+  const remainingDays = Math.max(0, Math.ceil((createdAt + campaign.duration_days * 86400000 - Date.now()) / 86400000));
+
+  const progressColor = campaign.campaign_status === "rejected"
+    ? "bg-red-500"
+    : ["completed", "closed"].includes(campaign.campaign_status)
+      ? "bg-emerald-500"
+      : "bg-[var(--color-orange)]";
 
   return (
     <>
-      {campaign.image_url ? (
-        <img
-          src={campaign.image_url}
-          alt=""
-          className="aspect-[16/9] w-full object-cover"
-        />
-      ) : (
-        <div className="grid aspect-[16/9] place-items-center bg-[linear-gradient(135deg,rgba(var(--color-cream-rgb),0.92),rgba(var(--color-peach-rgb),0.44))] text-[var(--color-orange)]">
-          <CampaignIcon />
-        </div>
-      )}
+      <div className="relative">
+        {campaign.image_url ? (
+          <img src={campaign.image_url} alt="" className="aspect-[16/7] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+        ) : (
+          <div className="grid aspect-[16/7] place-items-center bg-[linear-gradient(135deg,rgba(var(--color-cream-rgb),0.92),rgba(var(--color-peach-rgb),0.44))] text-[var(--color-orange)]"><CampaignIcon /></div>
+        )}
+        <div className="absolute bottom-3 left-3"><StatusBadge status={campaign.campaign_status} /></div>
+      </div>
 
       <div className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={campaign.campaign_status} />
-          <span className="rounded-full border border-orange-100 bg-white px-3 py-1 text-xs font-black text-stone-600">
-            {campaign.location}
-          </span>
-        </div>
-        <h2 className="mt-3 text-lg font-black text-stone-950">
+        <h2 className="text-lg font-black text-stone-950">
           {campaign.title}
         </h2>
-        <p className="mt-2 line-clamp-2 text-sm font-bold leading-6 text-stone-600">
-          {campaign.description}
-        </p>
+        <p className="mt-1 text-xs font-bold text-stone-500">{campaign.location}</p>
 
         <div className="mt-4">
-          <div className="flex items-center justify-between gap-3 text-sm font-black">
-            <span className="text-stone-950">
-              {formatCurrency(campaign.current_amount)}
-            </span>
-            <span className="text-stone-500">
-              {formatCurrency(campaign.goal_amount)}
-            </span>
+          <div className="flex items-end justify-between gap-3">
+            <div><p className="text-2xl font-black text-stone-950">{progress}%</p><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">funded</p></div>
+            <div className="text-right"><p className="text-xs font-black text-stone-950">{raisedEth.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH raised</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatCurrency(raisedEth * rate)}</p><p className="mt-1 text-[10px] font-black text-stone-500">{goalEth.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH goal</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatCurrency(goalEth * rate)}</p></div>
           </div>
-          <div className="mt-2 h-3 overflow-hidden rounded-full bg-orange-100">
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-orange-100">
             <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-gold),var(--color-orange))]"
+              className={`h-full rounded-full ${progressColor}`}
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="mt-2 text-right text-xs font-black text-stone-500">
-            {progress}% funded
-          </p>
+          <div className="mt-4 flex items-center justify-between border-t border-orange-100 pt-3 text-[11px] font-bold text-stone-500"><span>{milestoneCount ?? 0} milestone{milestoneCount === 1 ? "" : "s"}</span><span>{campaign.campaign_status === "completed" ? "Completed" : `${remainingDays} days left`}</span></div>
         </div>
       </div>
     </>
   );
 }
 
-export function CampaignCard({ campaign, href, actions }: CampaignCardProps) {
+export function CampaignCard({ campaign, href, actions, milestoneCount }: CampaignCardProps) {
   const cardClassName =
     "group block overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,var(--color-white),rgba(var(--color-cream-rgb),0.58))] shadow-[0_16px_42px_rgba(155,86,20,0.08)] transition duration-300 hover:-translate-y-1 hover:border-[var(--color-orange)] hover:shadow-[0_24px_58px_rgba(155,86,20,0.16)]";
 
@@ -87,7 +109,7 @@ export function CampaignCard({ campaign, href, actions }: CampaignCardProps) {
     return (
       <article className={cardClassName}>
         <Link href={href} className="block">
-          <CampaignCardContent campaign={campaign} />
+          <CampaignCardContent campaign={campaign} milestoneCount={milestoneCount} />
         </Link>
         <div className="border-t border-orange-100 px-4 py-3">{actions}</div>
       </article>
@@ -96,7 +118,7 @@ export function CampaignCard({ campaign, href, actions }: CampaignCardProps) {
 
   return (
     <Link href={href} className={cardClassName}>
-      <CampaignCardContent campaign={campaign} />
+      <CampaignCardContent campaign={campaign} milestoneCount={milestoneCount} />
     </Link>
   );
 }

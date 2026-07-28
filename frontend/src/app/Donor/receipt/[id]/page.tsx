@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDonorDonationById } from "@/lib/donor-donations";
+import {
+  getAddressExplorerUrl,
+  getExplorerNetworkName,
+  getTransactionExplorerUrl,
+  shortAddress,
+} from "@/lib/block-explorer";
 
 type ReceiptPageProps = {
   params: Promise<{ id: string }>;
@@ -25,6 +31,13 @@ function formatAmount(amount: number, currency: string) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatEth(value: number) {
+  return `${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  })} ETH`;
 }
 
 function formatDate(value: string) {
@@ -53,6 +66,16 @@ export default async function DonorReceiptPage({
   const trackingHref = walletAddress
     ? `/Donor/tracking?walletAddress=${encodeURIComponent(walletAddress)}`
     : "/Donor/tracking";
+  const explorerUrl = getTransactionExplorerUrl(receipt.txHash);
+  const contractUrl = receipt.contractAddress
+    ? getAddressExplorerUrl(receipt.contractAddress)
+    : "";
+  const receiptAmount = receipt.amountEth > 0
+    ? formatEth(receipt.amountEth)
+    : formatAmount(receipt.amount, receipt.currency);
+  const receiptAmountEstimate = receipt.amountEth > 0
+    ? formatAmount(receipt.amount, receipt.currency)
+    : "";
 
   return (
     <div className="space-y-5">
@@ -63,18 +86,18 @@ export default async function DonorReceiptPage({
         Back to tracking
       </Link>
 
-      <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm sm:p-6">
+      <section className="donor-tech-hero rounded-2xl border border-orange-100 bg-white p-5 shadow-sm sm:p-6">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
           Donation receipt
         </p>
         <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="break-all text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
-              {receipt.id}
+            <h1 className="text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
+              Receipt confirmed
             </h1>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              Verified donor receipt generated from the Supabase donation
-              history record.
+              {receipt.campaignTitle} - {receiptAmount}
+              {receiptAmountEstimate ? ` (${receiptAmountEstimate})` : ""}
             </p>
           </div>
           <span
@@ -104,13 +127,15 @@ export default async function DonorReceiptPage({
           </div>
           <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
             {[
+              ["Receipt ID", receipt.id],
               ["Campaign", receipt.campaignTitle],
               ["Shelter", receipt.shelterName],
-              ["Location", receipt.location],
-              ["Amount", formatAmount(receipt.amount, receipt.currency)],
+              ["Amount", receiptAmount],
+              ...(receiptAmountEstimate
+                ? ([["MYR estimate", receiptAmountEstimate]] as [string, string][])
+                : []),
+              ["Network", getExplorerNetworkName()],
               ["Date", formatDate(receipt.createdAt)],
-              ["Wallet", walletAddress ?? "-"],
-              ["Transaction hash", shortHash(receipt.txHash)],
             ].map(([label, value]) => (
               <div
                 key={label}
@@ -120,55 +145,63 @@ export default async function DonorReceiptPage({
                 <p className="break-all font-semibold text-stone-950">{value}</p>
               </div>
             ))}
+            <div className="grid gap-2 bg-orange-50/20 px-3 py-3 text-sm sm:grid-cols-[10rem_1fr]">
+              <p className="font-medium text-stone-500">Campaign contract</p>
+              {contractUrl && receipt.contractAddress ? (
+                <a
+                  href={contractUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all font-semibold text-[var(--color-orange)] transition hover:text-stone-950"
+                >
+                  {shortAddress(receipt.contractAddress)}
+                </a>
+              ) : (
+                <p className="break-all font-semibold text-stone-950">
+                  Contract not recorded
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-black text-stone-950">Verification</h2>
-          <div className="mt-4 grid place-items-center rounded-xl border border-orange-100 bg-orange-50/30 p-5">
-            <div className="grid h-28 w-28 grid-cols-5 gap-1 rounded-xl bg-white p-3 ring-1 ring-orange-100">
-              {Array.from({ length: 25 }).map((_, index) => (
-                <span
-                  key={index}
-                  className={[
-                    "rounded-sm",
-                    [0, 2, 4, 6, 8, 10, 12, 16, 18, 20, 22, 24].includes(
-                      index,
-                    )
-                      ? "bg-stone-900"
-                      : "bg-orange-100",
-                  ].join(" ")}
-                />
-              ))}
-            </div>
-            <p className="mt-3 text-center text-xs font-semibold text-stone-500">
-              Transaction hash linked to donor history
-            </p>
-          </div>
-          <div className="mt-4 space-y-3">
-            {[
-              "Donation record belongs to the connected donor wallet.",
-              "Campaign and shelter context are loaded from Supabase.",
-              "Smart contract explorer link can be added after Web3 network is finalized.",
-            ].map((item, index) => (
-              <div
-                key={item}
-                className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/25 p-3"
-              >
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
-                  {index + 1}
-                </span>
-                <p className="text-sm leading-6 text-stone-600">{item}</p>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-xl font-black text-stone-950">Blockchain proof</h2>
           <div className="mt-4 rounded-xl border border-orange-100 bg-white p-3">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-              Full transaction hash
+              Transaction hash
             </p>
             <p className="mt-2 break-all text-sm font-semibold text-stone-950">
               {receipt.txHash}
             </p>
+            {explorerUrl ? (
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-100"
+              >
+                View transaction on Etherscan
+              </a>
+            ) : null}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-orange-100 bg-orange-50/25 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
+                Wallet
+              </p>
+              <p className="mt-1 break-all text-sm font-semibold text-stone-950">
+                {walletAddress ?? "-"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-orange-100 bg-orange-50/25 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
+                Verification
+              </p>
+              <p className="mt-1 text-sm font-semibold text-stone-950">
+                Donor record matched
+              </p>
+            </div>
           </div>
         </div>
       </section>
