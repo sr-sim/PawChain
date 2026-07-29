@@ -44,10 +44,26 @@ describe("RoleNFT", function () {
     };
   }
 
+  async function getRoleNFTAsAdmin(roleNFTAddress: `0x${string}`) {
+    await hre.network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [adminOne],
+    });
+    await hre.network.provider.request({
+      method: "hardhat_setBalance",
+      params: [adminOne, "0x56BC75E2D63100000"],
+    });
+    const adminClient = await hre.viem.getWalletClient(adminOne);
+    return hre.viem.getContractAt("RoleNFT", roleNFTAddress, {
+      client: { wallet: adminClient },
+    });
+  }
+
   it("mints donor NFTs at the Normal donor level", async function () {
     const { roleNFT, donor } = await loadFixture(deployRoleNFTFixture);
 
-    await roleNFT.write.safeMintDonor([donor.account.address, "donor-cid"]);
+    const roleNFTAsAdmin = await getRoleNFTAsAdmin(roleNFT.address);
+    await roleNFTAsAdmin.write.safeMintDonor([donor.account.address, "donor-cid"]);
 
     const tokenId = await roleNFT.read.userTokenId([donor.account.address]);
 
@@ -73,10 +89,61 @@ describe("RoleNFT", function () {
     expect(await roleNFT.read.isAdmin([donor.account.address])).to.equal(false);
   });
 
+  it("blocks non-admin wallets from minting role NFTs", async function () {
+    const { roleNFT, donor, shelter, otherAccount } =
+      await loadFixture(deployRoleNFTFixture);
+    const roleNFTAsOtherAccount = await hre.viem.getContractAt(
+      "RoleNFT",
+      roleNFT.address,
+      { client: { wallet: otherAccount } },
+    );
+
+    await expectRevert(
+      roleNFTAsOtherAccount.write.safeMintShelter([
+        shelter.account.address,
+        "shelter-cid",
+      ]),
+      "Only admin",
+    );
+    await expectRevert(
+      roleNFTAsOtherAccount.write.safeMintDonor([
+        donor.account.address,
+        "donor-cid",
+      ]),
+      "Only admin",
+    );
+  });
+
+  it("allows admins to upgrade and revoke RoleNFTs", async function () {
+    const { roleNFT, donor } = await loadFixture(deployRoleNFTFixture);
+    const roleNFTAsAdmin = await getRoleNFTAsAdmin(roleNFT.address);
+
+    await roleNFTAsAdmin.write.safeMintDonor([
+      donor.account.address,
+      "donor-cid",
+    ]);
+    await roleNFTAsAdmin.write.upgradeDonorLevel([
+      donor.account.address,
+      DonorLevel.Bronze,
+      "bronze-cid",
+    ]);
+
+    const tokenId = await roleNFT.read.userTokenId([donor.account.address]);
+    expect(await roleNFT.read.donorLevelOf([tokenId])).to.equal(
+      DonorLevel.Bronze,
+    );
+
+    await roleNFTAsAdmin.write.revokeRoleNFT([donor.account.address]);
+    expect(await roleNFT.read.hasRoleNFT([donor.account.address])).to.equal(
+      false,
+    );
+  });
+
   it("mints shelter NFTs with no donor level", async function () {
     const { roleNFT, shelter } = await loadFixture(deployRoleNFTFixture);
 
-    await roleNFT.write.safeMintShelter([shelter.account.address, "shelter-cid"]);
+    const roleNFTAsAdmin = await getRoleNFTAsAdmin(roleNFT.address);
+    await roleNFTAsAdmin.write.safeMintShelter([shelter.account.address, "shelter-cid"]);
 
     const tokenId = await roleNFT.read.userTokenId([shelter.account.address]);
 

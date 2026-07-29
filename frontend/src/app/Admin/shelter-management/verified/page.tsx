@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
+import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 
 type Shelter = {
   profile_id: string;
@@ -74,6 +76,11 @@ export default function VerifiedSheltersPage() {
   const [toast, setToast] = useState<{ message: string; hash?: string } | null>(
     null,
   );
+  const [blockchainSuccess, setBlockchainSuccess] = useState<{
+    title: string;
+    message: string;
+    txHash: string;
+  } | null>(null);
 
   const load = async () => {
     if (!address) return;
@@ -146,13 +153,26 @@ export default function VerifiedSheltersPage() {
           new Error(result.message || "Account action failed."),
           { txHash: result.txHash },
         );
-      setToast({
-        message:
-          action === "deactivate"
-            ? "Shelter deactivated and RoleNFT revoked."
-            : "Shelter reactivated and RoleNFT restored.",
-        hash: result.txHash,
-      });
+      if (result.txHash) {
+        setBlockchainSuccess({
+          title:
+            action === "deactivate"
+              ? "Shelter RoleNFT revoked"
+              : "Shelter RoleNFT restored",
+          message:
+            action === "deactivate"
+              ? "The RoleNFT revocation was confirmed and the shelter account is deactivated."
+              : "A Shelter RoleNFT was minted and the shelter account is active again.",
+          txHash: result.txHash,
+        });
+      } else {
+        setToast({
+          message:
+            action === "deactivate"
+              ? "Shelter deactivated."
+              : "Shelter reactivated.",
+        });
+      }
       setActionTarget(null);
       setReason("");
       await load();
@@ -454,12 +474,25 @@ export default function VerifiedSheltersPage() {
         <div className="fixed bottom-6 right-6 z-[100] max-w-md rounded-2xl bg-stone-950 px-5 py-4 text-sm font-black text-white shadow-2xl">
           <p>{toast.message}</p>
           {toast.hash ? (
-            <p className="mt-2 break-all font-mono text-[10px] text-orange-200">
-              Tx: {toast.hash}
-            </p>
+            <div className="mt-2">
+              <TransactionLinks
+                transactions={[
+                  { label: "RoleNFT tx", hash: toast.hash },
+                ]}
+                emptyMessage={false}
+              />
+            </div>
           ) : null}
         </div>
       ) : null}
+      <BlockchainSuccessPopup
+        open={Boolean(blockchainSuccess)}
+        title={blockchainSuccess?.title ?? ""}
+        message={blockchainSuccess?.message ?? ""}
+        txHash={blockchainSuccess?.txHash ?? ""}
+        actionLabel="View RoleNFT transaction"
+        onClose={() => setBlockchainSuccess(null)}
+      />
     </>
   );
 }

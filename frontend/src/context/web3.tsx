@@ -18,6 +18,12 @@ createAppKit({
   projectId,
   networks,
   defaultNetwork,
+  metadata: {
+    name: "PawChain",
+    description: "Transparent blockchain donations for animal welfare.",
+    url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+    icons: [],
+  },
   enableCoinbase: false,
   features: {
     analytics: false,

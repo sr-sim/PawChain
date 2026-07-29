@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mintRoleNFT } from "@/lib/role-nft";
+import {
+  createShelterDocumentUrl,
+  uploadShelterDocument,
+} from "@/lib/shelter-document-storage";
+import { normalizeMalaysiaPhone } from "@/lib/malaysia-phone";
 
 type Role = "donor" | "shelter" | "admin";
 
@@ -187,17 +192,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const contactPhone = normalizeMalaysiaPhone(
+      readText(formData, "contactPhone"),
+    );
     const proofDocument = formData.get("proofDocument");
-    const proofDocumentPath =
-      proofDocument instanceof File && proofDocument.name
-        ? proofDocument.name
-        : null;
+    if (!(proofDocument instanceof File)) {
+      return NextResponse.json(
+        { message: "A shelter registration document is required." },
+        { status: 400 },
+      );
+    }
+
+    const proofDocumentPath = await uploadShelterDocument(
+      supabase,
+      userId,
+      proofDocument,
+    );
 
     const { error } = await supabase.from("shelter_applications").insert({
       user_id: userId,
       shelter_name: readText(formData, "shelterName"),
       registration_id: readText(formData, "registrationId"),
-      contact_phone: readText(formData, "contactPhone"),
+      contact_phone: contactPhone,
       website_url: readText(formData, "websiteUrl") || null,
       shelter_address: readText(formData, "shelterAddress"),
       organization_description: readText(formData, "organizationDescription"),
@@ -205,6 +221,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) throw error;
+    const proofDocumentUrl = await createShelterDocumentUrl(
+      supabase,
+      proofDocumentPath,
+    );
 
     return NextResponse.json({
       status: "pending",
@@ -213,11 +233,12 @@ export async function POST(request: NextRequest) {
         status: "pending",
         shelterName: readText(formData, "shelterName"),
         registrationId: readText(formData, "registrationId"),
-        contactPhone: readText(formData, "contactPhone"),
+        contactPhone,
         websiteUrl: readText(formData, "websiteUrl") || null,
         shelterAddress: readText(formData, "shelterAddress"),
         organizationDescription: readText(formData, "organizationDescription"),
         proofDocumentPath,
+        proofDocumentUrl,
         submittedAt: new Date().toISOString(),
       },
     });

@@ -1,6 +1,13 @@
 export const roleNFTAbi = [
   {
     type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    type: "function",
     name: "hasRoleNFT",
     stateMutability: "view",
     inputs: [{ name: "", type: "address" }],
@@ -16,7 +23,7 @@ export const roleNFTAbi = [
   {
     type: "function",
     name: "isAdmin",
-    stateMutability: "pure",
+    stateMutability: "view",
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ name: "", type: "bool" }],
   },

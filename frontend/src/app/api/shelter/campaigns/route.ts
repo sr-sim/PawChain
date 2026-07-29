@@ -228,13 +228,14 @@ export async function POST(request: NextRequest) {
     const { error: milestoneError } = await supabase
       .from("campaign_milestones")
       .insert(
-        parsedMilestones.map((milestone) => ({
+        parsedMilestones.map((milestone, index) => ({
           campaign_id: campaign.id,
           title: milestone.title,
           description: milestone.description,
           requirement: milestone.requirement,
           percentage: milestone.percentage,
           status: "pending",
+          on_chain_index: index,
         })),
       );
 

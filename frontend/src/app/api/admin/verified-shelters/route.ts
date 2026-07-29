@@ -3,26 +3,42 @@ import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleNFTStatus, mintRoleNFT, revokeRoleNFT } from "@/lib/role-nft";
 
-async function requireAdmin(walletAddress: string) {
-  if (!(await isAdminWallet(walletAddress))) {
-    throw new Response("Access denied.", { status: 403 });
+class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
   }
-  const supabase = createAdminClient();
+}
+
+async function requireAdminAccess(walletAddress: string) {
+  if (!(await isAdminWallet(walletAddress))) {
+    throw new HttpError("Access denied.", 403);
+  }
+  return createAdminClient();
+}
+
+async function requireAdminAuditProfile(walletAddress: string) {
+  const supabase = await requireAdminAccess(walletAddress);
   const { data: profile } = await supabase
     .from("profiles")
     .select("id")
     .ilike("wallet_address", walletAddress)
     .maybeSingle();
   if (!profile) {
-    throw new Response("The admin wallet needs a profiles row for audit logging.", { status: 409 });
+    throw new HttpError(
+      "The admin wallet needs a profiles row before changing shelter access.",
+      409,
+    );
   }
   return { supabase, adminId: profile.id };
 }
 
 function responseError(error: unknown) {
-  if (error instanceof Response) {
+  if (error instanceof HttpError) {
     return NextResponse.json(
-      { message: error.statusText || "Request failed." },
+      { message: error.message },
       { status: error.status },
     );
   }
@@ -35,7 +51,7 @@ function responseError(error: unknown) {
 export async function GET(request: NextRequest) {
   try {
     const adminWallet = request.nextUrl.searchParams.get("walletAddress") ?? "";
-    const { supabase } = await requireAdmin(adminWallet);
+    const supabase = await requireAdminAccess(adminWallet);
     const { data: applications, error: applicationError } = await supabase
       .from("shelter_applications")
       .select("user_id, shelter_name, registration_id, contact_phone, website_url, shelter_address, organization_description, status, reviewed_at")
@@ -89,7 +105,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "A deactivation reason is required." }, { status: 400 });
     }
 
-    const { supabase, adminId } = await requireAdmin(adminWallet);
+    const { supabase, adminId } =
+      await requireAdminAuditProfile(adminWallet);
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("id, role, wallet_address, account_status")

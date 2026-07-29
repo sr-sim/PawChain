@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
+import { useChainId, usePublicClient, useWriteContract } from "wagmi";
+import { isAddress, type Address } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar as SharedAdminSidebar } from "@/app/Admin/components/AdminSidebar";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
+import { roleNFTAbi } from "@/lib/role-nft-abi";
 
 type ApplicationStatus = "pending" | "approved" | "rejected";
 
@@ -18,6 +22,11 @@ type ShelterApplication = {
   shelter_address: string;
   organization_description: string;
   proof_document_path: string | null;
+  proof_document_url: string | null;
+  applicant_name: string | null;
+  applicant_email: string | null;
+  applicant_wallet: string | null;
+  account_status: string | null;
   status: ApplicationStatus;
   reviewed_by: string | null;
   reviewed_at: string | null;
@@ -172,7 +181,7 @@ function ModalShell({
       role="dialog"
       aria-modal="true"
     >
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-2xl font-black">{title}</h2>
           <button
@@ -197,10 +206,18 @@ function ShelterApplicationDetailsModal({
   onClose: () => void;
 }) {
   const fields = [
+    ["Application ID", application.id],
+    ["User ID", application.user_id],
+    ["Account owner", application.applicant_name || "Not provided"],
+    ["Account email", application.applicant_email || "Not provided"],
+    ["Wallet address", application.applicant_wallet || "Not provided"],
+    ["Account status", application.account_status || "Not provided"],
+    ["Shelter name", application.shelter_name],
     ["Registration ID", application.registration_id],
     ["Contact phone", application.contact_phone],
     ["Website", application.website_url || "Not provided"],
     ["Address", application.shelter_address],
+    ["Application status", application.status],
     ["Created", formatDate(application.created_at)],
     ["Updated", formatDate(application.updated_at)],
     ["Reviewed by", application.reviewed_by || "Not reviewed"],
@@ -217,7 +234,18 @@ function ShelterApplicationDetailsModal({
             <p className="text-xs font-black uppercase text-stone-400">
               {label}
             </p>
-            <p className="mt-1 break-words text-sm font-bold">{value}</p>
+            {label === "Website" && application.website_url ? (
+              <a
+                href={application.website_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 block break-all text-sm font-bold text-[var(--color-orange)] underline decoration-orange-200 underline-offset-2 transition hover:text-stone-950"
+              >
+                {application.website_url} ↗
+              </a>
+            ) : (
+              <p className="mt-1 break-words text-sm font-bold">{value}</p>
+            )}
           </div>
         ))}
       </div>
@@ -229,15 +257,57 @@ function ShelterApplicationDetailsModal({
           {application.organization_description}
         </p>
       </div>
-      {application.proof_document_path ? (
-        <a
-          href={application.proof_document_path}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex rounded-full bg-orange-50 px-4 py-2 text-sm font-black text-[var(--color-orange)]"
-        >
-          Open proof document ↗
-        </a>
+      {application.proof_document_url ? (
+        <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-stone-200 bg-white text-stone-600 shadow-sm">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 2.5h8l4 4V21H6V2.5Z" />
+                  <path d="M14 2.5v4h4M9 12h6M9 16h6" />
+                </svg>
+              </span>
+              <div>
+                <p className="text-sm font-bold text-stone-900">
+                  Registration certificate / licence
+                </p>
+                <p className="mt-0.5 text-xs text-stone-500">
+                  Review this document before making a decision.
+                </p>
+              </div>
+            </div>
+            <a
+              href={application.proof_document_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
+            >
+              Open document
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M14 5h5v5M19 5l-8 8" />
+                <path d="M19 14v5H5V5h5" />
+              </svg>
+            </a>
+          </div>
+        </div>
       ) : null}
       {application.rejection_reason ? (
         <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
@@ -249,56 +319,6 @@ function ShelterApplicationDetailsModal({
           </p>
         </div>
       ) : null}
-    </ModalShell>
-  );
-}
-
-function ApproveShelterModal({
-  application,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  application: ShelterApplication;
-  busy: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <ModalShell title="Approve shelter application" onClose={onClose}>
-      <div className="mt-5 rounded-2xl border border-orange-100 bg-[rgba(var(--color-cream-rgb),0.35)] p-4">
-        <p className="text-lg font-black">{application.shelter_name}</p>
-        <p className="mt-1 text-sm font-bold text-stone-500">
-          Registration ID: {application.registration_id}
-        </p>
-      </div>
-      <div className="mt-4 rounded-2xl bg-orange-50 p-4">
-        <p className="text-sm font-black text-[var(--color-orange)]">
-          Confirm shelter approval
-        </p>
-        <p className="mt-1 text-sm font-bold leading-6 text-stone-600">
-          This will approve the application and grant the shelter its Shelter
-          RoleNFT if it does not already have one.
-        </p>
-      </div>
-      <div className="mt-5 flex justify-end gap-3">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onClose}
-          className="rounded-full px-4 py-2.5 text-sm font-black text-stone-600 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onConfirm}
-          className="rounded-full bg-[var(--color-orange)] px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-200/60 disabled:opacity-50"
-        >
-          {busy ? "Approving..." : "Approve shelter"}
-        </button>
-      </div>
     </ModalShell>
   );
 }
@@ -351,6 +371,9 @@ function RejectReasonModal({
 
 export default function ShelterVerificationPage() {
   const { address, isConnected } = useAppKitAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [applications, setApplications] = useState<ShelterApplication[]>([]);
   const [loading, setLoading] = useState(false);
@@ -358,10 +381,15 @@ export default function ShelterVerificationPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | ApplicationStatus>("all");
   const [selected, setSelected] = useState<ShelterApplication | null>(null);
-  const [approving, setApproving] = useState<ShelterApplication | null>(null);
   const [rejecting, setRejecting] = useState<ShelterApplication | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState("");
+  const [blockchainSuccess, setBlockchainSuccess] = useState<{
+    status: "pending" | "confirmed" | "failed";
+    title: string;
+    message: string;
+    txHash: string;
+  } | null>(null);
 
   const loadApplications = async () => {
     if (!address) return;
@@ -427,6 +455,76 @@ export default function ShelterVerificationPage() {
     if (!address) return;
     setBusyId(application.id);
     try {
+      let txHash = "";
+      if (action === "approve") {
+        if (!application.applicant_wallet || !isAddress(application.applicant_wallet)) {
+          throw new Error("The shelter wallet address is invalid.");
+        }
+        if (!publicClient) {
+          throw new Error("Blockchain connection is unavailable.");
+        }
+        const configResponse = await fetch(
+          `/api/admin/role-nft-mint-config?walletAddress=${encodeURIComponent(address)}`,
+          { cache: "no-store" },
+        );
+        const config = await configResponse.json();
+        if (!configResponse.ok) {
+          throw new Error(config.message || "Unable to load RoleNFT configuration.");
+        }
+        if (chainId !== Number(config.chainId)) {
+          throw new Error(`Switch MetaMask to PawChain ${config.chainId}.`);
+        }
+        const contractAddress = config.contractAddress as Address;
+        const shelterWallet = application.applicant_wallet as Address;
+        const connectedWalletIsAdmin = await publicClient.readContract({
+          address: contractAddress,
+          abi: roleNFTAbi,
+          functionName: "isAdmin",
+          args: [address as Address],
+        });
+        if (!connectedWalletIsAdmin) {
+          throw new Error(
+            "This MetaMask wallet is not authorized as a RoleNFT admin.",
+          );
+        }
+        const hasNFT = await publicClient.readContract({
+          address: contractAddress,
+          abi: roleNFTAbi,
+          functionName: "hasRoleNFT",
+          args: [shelterWallet],
+        });
+        if (hasNFT) {
+          const existingRole = await publicClient.readContract({
+            address: contractAddress,
+            abi: roleNFTAbi,
+            functionName: "getUserRole",
+            args: [shelterWallet],
+          });
+          if (existingRole !== "Shelter") {
+            throw new Error("This wallet already has a different RoleNFT.");
+          }
+        } else {
+          txHash = await writeContractAsync({
+            address: contractAddress,
+            abi: roleNFTAbi,
+            functionName: "safeMintShelter",
+            args: [shelterWallet, String(config.metadataCID)],
+          });
+          setBlockchainSuccess({
+            status: "pending",
+            title: "Minting Shelter RoleNFT",
+            message:
+              "The admin transaction was submitted through MetaMask and is waiting for blockchain confirmation.",
+            txHash,
+          });
+          const receipt = await publicClient.waitForTransactionReceipt({
+            hash: txHash as `0x${string}`,
+          });
+          if (receipt.status !== "success") {
+            throw new Error("Shelter RoleNFT minting failed.");
+          }
+        }
+      }
       const response = await fetch("/api/admin/shelter-applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -435,24 +533,46 @@ export default function ShelterVerificationPage() {
           applicationId: application.id,
           action,
           rejectionReason,
+          txHash,
         }),
       });
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.message || "Unable to review application.");
-      setApproving(null);
       setRejecting(null);
       setSelected(null);
-      setToast(
-        action === "approve"
-          ? "Shelter approved successfully."
-          : "Application rejected successfully.",
-      );
+      if (action === "approve" && result.txHash) {
+        setBlockchainSuccess({
+          status: "confirmed",
+          title: "Shelter approved successfully",
+          message:
+            "The Shelter RoleNFT was minted and the wallet is now verified on-chain.",
+          txHash: result.txHash,
+        });
+      } else {
+        setToast(
+          action === "approve"
+            ? "Shelter approved successfully."
+            : "Application rejected successfully.",
+        );
+      }
       await loadApplications();
     } catch (actionError) {
-      setToast(
-        actionError instanceof Error ? actionError.message : "Action failed.",
-      );
+      const message =
+        actionError instanceof Error ? actionError.message : "Action failed.";
+      if (action === "approve") {
+        const cancelled = /reject|denied|cancel/i.test(message);
+        setBlockchainSuccess({
+          status: "failed",
+          title: cancelled
+            ? "Transaction cancelled"
+            : "Shelter approval failed",
+          message: cancelled
+            ? "You cancelled the request in MetaMask. The Shelter RoleNFT was not minted and the application was not approved."
+            : message,
+          txHash: "",
+        });
+      } else setToast(message);
     } finally {
       setBusyId(null);
     }
@@ -601,8 +721,20 @@ export default function ShelterVerificationPage() {
                             <td className="py-4 pr-4 text-sm font-bold">
                               {application.contact_phone}
                             </td>
-                            <td className="max-w-40 truncate py-4 pr-4 text-sm font-bold">
-                              {application.website_url || "—"}
+                            <td className="max-w-40 py-4 pr-4 text-sm font-bold">
+                              {application.website_url ? (
+                                <a
+                                  href={application.website_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={application.website_url}
+                                  className="block max-w-40 truncate text-[var(--color-orange)] underline decoration-orange-200 underline-offset-2 transition hover:text-stone-950"
+                                >
+                                  {application.website_url} ↗
+                                </a>
+                              ) : (
+                                "—"
+                              )}
                             </td>
                             <td className="py-4 pr-4">
                               <StatusBadge status={application.status} />
@@ -614,18 +746,34 @@ export default function ShelterVerificationPage() {
                               {formatDate(application.reviewed_at)}
                             </td>
                             <td className="py-4">
-                              <div className="flex gap-2">
+                              <div className="flex items-center gap-2">
                                 <button
+                                  type="button"
                                   onClick={() => setSelected(application)}
-                                  className="rounded-full border border-orange-100 px-3 py-2 text-xs font-black text-[var(--color-orange)]"
+                                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:ring-offset-2"
                                 >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 text-stone-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                                    <circle cx="12" cy="12" r="2.5" />
+                                  </svg>
                                   View details
                                 </button>
                                 {application.status === "pending" ? (
                                   <>
                                     <button
                                       disabled={busyId === application.id}
-                                      onClick={() => setApproving(application)}
+                                      onClick={() =>
+                                        void submitAction(application, "approve")
+                                      }
                                       className="rounded-full bg-[var(--color-orange)] px-3 py-2 text-xs font-black text-white disabled:opacity-50"
                                     >
                                       Approve
@@ -662,14 +810,6 @@ export default function ShelterVerificationPage() {
           onClose={() => setSelected(null)}
         />
       ) : null}
-      {approving ? (
-        <ApproveShelterModal
-          application={approving}
-          busy={busyId === approving.id}
-          onClose={() => setApproving(null)}
-          onConfirm={() => void submitAction(approving, "approve")}
-        />
-      ) : null}
       {rejecting ? (
         <RejectReasonModal
           application={rejecting}
@@ -680,9 +820,18 @@ export default function ShelterVerificationPage() {
       ) : null}
       {toast ? (
         <div className="fixed bottom-6 right-6 z-[100] max-w-sm rounded-2xl bg-stone-950 px-5 py-4 text-sm font-black text-white shadow-2xl">
-          {toast}
+          <p>{toast}</p>
         </div>
       ) : null}
+      <BlockchainSuccessPopup
+        open={Boolean(blockchainSuccess)}
+        status={blockchainSuccess?.status ?? "confirmed"}
+        title={blockchainSuccess?.title ?? ""}
+        message={blockchainSuccess?.message ?? ""}
+        txHash={blockchainSuccess?.txHash ?? ""}
+        actionLabel="View RoleNFT transaction"
+        onClose={() => setBlockchainSuccess(null)}
+      />
     </>
   );
 }

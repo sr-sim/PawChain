@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoleNFTStatus } from "@/lib/role-nft";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeMalaysiaPhone } from "@/lib/malaysia-phone";
 
 type ShelterApplication = {
   status: string;
@@ -215,7 +216,7 @@ export async function PATCH(request: NextRequest) {
     const walletAddress = String(body.walletAddress ?? "").trim();
     const fullName = String(body.fullName ?? "").trim();
     const email = String(body.email ?? "").trim();
-    const contactPhone = String(body.contactPhone ?? "").trim();
+    const rawContactPhone = String(body.contactPhone ?? "").trim();
     const websiteUrl = String(body.websiteUrl ?? "").trim();
     const shelterAddress = String(body.shelterAddress ?? "").trim();
     const organizationDescription = String(
@@ -230,7 +231,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (!fullName || !email || !contactPhone || !shelterAddress || !organizationDescription) {
+    if (!fullName || !email || !rawContactPhone || !shelterAddress || !organizationDescription) {
       return NextResponse.json(
         { message: "Complete all required profile fields before saving." },
         { status: 400 },
@@ -243,6 +244,8 @@ export async function PATCH(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    const contactPhone = normalizeMalaysiaPhone(rawContactPhone);
 
     const shelter = await getShelterProfile(walletAddress);
 
