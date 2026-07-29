@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { ConnectWallet } from "./ConnectWallet";
@@ -15,6 +15,7 @@ type ShelterApplicationStatus = {
   shelterAddress?: string;
   organizationDescription?: string;
   proofDocumentPath?: string;
+  proofDocumentUrl?: string;
   submittedAt?: string;
   reviewedAt?: string;
   rejectionReason?: string;
@@ -120,9 +121,14 @@ function ShelterStatusPanel({
         {application.websiteUrl && (
           <p>
             Website / social:{" "}
-            <span className="break-all text-stone-950">
-              {application.websiteUrl}
-            </span>
+            <a
+              href={application.websiteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="break-all text-[var(--color-orange)] underline decoration-orange-200 underline-offset-2 transition hover:text-stone-950"
+            >
+              {application.websiteUrl} ↗
+            </a>
           </p>
         )}
         {application.shelterAddress && (
@@ -141,13 +147,16 @@ function ShelterStatusPanel({
             </span>
           </p>
         )}
-        {application.proofDocumentPath && (
-          <p>
-            Document:{" "}
-            <span className="break-all text-stone-950">
-              {application.proofDocumentPath}
-            </span>
-          </p>
+        {application.proofDocumentUrl && (
+          <a
+            href={application.proofDocumentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-stone-700"
+          >
+            View registration document
+            <span aria-hidden="true">↗</span>
+          </a>
         )}
       </div>
       <button
@@ -166,8 +175,19 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
   const { address, isConnected } = useAppKitAccount();
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [documentPreview, setDocumentPreview] = useState<{
+    name: string;
+    type: string;
+    url: string;
+  } | null>(null);
   const [shelterApplication, setShelterApplication] =
     useState<ShelterApplicationStatus | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (documentPreview?.url) URL.revokeObjectURL(documentPreview.url);
+    };
+  }, [documentPreview]);
 
   const roleLabel = role === "donor" ? "Donor" : "Shelter";
   const isShelter = role === "shelter";
@@ -352,12 +372,30 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
                             name="registrationId"
                             placeholder="Organization ID"
                           />
-                          <TextField
-                            label="Contact phone"
-                            name="contactPhone"
-                            type="tel"
-                            placeholder="+60..."
-                          />
+                          <label className="block text-left">
+                            <span className="text-sm font-black text-stone-700">
+                              Contact phone
+                            </span>
+                            <span className="mt-1.5 flex overflow-hidden rounded-xl border border-orange-100 bg-white/80 transition focus-within:border-[var(--color-orange)] focus-within:ring-4 focus-within:ring-orange-100">
+                              <span className="flex items-center border-r border-orange-100 bg-stone-50 px-3 text-sm font-black text-stone-600">
+                                +60
+                              </span>
+                              <input
+                                name="contactPhone"
+                                type="tel"
+                                inputMode="numeric"
+                                autoComplete="tel-national"
+                                required
+                                pattern="[0-9]{8,10}"
+                                placeholder="123456789"
+                                aria-label="Malaysian contact phone number"
+                                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm font-bold text-stone-900 outline-none"
+                              />
+                            </span>
+                            <span className="mt-1 block text-xs font-semibold text-stone-500">
+                              Enter the number without the leading 0.
+                            </span>
+                          </label>
                           <TextField
                             label="Website or social page"
                             name="websiteUrl"
@@ -388,15 +426,71 @@ export function RegisterPage({ role }: { role: RegisterRole }) {
                     <div className="space-y-3 rounded-2xl border border-orange-100 bg-amber-50/70 p-3.5">
                       <label className="block text-left">
                         <span className="text-sm font-black text-stone-700">
-                          Document
+                          Shelter registration certificate / licence
                         </span>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">
+                          Upload an official document proving that the shelter is
+                          legally registered or authorized to operate.
+                        </p>
+                        <p className="text-xs font-semibold text-stone-500">
+                          Accepted formats: PDF, JPG, PNG.
+                        </p>
                         <input
                           name="proofDocument"
                           type="file"
                           required
                           accept=".pdf,.png,.jpg,.jpeg"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            setDocumentPreview(
+                              file
+                                ? {
+                                    name: file.name,
+                                    type: file.type,
+                                    url: URL.createObjectURL(file),
+                                  }
+                                : null,
+                            );
+                          }}
                           className="mt-1.5 w-full rounded-xl border border-dashed border-orange-200 bg-white/80 px-3 py-2 text-sm font-bold text-stone-700 file:mr-3 file:rounded-full file:border-0 file:bg-orange-100 file:px-3 file:py-1 file:text-sm file:font-black file:text-[var(--color-orange)]"
                         />
+                        {documentPreview ? (
+                          <div className="mt-3 overflow-hidden rounded-xl border border-stone-200 bg-white">
+                            <div className="flex items-center justify-between gap-3 border-b border-stone-200 bg-stone-50 px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-black uppercase tracking-wide text-stone-400">
+                                  Document preview
+                                </p>
+                                <p className="mt-0.5 truncate text-xs font-bold text-stone-700">
+                                  {documentPreview.name}
+                                </p>
+                              </div>
+                              <a
+                                href={documentPreview.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 transition hover:bg-stone-100"
+                              >
+                                Open full view ↗
+                              </a>
+                            </div>
+                            {documentPreview.type === "application/pdf" ? (
+                              <iframe
+                                src={documentPreview.url}
+                                title={`Preview of ${documentPreview.name}`}
+                                className="h-80 w-full bg-stone-100"
+                              />
+                            ) : (
+                              <div className="grid min-h-52 place-items-center bg-stone-100 p-3">
+                                <img
+                                  src={documentPreview.url}
+                                  alt={`Preview of ${documentPreview.name}`}
+                                  className="max-h-80 max-w-full rounded object-contain shadow-sm"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </label>
                     </div>
                   </>

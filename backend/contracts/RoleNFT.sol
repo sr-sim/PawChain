@@ -44,6 +44,11 @@ contract RoleNFT {
         _;
     }
 
+    modifier onlyAdmin() {
+        require(isAdmin(msg.sender), "Only admin");
+        _;
+    }
+
     constructor(address initialOwner) {
         require(initialOwner != address(0), "Owner required");
         owner = initialOwner;
@@ -56,8 +61,8 @@ contract RoleNFT {
         owner = newOwner;
     }
 
-    function isAdmin(address account) public pure returns (bool) {
-        return account == ADMIN_ONE || account == ADMIN_TWO;
+    function isAdmin(address account) public view returns (bool) {
+        return account == owner || account == ADMIN_ONE || account == ADMIN_TWO;
     }
 
     function balanceOf(address account) external view returns (uint256) {
@@ -77,16 +82,15 @@ contract RoleNFT {
         return _tokenURIs[tokenId];
     }
 
-    //Only the owner can call this. It gives the wallet a Donor NFT.
-    function safeMintDonor(address to, string memory metadataCID) external onlyOwner returns (uint256) {
+    //Authorized PawChain admins issue role badges through their connected wallet.
+    function safeMintDonor(address to, string memory metadataCID) external onlyAdmin returns (uint256) {
         require(donorSupply < MAX_DONOR_SUPPLY, "Donor supply limit reached");
         uint256 tokenId = _mintRole(to, metadataCID);
         donorLevelOf[tokenId] = DonorLevel.Normal;
         donorSupply++;
         return tokenId;
     }
-    //Only the owner can call this. It gives the wallet a Shelter NFT and marks:
-    function safeMintShelter(address to, string memory metadataCID) external onlyOwner returns (uint256) {
+    function safeMintShelter(address to, string memory metadataCID) external onlyAdmin returns (uint256) {
         require(shelterSupply < MAX_SHELTER_SUPPLY, "Shelter supply limit reached");
         uint256 tokenId = _mintRole(to, metadataCID);
         isShelterRole[tokenId] = true;
@@ -102,7 +106,7 @@ contract RoleNFT {
         return isShelterRole[userTokenId[user]] ? "Shelter" : "Donor";
     }
 
-    function revokeRoleNFT(address user) external onlyOwner returns (uint256) {
+    function revokeRoleNFT(address user) external onlyAdmin returns (uint256) {
         require(user != address(0), "Zero address");
         require(hasRoleNFT[user], "User does not own a RoleNFT");
 
@@ -128,12 +132,16 @@ contract RoleNFT {
     }
 
     function updateTokenURI(uint256 tokenId, string memory metadataCID) public onlyOwner {
+        _updateTokenURI(tokenId, metadataCID);
+    }
+
+    function _updateTokenURI(uint256 tokenId, string memory metadataCID) internal {
         ownerOf(tokenId);
         _tokenURIs[tokenId] = _buildTokenURI(metadataCID);
         emit TokenURIUpdated(tokenId, _tokenURIs[tokenId]);
     }
 
-    function upgradeDonorLevel(address donor, DonorLevel level, string memory metadataCID) external onlyOwner {
+    function upgradeDonorLevel(address donor, DonorLevel level, string memory metadataCID) external onlyAdmin {
         require(donor != address(0), "Zero address");
         require(hasRoleNFT[donor], "User does not own a RoleNFT");
 
@@ -142,7 +150,7 @@ contract RoleNFT {
         require(level != DonorLevel.None, "Invalid donor level");
 
         donorLevelOf[tokenId] = level;
-        updateTokenURI(tokenId, metadataCID);
+        _updateTokenURI(tokenId, metadataCID);
         emit DonorLevelUpdated(donor, tokenId, level);
     }
 // _mintRole is the helper that creates the NFT badge for the user wallet

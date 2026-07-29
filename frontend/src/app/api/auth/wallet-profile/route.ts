@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleNFTStatus } from "@/lib/role-nft";
+import { createShelterDocumentUrl } from "@/lib/shelter-document-storage";
 
 async function getShelterApplication(
   supabase: ReturnType<typeof createAdminClient>,
@@ -24,6 +25,12 @@ async function getShelterApplication(
         shelterAddress: application.shelter_address,
         organizationDescription: application.organization_description,
         proofDocumentPath: application.proof_document_path,
+        proofDocumentUrl: application.proof_document_path
+          ? await createShelterDocumentUrl(
+              supabase,
+              application.proof_document_path,
+            )
+          : null,
         submittedAt: application.created_at,
         reviewedAt: application.reviewed_at,
         rejectionReason: application.rejection_reason,

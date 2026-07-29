@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAddress, type Address, type Hash } from "viem";
+import { decodeEventLog, isAddress, type Address, type Hash } from "viem";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
-      .select("contract_address, campaign_status")
+      .select("contract_address, campaign_status, eth_myr_rate")
       .eq("id", campaignId)
       .single();
     if (campaignError) throw campaignError;
@@ -77,6 +77,35 @@ export async function POST(request: NextRequest) {
     if (!claimed) {
       return NextResponse.json(
         { message: "Refund is not recorded on-chain." },
+        { status: 409 },
+      );
+    }
+
+    let refundAmount: bigint | null = null;
+    for (const log of receipt.logs) {
+      if (log.address.toLowerCase() !== campaign.contract_address.toLowerCase()) {
+        continue;
+      }
+      try {
+        const decoded = decodeEventLog({
+          abi: campaignContractAbi,
+          data: log.data,
+          topics: log.topics,
+        });
+        if (
+          decoded.eventName === "RefundClaimed" &&
+          decoded.args.donor.toLowerCase() === walletAddress.toLowerCase()
+        ) {
+          refundAmount = decoded.args.amount;
+          break;
+        }
+      } catch {
+        // Ignore unrelated logs.
+      }
+    }
+    if (refundAmount === null) {
+      return NextResponse.json(
+        { message: "RefundClaimed event was not found." },
         { status: 409 },
       );
     }

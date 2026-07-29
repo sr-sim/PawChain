@@ -26,7 +26,7 @@ export async function POST(
     const supabase = createAdminClient();
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
-      .select("id, shelter_id, campaign_status, contract_address")
+      .select("id, shelter_id, campaign_status, contract_address, eth_myr_rate")
       .eq("id", id)
       .eq("shelter_id", profile.id)
       .single();

@@ -14,7 +14,6 @@ import {
   useWriteContract,
 } from "wagmi";
 import { formatEther, isAddress, parseEther } from "viem";
-import { formatEther, isAddress, parseEther } from "viem";
 import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
