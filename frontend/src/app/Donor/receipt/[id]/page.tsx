@@ -7,6 +7,7 @@ import {
   getTransactionExplorerUrl,
   shortAddress,
 } from "@/lib/block-explorer";
+import { getLatestEthMyrRate } from "@/lib/currency";
 
 type ReceiptPageProps = {
   params: Promise<{ id: string }>;
@@ -40,6 +41,13 @@ function formatEth(value: number) {
   })} ETH`;
 }
 
+function formatLiveMyr(value: number) {
+  return `Approx. live MYR ${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
@@ -63,6 +71,7 @@ export default async function DonorReceiptPage({
     notFound();
   }
 
+  const ethMyrRate = (await getLatestEthMyrRate()).rate;
   const trackingHref = walletAddress
     ? `/Donor/tracking?walletAddress=${encodeURIComponent(walletAddress)}`
     : "/Donor/tracking";
@@ -77,7 +86,7 @@ export default async function DonorReceiptPage({
     ? formatEth(receipt.amountEth)
     : formatAmount(receipt.amount, receipt.currency);
   const receiptAmountEstimate = receipt.amountEth > 0
-    ? formatAmount(receipt.amount, receipt.currency)
+    ? formatLiveMyr(receipt.amountEth * ethMyrRate)
     : "";
 
   return (
@@ -135,7 +144,7 @@ export default async function DonorReceiptPage({
               ["Shelter", receipt.shelterName],
               ["Amount", receiptAmount],
               ...(receiptAmountEstimate
-                ? ([["MYR estimate", receiptAmountEstimate]] as [string, string][])
+                ? ([["Live MYR estimate", receiptAmountEstimate]] as [string, string][])
                 : []),
               ["Network", getExplorerNetworkName()],
               ["Date", formatDate(receipt.createdAt)],
@@ -219,7 +228,7 @@ export default async function DonorReceiptPage({
                   <p className="mt-1 text-sm font-semibold text-stone-600">
                     {receipt.refundAmountEth > 0
                       ? `+${formatEth(receipt.refundAmountEth)}`
-                      : "Refund confirmed on-chain"}
+                      : "Refund confirmed"}
                   </p>
                   {receipt.refundedAt ? (
                     <p className="mt-1 text-xs font-semibold text-stone-500">

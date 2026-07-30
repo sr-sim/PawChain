@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { createPortal } from "react-dom";
 import { getShelters, type Campaign } from "../campaignData";
 import {
   getAddressExplorerUrl,
@@ -18,6 +19,7 @@ type DonorCampaign = Campaign & {
   goalAmount?: number;
   onChainGoalEth?: number;
   onChainTotalRaisedEth?: number;
+  currentMilestoneIndex?: number;
   contractAddress?: string | null;
   deploymentTxHash?: string | null;
   milestoneDetails?: {
@@ -29,8 +31,15 @@ type DonorCampaign = Campaign & {
   }[];
 };
 
+type MilestoneDisplay = {
+  title: string;
+  percentage: number;
+  proofTxHash?: string | null;
+  reviewTxHash?: string | null;
+  releaseTxHash?: string | null;
+};
+
 const urgencies = ["All", "Critical", "High", "Medium"];
-const locations = ["All", "Kuala Lumpur", "Selangor", "Penang", "Johor"];
 const sortOptions = ["Most urgent", "Deadline soon", "Most progress", "Most donors"];
 const tabs = ["Campaigns", "Completed", "Closed", "Shelters", "Saved"] as const;
 const urgencyRank: Record<string, number> = { Critical: 0, High: 1, Medium: 2 };
@@ -95,6 +104,98 @@ function getCumulativeMilestonePercentage(
     .reduce((total, milestone) => total + Number(milestone.percentage || 0), 0);
 }
 
+function getCurrentMilestoneIndex(
+  milestones: { percentage: number }[],
+  campaignProgress: number,
+  campaignStatus: string,
+  contractIndex?: number,
+) {
+  if (milestones.length === 0) {
+    return -1;
+  }
+
+  if (
+    typeof contractIndex === "number" &&
+    Number.isFinite(contractIndex) &&
+    contractIndex >= 0 &&
+    contractIndex < milestones.length
+  ) {
+    return contractIndex;
+  }
+
+  if (campaignStatus === "Completed" || campaignProgress >= 100) {
+    return milestones.length - 1;
+  }
+
+  const nextIndex = milestones.findIndex(
+    (_milestone, index) =>
+      campaignProgress <
+      getCumulativeMilestonePercentage(milestones, index),
+  );
+
+  return nextIndex >= 0 ? nextIndex : milestones.length - 1;
+}
+
+function getCampaignMilestoneItems(
+  campaign: DonorCampaign | null | undefined,
+): MilestoneDisplay[] {
+  if (!campaign) {
+    return [];
+  }
+
+  return (
+    campaign.milestoneDetails ??
+    campaign.milestones.map((milestone) => ({
+      ...milestone,
+      proofTxHash: null,
+      reviewTxHash: null,
+      releaseTxHash: null,
+    }))
+  );
+}
+
+function getMilestoneDisplayAmount(campaign: DonorCampaign, percentage: number) {
+  return typeof campaign.onChainGoalEth === "number"
+    ? formatEth((campaign.onChainGoalEth * Number(percentage || 0)) / 100)
+    : formatMyr(getMilestoneAmount(campaign.goalAmount, percentage));
+}
+
+function getMilestoneFundingState(
+  milestones: { percentage: number }[],
+  index: number,
+  campaignProgress: number,
+) {
+  const stagePercent = Math.max(0, Number(milestones[index]?.percentage ?? 0));
+  const previousTarget =
+    index > 0 ? getCumulativeMilestonePercentage(milestones, index - 1) : 0;
+  const target = getCumulativeMilestonePercentage(milestones, index);
+
+  if (campaignProgress >= target) {
+    return {
+      label: "Funded",
+      progress: 100,
+      tone: "complete" as const,
+    };
+  }
+
+  if (campaignProgress <= previousTarget || stagePercent <= 0) {
+    return {
+      label: "Locked",
+      progress: 0,
+      tone: "locked" as const,
+    };
+  }
+
+  return {
+    label: "Funding now",
+    progress: Math.min(
+      100,
+      Math.max(0, ((campaignProgress - previousTarget) / stagePercent) * 100),
+    ),
+    tone: "active" as const,
+  };
+}
+
 function shortHash(value: string) {
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
 }
@@ -109,7 +210,11 @@ function CampaignImage({
   size?: "compact" | "card" | "hero";
 }) {
   const imageHeight =
-    size === "hero" ? "h-64" : size === "compact" ? "h-[8.5rem] sm:h-36" : "h-44 sm:h-48";
+    size === "hero"
+      ? "h-72 sm:h-80 lg:h-[29rem]"
+      : size === "compact"
+        ? "h-[8.5rem] sm:h-36"
+        : "h-44 sm:h-48";
 
   if (imageUrl) {
     return (
@@ -180,9 +285,9 @@ export default function DonorDiscoverPage() {
   const [actionToast, setActionToast] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [urgency, setUrgency] = useState("All");
-  const [location, setLocation] = useState("All");
   const [sortBy, setSortBy] = useState(sortOptions[0]);
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Campaigns");
+  const [isModalMounted, setIsModalMounted] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     searchParams.get("campaign"),
   );
@@ -190,8 +295,7 @@ export default function DonorDiscoverPage() {
   const modalPanelRef = useRef<HTMLDivElement | null>(null);
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
-    urgency !== "All" ||
-    location !== "All";
+    urgency !== "All";
 
   useEffect(() => {
     let isMounted = true;
@@ -293,7 +397,6 @@ export default function DonorDiscoverPage() {
   function clearFilters() {
     setSearchTerm("");
     setUrgency("All");
-    setLocation("All");
   }
 
   async function toggleSaved(campaignId: string) {
@@ -360,7 +463,7 @@ export default function DonorDiscoverPage() {
       const matchesUrgency = urgency === "All" || campaign.urgency === urgency;
       return matchesSearch && matchesUrgency;
     });
-  }, [location, searchTerm, urgency]);
+  }, [searchTerm, urgency]);
 
   const sortedCampaigns = useMemo(() => {
     return [...filteredCampaigns].sort((first, second) => {
@@ -390,12 +493,6 @@ export default function DonorDiscoverPage() {
     (campaign) => campaign.id !== selectedCampaign?.id,
   );
   const shelters = useMemo(() => getShelters(campaigns), [campaigns]);
-  const locationOptions = useMemo(() => {
-    const shelterLocations = shelters.map((shelter) => shelter.location);
-
-    return ["All", ...Array.from(new Set(shelterLocations))];
-  }, [campaigns, shelters]);
-
   const filteredShelters = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -404,7 +501,6 @@ export default function DonorDiscoverPage() {
         normalizedSearch.length === 0 ||
         [
           shelter.name,
-          shelter.location,
           shelter.story,
           ...shelter.campaigns.map((campaign) => campaign.title),
         ]
@@ -412,34 +508,59 @@ export default function DonorDiscoverPage() {
           .toLowerCase()
           .includes(normalizedSearch);
 
-      const matchesLocation = location === "All" || shelter.location === location;
       const matchesUrgency =
         urgency === "All" ||
         shelter.campaigns.some((campaign) => campaign.urgency === urgency);
 
-      return matchesSearch && matchesLocation && matchesUrgency;
+      return matchesSearch && matchesUrgency;
     });
-  }, [location, searchTerm, shelters, urgency]);
+  }, [searchTerm, shelters, urgency]);
 
   const savedCampaigns = useMemo(() => {
     return sortedCampaigns.filter((campaign) => savedIds.includes(campaign.id));
   }, [savedIds, sortedCampaigns]);
 
   useEffect(() => {
+    setIsModalMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!selectedCampaign) {
       return;
     }
 
+    const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
+    const originalPosition = document.body.style.position;
+    const originalTop = document.body.style.top;
+    const originalWidth = document.body.style.width;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+
     document.body.style.overflow = "hidden";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.documentElement.style.overflow = "hidden";
+
     window.requestAnimationFrame(() => {
       if (modalPanelRef.current) {
         modalPanelRef.current.scrollTop = 0;
       }
     });
+    const resetTimer = window.setTimeout(() => {
+      if (modalPanelRef.current) {
+        modalPanelRef.current.scrollTop = 0;
+      }
+    }, 80);
 
     return () => {
+      window.clearTimeout(resetTimer);
       document.body.style.overflow = originalOverflow;
+      document.body.style.position = originalPosition;
+      document.body.style.top = originalTop;
+      document.body.style.width = originalWidth;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      window.scrollTo(0, scrollY);
     };
   }, [selectedCampaign]);
   const activeCampaigns = useMemo(
@@ -464,6 +585,21 @@ export default function DonorDiscoverPage() {
           : activeCampaigns.length === 0 && campaigns.length > 0
             ? campaigns.filter((campaign) => campaign.status === "Active")
             : activeCampaigns;
+  const selectedMilestones = getCampaignMilestoneItems(selectedCampaign);
+  const selectedCurrentMilestoneIndex = getCurrentMilestoneIndex(
+    selectedMilestones,
+    selectedCampaign?.raised ?? 0,
+    selectedCampaign?.status ?? "",
+    selectedCampaign?.currentMilestoneIndex,
+  );
+  const selectedCurrentMilestone =
+    selectedCurrentMilestoneIndex >= 0
+      ? selectedMilestones[selectedCurrentMilestoneIndex]
+      : null;
+  const selectedProgressWidth = Math.min(
+    100,
+    Math.max(0, selectedCampaign?.raised ?? 0),
+  );
 
   const sortedShelters = useMemo(() => {
     return [...filteredShelters].sort((first, second) => {
@@ -624,12 +760,6 @@ export default function DonorDiscoverPage() {
             value={urgency}
             options={urgencies}
             onChange={setUrgency}
-          />
-          <SelectField
-            label="Location"
-            value={location}
-            options={locationOptions.length > 1 ? locationOptions : locations}
-            onChange={setLocation}
           />
           <SelectField
             label="Sort by"
@@ -932,9 +1062,6 @@ export default function DonorDiscoverPage() {
                         >
                           <span>{shelter.name}</span>
                         </Link>
-                        <p className="mt-1 text-sm font-medium text-stone-500">
-                          {shelter.location}
-                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="w-fit rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-[var(--color-orange)]">
@@ -1036,15 +1163,15 @@ export default function DonorDiscoverPage() {
         )}
       </section>
 
-      {selectedCampaign ? (
-        <div className="fixed inset-x-0 bottom-0 top-20 z-[120] flex items-start justify-center overflow-hidden bg-stone-950/50 p-3 backdrop-blur-md sm:p-6">
+      {isModalMounted && selectedCampaign ? createPortal((
+        <div className="fixed inset-x-0 bottom-0 top-16 z-[900] flex items-stretch justify-center overflow-hidden bg-stone-950/50 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-5">
           <div
-            className="animate-fade-up flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.26)]"
+            className="animate-fade-up flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.26)]"
           >
             <div className="shrink-0 flex items-start justify-between gap-4 border-b border-orange-100 bg-white/95 p-4 backdrop-blur-xl sm:p-5">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
-                  On-chain campaign record
+                  Campaign details
                 </p>
                 <h2 className="mt-1 line-clamp-1 text-xl font-black text-stone-950 sm:text-2xl">
                   {selectedCampaign.title}
@@ -1077,26 +1204,29 @@ export default function DonorDiscoverPage() {
               </button>
             </div>
 
-            <div ref={modalPanelRef} className="min-h-0 flex-1 overflow-y-auto pb-4">
-            <div className="grid items-start gap-5 p-4 sm:p-5 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="relative self-start overflow-hidden rounded-3xl border border-orange-100 bg-orange-50/45 p-3 shadow-sm">
+            <div
+              ref={modalPanelRef}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-smooth pb-6"
+            >
+            <div className="grid items-start gap-5 p-4 sm:p-5 lg:grid-cols-[1fr_1.1fr]">
+              <div className="self-start overflow-hidden rounded-3xl bg-white">
                 <CampaignImage
                   imageClass={selectedCampaign.imageClass}
                   imageUrl={selectedCampaign.imageUrl}
                   size="hero"
                 />
-                <div className="absolute left-6 top-6 rounded-full border border-white/80 bg-white/95 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--color-orange)] shadow-sm">
-                  Blockchain verified
-                </div>
-                {selectedCampaign.contractAddress &&
-                getAddressExplorerUrl(selectedCampaign.contractAddress) ? (
+                {selectedCampaign.deploymentTxHash &&
+                getTransactionExplorerUrl(selectedCampaign.deploymentTxHash) ? (
                   <a
-                    href={getAddressExplorerUrl(selectedCampaign.contractAddress)}
+                    href={getTransactionExplorerUrl(
+                      selectedCampaign.deploymentTxHash,
+                    )}
                     target="_blank"
                     rel="noreferrer"
-                    className="absolute bottom-6 left-6 rounded-full border border-orange-200 bg-white/95 px-3 py-1.5 text-xs font-black text-[var(--color-orange)] shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-50"
+                    className="mx-auto mt-3 flex w-fit items-center justify-center gap-2 rounded-full bg-stone-100 px-4 py-2 text-sm font-black text-stone-700 transition hover:-translate-y-0.5 hover:bg-stone-200 hover:text-stone-950"
                   >
-                    {shortAddress(selectedCampaign.contractAddress)}
+                    <span className="text-stone-500">Campaign tx:</span>
+                    <span>{shortHash(selectedCampaign.deploymentTxHash)}</span>
                   </a>
                 ) : null}
               </div>
@@ -1119,41 +1249,7 @@ export default function DonorDiscoverPage() {
                   >
                     {selectedCampaign.status}
                   </span>
-                  {selectedCampaign.deploymentTxHash &&
-                  getTransactionExplorerUrl(selectedCampaign.deploymentTxHash) ? (
-                    <a
-                      href={getTransactionExplorerUrl(
-                        selectedCampaign.deploymentTxHash,
-                      )}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-100"
-                    >
-                      Campaign tx: {shortHash(selectedCampaign.deploymentTxHash)}
-                    </a>
-                  ) : null}
                 </div>
-                <div className="donor-gradient-card mt-4 grid gap-2 rounded-2xl border border-orange-100 p-3 text-xs font-semibold text-stone-600 sm:grid-cols-2">
-                  <span className="donor-chain-node pl-2">Shelter RoleNFT verified</span>
-                  <span className="donor-chain-node pl-2">{getExplorerNetworkName()}</span>
-                  <span>
-                    {selectedCampaign.contractAddress &&
-                    getAddressExplorerUrl(selectedCampaign.contractAddress) ? (
-                      <a
-                        href={getAddressExplorerUrl(selectedCampaign.contractAddress)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[var(--color-orange)] transition hover:text-stone-950"
-                      >
-                        Contract {shortAddress(selectedCampaign.contractAddress)}
-                      </a>
-                    ) : (
-                      "Contract pending"
-                    )}
-                  </span>
-                  <span className="donor-chain-node pl-2">Milestone-gated release</span>
-                </div>
-
                 <p className="mt-4 text-sm leading-7 text-stone-600">
                   {selectedCampaign.story}
                 </p>
@@ -1214,22 +1310,27 @@ export default function DonorDiscoverPage() {
                   <div className="mt-3 h-3 overflow-hidden rounded-full bg-orange-100">
                     <div
                       className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
-                      style={{ width: `${selectedCampaign.raised}%` }}
+                      style={{ width: `${selectedProgressWidth}%` }}
                     />
                   </div>
-                  <p className="mt-3 text-xs font-bold text-stone-600">
-                    Next milestone: {selectedCampaign.milestones[0].title} (
-                    {selectedCampaign.milestones[0].percentage}% release)
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-stone-500">
-                    Stage amount:{" "}
-                    {formatMyr(
-                      getMilestoneAmount(
-                        selectedCampaign.goalAmount,
-                        selectedCampaign.milestones[0].percentage,
-                      ),
-                    )}
-                  </p>
+                  {selectedCurrentMilestone ? (
+                    <>
+                      <p className="mt-3 text-xs font-bold text-stone-600">
+                        {selectedCampaign.status === "Completed"
+                          ? "Final milestone"
+                          : "Current milestone"}
+                        : {selectedCurrentMilestone.title} (
+                        {selectedCurrentMilestone.percentage}% release)
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-stone-500">
+                        Stage amount:{" "}
+                        {getMilestoneDisplayAmount(
+                          selectedCampaign,
+                          selectedCurrentMilestone.percentage,
+                        )}
+                      </p>
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1262,46 +1363,100 @@ export default function DonorDiscoverPage() {
                 Transparent release stages
               </p>
               <div className="mt-3 grid gap-2 md:grid-cols-3">
-                {(selectedCampaign.milestoneDetails ??
-                  selectedCampaign.milestones.map((milestone) => ({
-                    ...milestone,
-                    proofTxHash: null,
-                    reviewTxHash: null,
-                    releaseTxHash: null,
-                  }))).map((milestone, index) => (
+                {selectedMilestones.map((milestone, index) => {
+                  const fundingState = getMilestoneFundingState(
+                    selectedMilestones,
+                    index,
+                    selectedCampaign.raised,
+                  );
+                  const isLocked = fundingState.tone === "locked";
+
+                  return (
                   <div
                     key={milestone.title}
-                    className="donor-ledger-row rounded-2xl border border-orange-100 p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200"
+                    className={[
+                      "donor-ledger-row rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5",
+                      isLocked
+                        ? "border-slate-200 bg-slate-50/70 opacity-80"
+                        : index === selectedCurrentMilestoneIndex
+                          ? "border-[var(--color-orange)] bg-orange-50/45"
+                          : "border-orange-100 hover:border-orange-200",
+                    ].join(" ")}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-[var(--color-orange)]">
+                      <span
+                        className={[
+                          "grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black ring-1",
+                          isLocked
+                            ? "text-slate-400 ring-slate-200"
+                            : "text-[var(--color-orange)] ring-orange-100",
+                        ].join(" ")}
+                      >
                         {index + 1}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-stone-700">
-                          {milestone.title}
-                        </p>
-                        <p className="text-xs font-semibold text-[var(--color-orange)]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p
+                            className={[
+                              "text-sm font-medium",
+                              isLocked ? "text-slate-500" : "text-stone-700",
+                            ].join(" ")}
+                          >
+                            {milestone.title}
+                          </p>
+                          <span
+                            className={[
+                              "rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em]",
+                              fundingState.tone === "complete"
+                                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                                : fundingState.tone === "active"
+                                  ? "bg-orange-50 text-[var(--color-orange)] ring-1 ring-orange-100"
+                                  : "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+                            ].join(" ")}
+                          >
+                            {fundingState.label}
+                          </span>
+                        </div>
+                        <p
+                          className={[
+                            "text-xs font-semibold",
+                            isLocked
+                              ? "text-slate-400"
+                              : "text-[var(--color-orange)]",
+                          ].join(" ")}
+                        >
                           {milestone.percentage}% release
+                        </p>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                          <div
+                            className={[
+                              "h-full rounded-full transition-all",
+                              fundingState.tone === "complete"
+                                ? "bg-emerald-500"
+                                : fundingState.tone === "active"
+                                  ? "bg-[var(--color-orange)]"
+                                  : "bg-slate-300",
+                            ].join(" ")}
+                            style={{ width: `${fundingState.progress}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-[11px] font-semibold text-stone-400">
+                          {Math.round(fundingState.progress)}% of this stage funded
                         </p>
                         <p className="text-xs font-semibold text-stone-500">
                           Stage:{" "}
-                          {formatMyr(
-                            getMilestoneAmount(
-                              selectedCampaign.goalAmount,
-                              milestone.percentage,
-                            ),
+                          {getMilestoneDisplayAmount(
+                            selectedCampaign,
+                            milestone.percentage,
                           )}
                         </p>
                         <p className="text-xs font-semibold text-stone-500">
                           Cumulative:{" "}
-                          {formatMyr(
-                            getMilestoneAmount(
-                              selectedCampaign.goalAmount,
-                              getCumulativeMilestonePercentage(
-                                selectedCampaign.milestones,
-                                index,
-                              ),
+                          {getMilestoneDisplayAmount(
+                            selectedCampaign,
+                            getCumulativeMilestonePercentage(
+                              selectedMilestones,
+                              index,
                             ),
                           )}
                         </p>
@@ -1315,7 +1470,8 @@ export default function DonorDiscoverPage() {
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -1372,7 +1528,7 @@ export default function DonorDiscoverPage() {
             </div>
           </div>
         </div>
-      ) : null}
+      ), document.body) : null}
       {actionToast ? (
         <div className="fixed bottom-6 right-6 z-[130] max-w-sm rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-black text-stone-950 shadow-[0_20px_60px_rgba(28,25,23,0.18)]">
           <p>{actionToast}</p>

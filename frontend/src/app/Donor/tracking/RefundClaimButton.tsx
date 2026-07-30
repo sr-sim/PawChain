@@ -14,13 +14,11 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 
-function formatMyr(value: number) {
-  return new Intl.NumberFormat("en-MY", {
-    style: "currency",
-    currency: "MYR",
+function formatLiveMyr(value: number) {
+  return `Approx. live MYR ${value.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(value);
+  })}`;
 }
 
 export function RefundClaimButton({
@@ -173,7 +171,7 @@ export function RefundClaimButton({
       if (!response.ok) {
         throw new Error(result.message ?? "Unable to record refund.");
       }
-      setMessage("Refund confirmed on-chain.");
+      setMessage("Refund confirmed.");
       setMessageType("success");
       setBlockchainPopup({
         status: "confirmed",
@@ -237,7 +235,7 @@ export function RefundClaimButton({
               ETH
             </p>
             <p className="text-xs font-semibold text-stone-500">
-              approx. {formatMyr(refundableMyr)}
+              {formatLiveMyr(refundableMyr)}
             </p>
           </div>
           <p className="mt-2 max-w-xl text-[11px] font-semibold leading-relaxed text-stone-500">
@@ -288,7 +286,7 @@ export function RefundClaimButton({
               </p>
               {confirmedRefundMyr !== null ? (
                 <p className="mt-0.5 text-xs font-semibold text-stone-500">
-                  approx. {formatMyr(confirmedRefundMyr)}
+                  {formatLiveMyr(confirmedRefundMyr)}
                 </p>
               ) : null}
             </div>
@@ -339,7 +337,7 @@ export function RefundClaimButton({
               </p>
               {netReceivedMyr !== null ? (
                 <p className="mt-0.5 font-semibold text-stone-500">
-                  approx. {formatMyr(netReceivedMyr)}
+                  {formatLiveMyr(netReceivedMyr)}
                 </p>
               ) : null}
             </div>

@@ -62,6 +62,7 @@ type OnChainCampaignSnapshot = {
   goalEth: number;
   status: string;
   progress: number;
+  currentMilestoneIndex: number;
 };
 
 export type DonorCampaign = Omit<(typeof previewCampaigns)[number], "location"> & {
@@ -87,6 +88,7 @@ export type DonorCampaign = Omit<(typeof previewCampaigns)[number], "location"> 
   ethMyrRate?: number;
   onChainGoalEth?: number;
   onChainTotalRaisedEth?: number;
+  currentMilestoneIndex?: number;
 };
 
 export type DonorShelter = ReturnType<typeof import("@/app/Donor/campaignData").getShelters>[number] & {
@@ -144,7 +146,7 @@ function getOnChainStatusLabel(status: number) {
   if (status === 1) return "Completed";
   if (status === 2) return "Refunding";
   if (status === 3) return "Closed";
-  return "On-chain";
+  return "Blockchain";
 }
 
 function getCampaignStatusLabel(status: string) {
@@ -171,7 +173,12 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
     contractCampaigns.map(async (campaign) => {
       try {
         const address = campaign.contract_address as Address;
-        const [totalRaisedWei, goalWei, campaignStatus] = await Promise.all([
+        const [
+          totalRaisedWei,
+          goalWei,
+          campaignStatus,
+          currentMilestoneIndex,
+        ] = await Promise.all([
           publicClient.readContract({
             address,
             abi: campaignContractAbi,
@@ -186,6 +193,11 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
             address,
             abi: campaignContractAbi,
             functionName: "campaignStatus",
+          }),
+          publicClient.readContract({
+            address,
+            abi: campaignContractAbi,
+            functionName: "currentMilestoneIndex",
           }),
         ]);
         const totalRaisedEth = Number(formatEther(totalRaisedWei));
@@ -205,6 +217,7 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
             goalEth,
             status,
             progress,
+            currentMilestoneIndex: Number(currentMilestoneIndex),
           },
         ] as const;
       } catch {
@@ -389,6 +402,7 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       currentAmount: Number(campaign.current_amount ?? 0) || 0,
       onChainGoalEth: onChainSnapshot?.goalEth,
       onChainTotalRaisedEth: onChainSnapshot?.totalRaisedEth,
+      currentMilestoneIndex: onChainSnapshot?.currentMilestoneIndex,
       donors: 0,
       daysLeft: getDaysLeft(campaign.created_at, campaign.duration_days),
       verifiedSince: campaign.created_at

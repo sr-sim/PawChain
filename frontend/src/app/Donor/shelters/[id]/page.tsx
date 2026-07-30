@@ -78,9 +78,6 @@ export default async function DonorShelterProfilePage({
               <h1 className="mt-2 flex items-center gap-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
                 <span>{shelter.name}</span>
               </h1>
-              <p className="mt-2 text-sm font-semibold text-[var(--color-orange)]">
-                {shelter.address ?? shelter.location}
-              </p>
               {shelter.websiteUrl ? (
                 <Link
                   href={shelter.websiteUrl}
@@ -116,7 +113,7 @@ export default async function DonorShelterProfilePage({
               {shelter.story}
             </p>
           </div>
-          <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
             <div className="rounded-xl bg-orange-50/50 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
                 Registration
@@ -131,14 +128,6 @@ export default async function DonorShelterProfilePage({
               </p>
               <p className="mt-1 break-all font-semibold text-stone-950">
                 {shelter.contactPhone ?? "Contact through PawChain"}
-              </p>
-            </div>
-            <div className="rounded-xl bg-orange-50/50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Address
-              </p>
-              <p className="mt-1 font-semibold text-stone-950">
-                {shelter.address ?? shelter.location}
               </p>
             </div>
           </div>
