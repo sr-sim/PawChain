@@ -7,8 +7,8 @@ import type { Campaign } from "./campaign-types";
 import { formatCurrency, getProgress } from "./campaign-utils";
 import { StatusBadge } from "./StatusBadge";
 import { formatEther, isAddress } from "viem";
-import { demoEthMyrRate } from "@/lib/campaign-blockchain";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type CampaignCardProps = {
   campaign: Campaign;
@@ -32,7 +32,7 @@ function CampaignIcon() {
 }
 
 function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign; milestoneCount?: number }) {
-  const rate = Number(campaign.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
+  const { rate } = useEthMyrRate();
   const contractAddress = campaign.contract_address && isAddress(campaign.contract_address)
     ? campaign.contract_address
     : undefined;

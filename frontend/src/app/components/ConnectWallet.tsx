@@ -8,6 +8,7 @@ import {
 } from '@reown/appkit/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { walletDisconnectEvent } from './DisconnectOverlayHost';
+import { WalletStyleBadge } from './wallet/WalletStyle';
 
 type ConnectWalletProps = {
   variant?: 'dark' | 'outline';
@@ -66,8 +67,9 @@ export function ConnectWallet({ variant = 'dark' }: ConnectWalletProps) {
     }
   }, [isConnected]);
 
-  const className =
-    variant === 'outline'
+  const className = isConnected
+    ? 'rounded-full bg-transparent p-0 text-left disabled:opacity-60'
+    : variant === 'outline'
       ? 'rounded-full border border-orange-200 bg-white/75 px-6 py-3 text-center text-sm font-black text-stone-900 shadow-lg shadow-orange-100 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-200/70'
       : 'rounded-full bg-stone-950 px-3 py-2 text-xs font-black text-white shadow-lg shadow-orange-200/70 transition-all duration-300 hover:-translate-y-0.5 hover:bg-[var(--color-orange)] hover:shadow-xl hover:shadow-orange-300/70 sm:px-4 sm:py-2.5 sm:text-sm';
 
@@ -103,7 +105,7 @@ export function ConnectWallet({ variant = 'dark' }: ConnectWalletProps) {
           disabled={isDisconnecting}
           suppressHydrationWarning
         >
-          {isConnected ? formatAddress(address) : 'Connect Wallet'}
+          {isConnected ? <WalletStyleBadge address={address} /> : 'Connect Wallet'}
         </button>
 
         {isConnected && isMenuOpen && (
