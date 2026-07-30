@@ -116,10 +116,10 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-sm ${className}`}>
+    <section className={`overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white p-5 shadow-[0_14px_38px_rgba(97,55,17,0.07)] ${className}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-base font-bold text-stone-950">{title}</h2>
+          <h2 className="text-base font-black text-stone-950">{title}</h2>
           <p className="mt-1 text-xs leading-5 text-stone-500">{description}</p>
         </div>
         {action}
@@ -149,12 +149,12 @@ function MetricCard({
     stone: "bg-stone-500",
   };
   return (
-    <article className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+    <article className="relative overflow-hidden rounded-2xl border border-orange-100 bg-white px-4 py-3.5 shadow-[0_10px_28px_rgba(97,55,17,0.06)]">
       <span className={`absolute inset-y-0 left-0 w-1 ${colors[tone]}`} />
-      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-      <p className="mt-3 text-2xl font-bold tracking-tight text-stone-950">{value}</p>
-      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <p className="text-xs font-medium text-stone-400">Approx. {secondary}</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-stone-500">{label}</p>
+      <p className="mt-1.5 text-xl font-black tracking-tight text-stone-950">{value}</p>
+      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+        <p className="text-[11px] font-medium text-stone-400">{secondary}</p>
         {change !== undefined ? (
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${change >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
             {change >= 0 ? "↑" : "↓"} {percent(Math.abs(change))} vs previous
@@ -259,7 +259,7 @@ function Donut({
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm font-medium text-stone-400">{text}</div>;
+  return <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-6 text-center text-sm font-medium text-stone-400">{text}</div>;
 }
 
 export default function AdminAnalyticsPage() {
@@ -313,37 +313,37 @@ export default function AdminAnalyticsPage() {
       <DashboardTopBar role="Admin" isMenuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen((value) => !value)} />
       <AdminSidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
       <main className={`min-h-screen bg-[var(--color-cream)] pt-16 transition-[padding] ${sidebarOpen ? "lg:pl-64" : ""}`}>
-        <div className="mx-auto max-w-[1500px] space-y-5 px-4 py-7 sm:px-7">
-          <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="mx-auto max-w-7xl space-y-6 px-4 py-7 sm:px-8">
+          <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">Platform intelligence</p>
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-stone-950">Analytics &amp; Insights</h1>
               <p className="mt-1 max-w-2xl text-sm text-stone-500">Monitor donation activity, campaign performance, fund distribution, and verified on-chain outcomes.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 rounded-2xl border border-orange-100 bg-white p-1.5 shadow-sm">
               {["7", "30", "90", "all", "custom"].map((value) => (
-                <button key={value} type="button" onClick={() => setPeriod(value)} className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${period === value ? "border-orange-300 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-600 hover:border-orange-200"}`}>
+                <button key={value} type="button" onClick={() => setPeriod(value)} className={`rounded-xl px-3 py-2 text-xs font-bold transition ${period === value ? "bg-orange-500 text-white shadow-sm" : "text-stone-500 hover:bg-orange-50 hover:text-orange-700"}`}>
                   {value === "all" ? "All time" : value === "custom" ? "Custom" : `${value} days`}
                 </button>
               ))}
             </div>
           </header>
 
-          <section className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm md:flex-row md:items-end">
+          <section className="flex flex-col gap-3 rounded-[1.4rem] border border-orange-100 bg-white p-4 shadow-[0_14px_38px_rgba(97,55,17,0.06)] md:flex-row md:items-end">
             <label className="flex-1 text-xs font-bold uppercase tracking-wide text-stone-500">
               Campaign
-              <select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-stone-800 outline-none focus:border-orange-400">
+              <select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className="mt-2 w-full rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-stone-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100">
                 <option value="all">All campaigns</option>
                 {campaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}
               </select>
             </label>
             {period === "custom" ? (
               <>
-                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-2 block rounded-lg border border-stone-300 px-3 py-2.5 text-sm font-medium normal-case text-stone-800" /></label>
-                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">To<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-2 block rounded-lg border border-stone-300 px-3 py-2.5 text-sm font-medium normal-case text-stone-800" /></label>
+                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-2 block rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5 text-sm font-medium normal-case text-stone-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" /></label>
+                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">To<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-2 block rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5 text-sm font-medium normal-case text-stone-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" /></label>
               </>
             ) : null}
-            <button type="button" onClick={() => void loadAnalytics()} className="rounded-lg bg-stone-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-orange-600">Refresh analytics</button>
+            <button type="button" onClick={() => void loadAnalytics()} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400">Refresh analytics</button>
           </section>
 
           {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{error}</div> : null}
@@ -352,10 +352,10 @@ export default function AdminAnalyticsPage() {
           {!loading && data ? (
             <>
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Donations received" value={eth(data.financial.donatedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.donatedWei))}`} change={data.financial.donationChange} />
-                <MetricCard label="Milestone funds released" value={eth(data.financial.releasedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.releasedWei))}`} tone="emerald" />
-                <MetricCard label="Funds currently locked" value={eth(data.financial.lockedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.lockedWei))}`} tone="blue" />
-                <MetricCard label="Refunds returned to donors" value={eth(data.financial.refundedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.refundedWei))}`} tone="stone" />
+                <MetricCard label="Donations received" value={eth(data.financial.donatedWei)} secondary={`≈ ${money(weiToMyr(data.financial.donatedWei))} (current rate)`} change={data.financial.donationChange} />
+                <MetricCard label="Milestone funds released" value={eth(data.financial.releasedWei)} secondary={`≈ ${money(weiToMyr(data.financial.releasedWei))} (current rate)`} tone="emerald" />
+                <MetricCard label="Funds currently locked" value={eth(data.financial.lockedWei)} secondary={`≈ ${money(weiToMyr(data.financial.lockedWei))} (current rate)`} tone="blue" />
+                <MetricCard label="Refunds returned to donors" value={eth(data.financial.refundedWei)} secondary={`≈ ${money(weiToMyr(data.financial.refundedWei))} (current rate)`} tone="stone" />
               </section>
 
               <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
@@ -385,7 +385,7 @@ export default function AdminAnalyticsPage() {
                     <Donut center={eth(fundTotal)} data={data.fundDistribution.map((item, index) => ({ label: `${item.label} · ${eth(item.amountEth)}`, value: item.amountEth, color: ["#10b981", "#38bdf8", "#78716c"][index] }))} />
                   ) : <EmptyState text="No confirmed financial distribution is available for this period." />}
                   <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    {data.fundDistribution.map((item) => <div key={item.label} className="rounded-lg bg-stone-50 p-3"><p className="text-[10px] font-bold uppercase text-stone-400">{item.label}</p><p className="mt-1 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">Approx. live MYR {money(ethToMyr(item.amountEth))}</p></div>)}
+                    {data.fundDistribution.map((item) => <div key={item.label} className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"><p className="text-[10px] font-bold uppercase text-stone-400">{item.label}</p><p className="mt-1 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">≈ {money(ethToMyr(item.amountEth))} (current rate)</p></div>)}
                   </div>
                 </Panel>
                 <Panel title="Campaign portfolio" description="Funding health and time-sensitive campaign indicators." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">Manage campaigns ↗</Link>}>

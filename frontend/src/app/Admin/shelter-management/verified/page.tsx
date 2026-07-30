@@ -2,10 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
+import { useChainId, usePublicClient, useWriteContract } from "wagmi";
+import { isAddress } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
 import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getPawChainId } from "@/lib/campaign-blockchain";
 
 type Shelter = {
   profile_id: string;
@@ -23,7 +27,22 @@ type Shelter = {
   deactivated_by: string | null;
   reviewed_at: string | null;
   role_nft_active: boolean;
+  active_campaigns: DeactivationCampaign[];
 };
+
+type DeactivationCampaign = {
+  id: string;
+  title: string;
+  contract_address: string | null;
+};
+
+type DeactivationStep = DeactivationCampaign & {
+  status: "pending" | "processing" | "confirmed";
+  txHash?: string;
+};
+
+const isDeactivationPending = (shelter: Shelter) =>
+  shelter.account_status === "deactivated" && shelter.role_nft_active;
 
 function date(value: string | null) {
   return value
@@ -63,6 +82,9 @@ function Modal({
 
 export default function VerifiedSheltersPage() {
   const { address, isConnected } = useAppKitAccount();
+  const chainId = useChainId();
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shelters, setShelters] = useState<Shelter[]>([]);
   const [loading, setLoading] = useState(false);
@@ -81,6 +103,9 @@ export default function VerifiedSheltersPage() {
     message: string;
     txHash: string;
   } | null>(null);
+  const [deactivationSteps, setDeactivationSteps] = useState<
+    DeactivationStep[]
+  >([]);
 
   const load = async () => {
     if (!address) return;
@@ -132,36 +157,126 @@ export default function VerifiedSheltersPage() {
 
   const runAction = async () => {
     if (!address || !actionTarget) return;
-    const action =
-      actionTarget.account_status === "active" ? "deactivate" : "reactivate";
-    if (action === "deactivate" && !reason.trim()) return;
+    const isDeactivating =
+      actionTarget.account_status === "active" ||
+      isDeactivationPending(actionTarget);
+    const action = isDeactivating ? "deactivate" : "reactivate";
+    if (actionTarget.account_status === "active" && !reason.trim()) return;
     setBusy(true);
+    setDeactivationSteps([]);
     try {
-      const response = await fetch("/api/admin/verified-shelters", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress: address,
-          profileId: actionTarget.profile_id,
-          action,
-          reason: reason.trim(),
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok)
-        throw Object.assign(
-          new Error(result.message || "Account action failed."),
-          { txHash: result.txHash },
+      const changeShelterStatus = async () => {
+        const response = await fetch("/api/admin/verified-shelters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: address,
+            profileId: actionTarget.profile_id,
+            action,
+            reason: reason.trim(),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw Object.assign(
+            new Error(result.message || "Account action failed."),
+            { txHash: result.txHash },
+          );
+        }
+        return result;
+      };
+
+      let result = await changeShelterStatus();
+      if (
+        action === "deactivate" &&
+        result.status === "deactivation_pending"
+      ) {
+        if (!publicClient) {
+          throw new Error("Blockchain connection is unavailable.");
+        }
+        if (chainId !== getPawChainId()) {
+          throw new Error(`Switch your wallet to PawChain ${getPawChainId()}.`);
+        }
+
+        const campaigns = (result.campaigns ??
+          []) as DeactivationCampaign[];
+        setDeactivationSteps(
+          campaigns.map((campaign) => ({ ...campaign, status: "pending" })),
         );
+
+        for (const campaign of campaigns) {
+          if (
+            !campaign.contract_address ||
+            !isAddress(campaign.contract_address)
+          ) {
+            throw new Error(
+              `${campaign.title} does not have a valid campaign contract.`,
+            );
+          }
+          setDeactivationSteps((current) =>
+            current.map((step) =>
+              step.id === campaign.id
+                ? { ...step, status: "processing" }
+                : step,
+            ),
+          );
+          const cancellationHash = await writeContractAsync({
+            address: campaign.contract_address,
+            abi: campaignContractAbi,
+            functionName: "cancelCampaign",
+          });
+          const receipt = await publicClient.waitForTransactionReceipt({
+            hash: cancellationHash,
+          });
+          if (receipt.status !== "success") {
+            throw new Error(`${campaign.title} cancellation failed.`);
+          }
+
+          const saveResponse = await fetch("/api/admin/campaigns", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              walletAddress: address,
+              campaignId: campaign.id,
+              action: "cancel",
+              txHash: cancellationHash,
+            }),
+          });
+          const saveResult = await saveResponse.json();
+          if (!saveResponse.ok) {
+            throw new Error(
+              saveResult.message ??
+                `Unable to record ${campaign.title} cancellation.`,
+            );
+          }
+          setDeactivationSteps((current) =>
+            current.map((step) =>
+              step.id === campaign.id
+                ? {
+                    ...step,
+                    status: "confirmed",
+                    txHash: cancellationHash,
+                  }
+                : step,
+            ),
+          );
+        }
+
+        result = await changeShelterStatus();
+        if (result.status !== "deactivated") {
+          throw new Error("Shelter deactivation could not be finalized.");
+        }
+      }
+
       if (result.txHash) {
         setBlockchainSuccess({
           title:
             action === "deactivate"
-              ? "Shelter RoleNFT revoked"
+              ? "Shelter fully deactivated"
               : "Shelter RoleNFT restored",
           message:
             action === "deactivate"
-              ? "The RoleNFT revocation was confirmed and the shelter account is deactivated."
+              ? "All active campaigns were cancelled, donor refunds are available, and the Shelter RoleNFT was revoked."
               : "A Shelter RoleNFT was minted and the shelter account is active again.",
           txHash: result.txHash,
         });
@@ -169,7 +284,7 @@ export default function VerifiedSheltersPage() {
         setToast({
           message:
             action === "deactivate"
-              ? "Shelter deactivated."
+              ? "Shelter fully deactivated."
               : "Shelter reactivated.",
         });
       }
@@ -331,9 +446,11 @@ export default function VerifiedSheltersPage() {
                             </td>
                             <td className="py-4 pr-4">
                               <span
-                                className={`rounded-full px-3 py-1 text-xs font-black capitalize ${shelter.account_status === "active" ? "bg-orange-50 text-[var(--color-orange)]" : "bg-stone-100 text-stone-600"}`}
+                                className={`rounded-full px-3 py-1 text-xs font-black capitalize ${shelter.account_status === "active" ? "bg-orange-50 text-[var(--color-orange)]" : isDeactivationPending(shelter) ? "bg-amber-100 text-amber-800" : "bg-stone-100 text-stone-600"}`}
                               >
-                                {shelter.account_status}
+                                {isDeactivationPending(shelter)
+                                  ? "Deactivation pending"
+                                  : shelter.account_status}
                               </span>
                             </td>
                             <td className="py-4 pr-4 text-sm font-black">
@@ -356,11 +473,13 @@ export default function VerifiedSheltersPage() {
                                     setActionTarget(shelter);
                                     setReason("");
                                   }}
-                                  className={`rounded-full px-3 py-2 text-xs font-black text-white disabled:opacity-40 ${shelter.account_status === "active" ? "bg-stone-950" : "bg-[var(--color-orange)]"}`}
+                                  className={`rounded-full px-3 py-2 text-xs font-black text-white disabled:opacity-40 ${shelter.account_status === "active" || isDeactivationPending(shelter) ? "bg-stone-950" : "bg-[var(--color-orange)]"}`}
                                 >
                                   {shelter.account_status === "active"
                                     ? "Deactivate"
-                                    : "Reactivate"}
+                                    : isDeactivationPending(shelter)
+                                      ? "Resume deactivation"
+                                      : "Reactivate"}
                                 </button>
                               </div>
                             </td>
@@ -415,7 +534,9 @@ export default function VerifiedSheltersPage() {
           title={
             actionTarget.account_status === "active"
               ? "Deactivate shelter"
-              : "Reactivate shelter"
+              : isDeactivationPending(actionTarget)
+                ? "Resume shelter deactivation"
+                : "Reactivate shelter"
           }
           close={() => !busy && setActionTarget(null)}
         >
@@ -425,19 +546,79 @@ export default function VerifiedSheltersPage() {
               {actionTarget.wallet_address}
             </p>
           </div>
-          {actionTarget.account_status === "active" ? (
+          {actionTarget.account_status === "active" ||
+          isDeactivationPending(actionTarget) ? (
             <>
               <p className="mt-4 text-sm font-bold leading-6 text-stone-600">
-                The RoleNFT will be revoked first. The database will only be
-                updated after blockchain confirmation.
+                Shelter access will remain blocked while every active campaign
+                is cancelled on-chain. Donors can then claim refunds, and the
+                Shelter RoleNFT will be revoked last.
               </p>
-              <textarea
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                rows={4}
-                placeholder="Required deactivation reason"
-                className="mt-3 w-full rounded-2xl border border-orange-100 p-4 text-sm font-bold outline-none"
-              />
+              {actionTarget.active_campaigns.length ? (
+                <div className="mt-3 rounded-2xl border border-red-100 bg-red-50/45 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-red-700">
+                    Campaigns that must be cancelled
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {actionTarget.active_campaigns.map((campaign, index) => (
+                      <div
+                        key={campaign.id}
+                        className="flex items-center gap-2 text-sm font-bold text-stone-700"
+                      >
+                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
+                          {index + 1}
+                        </span>
+                        <span className="truncate">{campaign.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs font-semibold leading-5 text-red-700">
+                    Each campaign requires a separate wallet confirmation.
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                  No active campaigns require cancellation.
+                </p>
+              )}
+              {actionTarget.account_status === "active" ? (
+                <textarea
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  rows={4}
+                  placeholder="Required deactivation reason"
+                  className="mt-3 w-full rounded-2xl border border-orange-100 p-4 text-sm font-bold outline-none"
+                />
+              ) : null}
+              {deactivationSteps.length ? (
+                <div className="mt-4 space-y-2 rounded-2xl border border-orange-100 bg-orange-50/35 p-3">
+                  {deactivationSteps.map((step) => (
+                    <div
+                      key={step.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-xs"
+                    >
+                      <span className="min-w-0 truncate font-bold">
+                        {step.title}
+                      </span>
+                      <span
+                        className={`shrink-0 font-black ${
+                          step.status === "confirmed"
+                            ? "text-emerald-600"
+                            : step.status === "processing"
+                              ? "text-orange-600"
+                              : "text-stone-400"
+                        }`}
+                      >
+                        {step.status === "confirmed"
+                          ? "Cancelled"
+                          : step.status === "processing"
+                            ? "Waiting for wallet"
+                            : "Pending"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="mt-4 text-sm font-bold leading-6 text-stone-600">
@@ -462,10 +643,12 @@ export default function VerifiedSheltersPage() {
               className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40"
             >
               {busy
-                ? "Waiting for blockchain..."
+                ? "Processing deactivation..."
                 : actionTarget.account_status === "active"
-                  ? "Revoke and deactivate"
-                  : "Mint and reactivate"}
+                  ? "Cancel campaigns and deactivate"
+                  : isDeactivationPending(actionTarget)
+                    ? "Resume deactivation"
+                    : "Mint and reactivate"}
             </button>
           </div>
         </Modal>

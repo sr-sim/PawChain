@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 const items = [
   ["Dashboard", "/Admin/dashboard"],
   ["Campaign Management", "/Admin/campaign-management"],
+  ["User Management", "/Admin/user-management"],
   ["Transactions", "/Admin/transactions"],
-  ["Users", "/Admin/user-management"],
   ["Analytics & Insights", "/Admin/analytics"],
 ] as const;
 
@@ -84,20 +84,20 @@ export function AdminSidebar({
             ○ <span>Campaign Management</span>
           </Link>
           <Link
+            href="/Admin/user-management"
+            onClick={onNavigate}
+            className={`${row} ${pathname === "/Admin/user-management" ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]" : "border-transparent text-slate-700 hover:bg-orange-50"}`}
+          >
+            <span>○</span>
+            <span>User Management</span>
+          </Link>
+          <Link
             href="/Admin/transactions"
             onClick={onNavigate}
             className={`${row} ${pathname === "/Admin/transactions" ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]" : "border-transparent text-slate-700 hover:bg-orange-50"}`}
           >
             <span>↔</span>
             <span>Transactions</span>
-          </Link>
-          <Link
-            href="/Admin/user-management"
-            onClick={onNavigate}
-            className={`${row} ${pathname === "/Admin/user-management" ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]" : "border-transparent text-slate-700 hover:bg-orange-50"}`}
-          >
-            <span>○</span>
-            <span>Users</span>
           </Link>
           <Link
             href="/Admin/analytics"

@@ -26,13 +26,7 @@ async function requireAdminAuditProfile(walletAddress: string) {
     .select("id")
     .ilike("wallet_address", walletAddress)
     .maybeSingle();
-  if (!profile) {
-    throw new HttpError(
-      "The admin wallet needs a profiles row before changing shelter access.",
-      409,
-    );
-  }
-  return { supabase, adminId: profile.id };
+  return { supabase, adminId: profile?.id ?? null };
 }
 
 function responseError(error: unknown) {
@@ -66,6 +60,13 @@ export async function GET(request: NextRequest) {
       .select("id, full_name, email, wallet_address, account_status, deactivation_reason, deactivated_at, deactivated_by, created_at, updated_at")
       .in("id", userIds);
     if (profileError) throw profileError;
+    const { data: activeCampaigns, error: campaignError } = await supabase
+      .from("campaigns")
+      .select("id, shelter_id, title, contract_address")
+      .in("shelter_id", userIds)
+      .eq("campaign_status", "active")
+      .order("created_at", { ascending: true });
+    if (campaignError) throw campaignError;
 
     const applicationMap = new Map((applications ?? []).map((item) => [item.user_id, item]));
     const shelters = await Promise.all(
@@ -80,7 +81,15 @@ export async function GET(request: NextRequest) {
         } catch {
           roleNFTActive = false;
         }
-        return { ...profile, ...application, profile_id: profile.id, role_nft_active: roleNFTActive };
+        return {
+          ...profile,
+          ...application,
+          profile_id: profile.id,
+          role_nft_active: roleNFTActive,
+          active_campaigns: (activeCampaigns ?? []).filter(
+            (campaign) => campaign.shelter_id === profile.id,
+          ),
+        };
       }),
     );
     return NextResponse.json({ shelters });
@@ -101,10 +110,6 @@ export async function POST(request: NextRequest) {
     if (!profileId || !["deactivate", "reactivate"].includes(action)) {
       return NextResponse.json({ message: "Invalid account action." }, { status: 400 });
     }
-    if (action === "deactivate" && !reason) {
-      return NextResponse.json({ message: "A deactivation reason is required." }, { status: 400 });
-    }
-
     const { supabase, adminId } =
       await requireAdminAuditProfile(adminWallet);
     const { data: profile, error } = await supabase
@@ -125,15 +130,63 @@ export async function POST(request: NextRequest) {
 
     const nftStatus = await getRoleNFTStatus(profile.wallet_address);
     if (action === "deactivate") {
+      if (profile.account_status !== "deactivated" && !reason) {
+        return NextResponse.json({ message: "A deactivation reason is required." }, { status: 400 });
+      }
+      const { data: activeCampaigns, error: campaignError } = await supabase
+        .from("campaigns")
+        .select("id, title, contract_address")
+        .eq("shelter_id", profile.id)
+        .eq("campaign_status", "active")
+        .order("created_at", { ascending: true });
+      if (campaignError) throw campaignError;
+
+      const now = new Date().toISOString();
+      const { error: pendingCampaignError } = await supabase
+        .from("campaigns")
+        .update({
+          campaign_status: "rejected",
+          rejection_reason: "Shelter account deactivated by administrator.",
+          updated_at: now,
+        })
+        .eq("shelter_id", profile.id)
+        .eq("campaign_status", "pending_approval");
+      if (pendingCampaignError) throw pendingCampaignError;
+
+      if ((activeCampaigns ?? []).length > 0) {
+        const { error: blockError } = await supabase
+          .from("profiles")
+          .update({
+            account_status: "deactivated",
+            ...(reason ? { deactivation_reason: reason } : {}),
+            deactivated_at: now,
+            deactivated_by: adminId,
+            updated_at: now,
+          })
+          .eq("id", profile.id);
+        if (blockError) throw blockError;
+
+        return NextResponse.json({
+          status: "deactivation_pending",
+          message:
+            "Shelter access is blocked. All active campaigns must now be cancelled.",
+          campaigns: activeCampaigns,
+        });
+      }
+
       if (profile.account_status === "deactivated" && !nftStatus.hasNFT) {
-        return NextResponse.json({ message: "Shelter is already deactivated." }, { status: 409 });
+        return NextResponse.json({
+          status: "deactivated",
+          txHash: null,
+          blockchainConfirmed: true,
+          idempotent: true,
+        });
       }
       if (nftStatus.hasNFT) {
         const result = await revokeRoleNFT(profile.wallet_address);
         txHash = result.txHash;
       }
       blockchainConfirmed = true;
-      const now = new Date().toISOString();
       const { error: updateError } = await supabase.from("profiles").update({
         account_status: "deactivated",
         deactivation_reason: reason,
