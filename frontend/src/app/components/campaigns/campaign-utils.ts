@@ -23,13 +23,13 @@ export function formatCurrency(value: number | string | null | undefined) {
   const amount = Number(value ?? 0);
 
   if (!Number.isFinite(amount)) {
-    return "RM 0.00";
+    return "Approx. live MYR: MYR 0.00";
   }
 
-  return new Intl.NumberFormat("en-MY", {
-    style: "currency",
-    currency: "MYR",
-  }).format(amount);
+  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)}`;
 }
 
 export function getProgress(

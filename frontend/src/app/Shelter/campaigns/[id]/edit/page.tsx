@@ -18,6 +18,7 @@ import type {
   UrgencyLevel,
 } from "@/app/components/campaigns/campaign-types";
 import { demoEthMyrRate } from "@/lib/campaign-blockchain";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 import { formatEther } from "viem";
 
 type CampaignForm = {
@@ -132,6 +133,7 @@ function orderMilestones(items: CampaignMilestone[]) {
 }
 
 export default function EditCampaignPage() {
+  const { rate: liveEthMyrRate } = useEthMyrRate();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { address, isConnected } = useAppKitAccount();
@@ -301,9 +303,9 @@ export default function EditCampaignPage() {
           title: form.title,
           description: form.description,
           urgencyLevel: form.urgencyLevel,
-          goalAmount: Number(form.goalAmount) * demoEthMyrRate,
+          goalAmount: Number(form.goalAmount) * liveEthMyrRate,
           goalEth: form.goalAmount,
-          ethMyrRate: demoEthMyrRate,
+          ethMyrRate: liveEthMyrRate,
           durationDays: Number(form.durationDays),
           imageUrl: form.imageUrl,
           milestones: milestones.map((milestone) => ({
@@ -436,7 +438,7 @@ export default function EditCampaignPage() {
                 className="w-full rounded-2xl border border-orange-100 bg-orange-50/40 px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:bg-white focus:ring-4 focus:ring-orange-100"
                 required
               />
-              <p className="mt-2 text-xs font-bold text-stone-500">Approximately {new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(Number(form.goalAmount || 0) * demoEthMyrRate)} at the current demo rate.</p>
+              <p className="mt-2 text-xs font-bold text-stone-500">Approx. live MYR: MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(form.goalAmount || 0) * liveEthMyrRate)}</p>
             </FieldLabel>
 
             <FieldLabel label="Duration">

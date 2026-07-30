@@ -12,7 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import type { UrgencyLevel } from "@/app/components/campaigns/campaign-types";
-import { demoEthMyrRate } from "@/lib/campaign-blockchain";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type CampaignForm = {
   title: string;
@@ -209,7 +209,7 @@ const durationOptions: SelectOption[] = [
 ];
 
 function formatMYR(value: number | string) {
-  return new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR", maximumFractionDigits: 2 }).format(Number(value || 0));
+  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0))}`;
 }
 
 function formatETH(value: number | string) {
@@ -246,6 +246,7 @@ function MilestoneEditorRow({
   index,
   cumulative,
   goalAmount,
+  ethMyrRate,
   canRemove,
   onUpdate,
   onRemove,
@@ -254,6 +255,7 @@ function MilestoneEditorRow({
   index: number;
   cumulative: number;
   goalAmount: string;
+  ethMyrRate: number;
   canRemove: boolean;
   onUpdate: (key: keyof MilestoneForm, value: string) => void;
   onRemove: () => void;
@@ -267,7 +269,7 @@ function MilestoneEditorRow({
         <div className="space-y-2"><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Milestone title</label><input value={milestone.title} onChange={(event) => onUpdate("title", event.target.value)} placeholder={index === 0 ? "Name the emergency milestone" : `Milestone ${index + 1} title`} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 text-sm font-black outline-none focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100" required /><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Description</label><textarea value={milestone.description} onChange={(event) => onUpdate("description", event.target.value)} placeholder="Describe what this milestone will achieve" rows={2} className="w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required />{index === 0 ? <p className="rounded-lg bg-orange-50 px-2 py-1.5 text-[10px] font-bold text-orange-700">Usage proof is uploaded after this fund is withdrawn.</p> : null}</div>
         <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Percentage</label><div className="relative mt-2"><input value={milestone.percentage} onChange={(event) => onUpdate("percentage", event.target.value)} min="5" max="100" step="5" type="number" onWheel={preventWheelNumberChange} readOnly={index === 0} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 pr-7 text-sm font-black outline-none focus:border-[var(--color-orange)]" required /><span className="absolute right-3 top-2 text-xs font-black text-stone-400">%</span></div>{index === 0 ? <span className="mt-2 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Fixed</span> : null}</div>
         <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Cumulative</p><p className="mt-3 text-sm font-black text-stone-950">{cumulative}%</p></div>
-        <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Est. allocation</p><p className="mt-3 text-sm font-black text-stone-950">{formatETH(allocation)}</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatMYR(allocation * demoEthMyrRate)}</p></div>
+        <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Est. allocation</p><p className="mt-3 text-sm font-black text-stone-950">{formatETH(allocation)}</p><p className="mt-1 text-[10px] font-bold text-stone-400">{formatMYR(allocation * ethMyrRate)}</p></div>
         <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Proof requirement</label><textarea value={milestone.requirement} onChange={(event) => onUpdate("requirement", event.target.value)} placeholder="Invoices, receipts, reports or photos" rows={3} className="mt-2 w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required /></div>
         <div>{index === 0 ? <span className="inline-flex rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Locked 5%</span> : <button type="button" onClick={onRemove} disabled={!canRemove} aria-label={`Remove milestone ${index + 1}`} className="rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 hover:bg-red-50 disabled:opacity-40">Delete</button>}</div>
       </div>
@@ -276,6 +278,8 @@ function MilestoneEditorRow({
 }
 
 export default function CreateCampaignPage() {
+  const { rate: ethMyrRate } = useEthMyrRate();
+  const demoEthMyrRate = ethMyrRate;
   const router = useRouter();
   const { address, isConnected } = useAppKitAccount();
   const { open } = useAppKit();
@@ -423,9 +427,9 @@ export default function CreateCampaignPage() {
           title: form.title,
           description: form.description,
           urgencyLevel: form.urgencyLevel,
-          goalAmount: Number(form.goalAmount) * demoEthMyrRate,
+          goalAmount: Number(form.goalAmount) * ethMyrRate,
           goalEth: form.goalAmount,
-          ethMyrRate: demoEthMyrRate,
+          ethMyrRate,
           durationDays: Number(form.durationDays),
           imageUrl: form.imageUrl,
           milestones: milestones.map((milestone) => ({
@@ -576,7 +580,7 @@ export default function CreateCampaignPage() {
                   className="w-full rounded-xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
                   required
                 />
-                <p className="mt-2 text-xs font-bold text-stone-500">Approximately {formatMYR(Number(form.goalAmount || 0) * demoEthMyrRate)} at 1 ETH = {formatMYR(demoEthMyrRate)}</p>
+                <p className="mt-2 text-xs font-bold text-stone-500">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)} at 1 ETH = MYR {ethMyrRate.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </FieldLabel>
 
               <FieldLabel label="Campaign Duration *">
@@ -634,6 +638,7 @@ export default function CreateCampaignPage() {
                     index={index}
                     cumulative={milestones.slice(0, index + 1).reduce((sum, item) => sum + Number(item.percentage || 0), 0)}
                     goalAmount={form.goalAmount}
+                    ethMyrRate={ethMyrRate}
                     canRemove={milestones.length > 2}
                     onUpdate={(key, value) => updateMilestone(index, key, value)}
                     onRemove={() => setMilestones((current) => current.filter((_, milestoneIndex) => milestoneIndex !== index))}
@@ -664,7 +669,7 @@ export default function CreateCampaignPage() {
               <div className="flex items-center gap-3 border-b border-orange-100 pb-4"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--color-orange)] text-sm font-black text-white">1</span><div><h2 className="text-xl font-black text-stone-950">Campaign Summary</h2><p className="text-xs font-semibold text-stone-500">Final campaign details before submission</p></div></div>
               <div className="mt-5 grid gap-6 lg:grid-cols-[15rem_1fr_18rem]">
                 <div className="grid h-64 place-items-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50">{form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="max-h-64 w-full object-contain" /> : <div className="grid h-64 place-items-center text-sm font-black text-orange-400">No campaign image</div>}</div>
-                <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-100">{form.urgencyLevel}</span></div><p className="mt-3 text-sm font-semibold leading-6 text-stone-600">{form.description}</p><dl className="mt-5 grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="font-bold text-stone-500">Goal</dt><dd className="font-black">{formatETH(form.goalAmount)} <span className="block text-xs text-stone-400">about {formatMYR(Number(form.goalAmount || 0) * demoEthMyrRate)}</span></dd><dt className="font-bold text-stone-500">Duration</dt><dd className="font-black">{form.durationDays} days</dd></dl></div>
+                <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-100">{form.urgencyLevel}</span></div><p className="mt-3 text-sm font-semibold leading-6 text-stone-600">{form.description}</p><dl className="mt-5 grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="font-bold text-stone-500">Goal</dt><dd className="font-black">{formatETH(form.goalAmount)} <span className="block text-xs text-stone-400">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)}</span></dd><dt className="font-bold text-stone-500">Duration</dt><dd className="font-black">{form.durationDays} days</dd></dl></div>
                 <aside className="space-y-4"><div className="rounded-2xl border border-[#FFCD80] bg-[#FFFCC9]/45 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Connected wallet</p><p className="mt-2 font-mono text-sm font-black">{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}</p><span className="mt-3 inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">Sepolia Network</span></div><div className="rounded-2xl border border-orange-100 bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Submission status</p><p className="mt-2 text-sm font-black text-stone-950">Pending admin approval</p><p className="mt-1 text-xs font-semibold leading-5 text-stone-500">The campaign contract is created only after approval succeeds.</p></div></aside>
               </div>
             </section>

@@ -10,6 +10,7 @@ import {
 } from "@/app/components/campaigns/MilestoneCard";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainId } from "@/lib/campaign-blockchain";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 
 type ShelterMilestoneCardProps = {
   milestone: CampaignMilestone;
@@ -95,6 +96,12 @@ export function MilestoneCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [blockchainPopup, setBlockchainPopup] = useState<{
+    status: "pending" | "confirmed" | "failed";
+    title: string;
+    message: string;
+    txHash: string;
+  } | null>(null);
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
@@ -200,6 +207,8 @@ export function MilestoneCard({
     setError("");
     setMessage("");
 
+    let submittedTxHash = "";
+    let chainConfirmed = false;
     try {
       const proofCID = keccak256(toBytes(JSON.stringify(selectedFiles)));
       const txHash = await writeContractAsync({
@@ -208,12 +217,26 @@ export function MilestoneCard({
         functionName: "submitMilestoneProof",
         args: [BigInt(onChainIndex), proofCID],
       });
+      submittedTxHash = txHash;
+      setBlockchainPopup({
+        status: "pending",
+        title: "Submitting milestone proof",
+        message: `Milestone ${index + 1} proof is waiting for blockchain confirmation.`,
+        txHash,
+      });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
       if (receipt.status !== "success") {
         throw new Error("Proof transaction failed.");
       }
+      chainConfirmed = true;
+      setBlockchainPopup({
+        status: "confirmed",
+        title: "Milestone proof submitted",
+        message: `Milestone ${index + 1} proof was recorded by the campaign smart contract.`,
+        txHash,
+      });
 
       const response = await fetch(
         `/api/shelter/campaigns/${campaignId}/milestones/${milestone.id}/proof`,
@@ -241,6 +264,14 @@ export function MilestoneCard({
       setMessage("Proof submitted for review.");
       await refetchOnChainMilestone();
     } catch (submitError) {
+      if (!chainConfirmed) {
+        setBlockchainPopup({
+          status: "failed",
+          title: "Proof transaction not completed",
+          message: submitError instanceof Error ? submitError.message : "Unable to submit proof.",
+          txHash: submittedTxHash,
+        });
+      }
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -272,6 +303,8 @@ export function MilestoneCard({
     setError("");
     setMessage("");
 
+    let withdrawalTxHash = "";
+    let chainConfirmed = false;
     try {
       const txHash = await writeContractAsync({
         address: validContractAddress,
@@ -279,12 +312,26 @@ export function MilestoneCard({
         functionName: "withdrawMilestone",
         args: [BigInt(onChainIndex)],
       });
+      withdrawalTxHash = txHash;
+      setBlockchainPopup({
+        status: "pending",
+        title: "Withdrawing milestone funds",
+        message: `Milestone ${index + 1} withdrawal is waiting for blockchain confirmation.`,
+        txHash,
+      });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
       if (receipt.status !== "success") {
         throw new Error("Fund release transaction failed.");
       }
+      chainConfirmed = true;
+      setBlockchainPopup({
+        status: "confirmed",
+        title: "Milestone funds withdrawn",
+        message: `Milestone ${index + 1} funds were released to the verified shelter wallet.`,
+        txHash,
+      });
 
       const response = await fetch(
         `/api/shelter/campaigns/${campaignId}/milestones/${milestone.id}/release`,
@@ -303,6 +350,14 @@ export function MilestoneCard({
       await refetchOnChainMilestone();
       onWithdrawalCompleted?.();
     } catch (withdrawError) {
+      if (!chainConfirmed) {
+        setBlockchainPopup({
+          status: "failed",
+          title: "Withdrawal not completed",
+          message: withdrawError instanceof Error ? withdrawError.message : "Unable to release milestone funds.",
+          txHash: withdrawalTxHash,
+        });
+      }
       setError(
         withdrawError instanceof Error
           ? withdrawError.message
@@ -532,7 +587,7 @@ export function MilestoneCard({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Funds (ETH)</p><p className="mt-1 text-sm font-black text-stone-950">{(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH</p></div>
-          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Approx. value (MYR)</p><p className="mt-1 text-sm font-black text-stone-950">{new Intl.NumberFormat("en-MY", { style: "currency", currency: "MYR" }).format(goalEth * Number(milestone.percentage || 0) / 100 * ethMyrRate)}</p></div>
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Approx. live MYR</p><p className="mt-1 text-sm font-black text-stone-950">MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(goalEth * Number(milestone.percentage || 0) / 100 * ethMyrRate)}</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Required funding</p><p className="mt-1 text-sm font-black text-stone-950">{cumulativePercentage}%</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Proof state</p><p className="mt-1 text-sm font-black capitalize text-stone-950">{milestone.status.replaceAll("_", " ")}</p></div>
         </div>
@@ -548,6 +603,15 @@ export function MilestoneCard({
           </p>
         ) : null}
       </SharedMilestoneCard>
+
+      <BlockchainSuccessPopup
+        open={Boolean(blockchainPopup)}
+        status={blockchainPopup?.status}
+        title={blockchainPopup?.title ?? "Blockchain transaction"}
+        message={blockchainPopup?.message ?? ""}
+        txHash={blockchainPopup?.txHash}
+        onClose={() => setBlockchainPopup(null)}
+      />
 
       {previewFile ? (
         <div

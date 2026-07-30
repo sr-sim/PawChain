@@ -11,7 +11,7 @@ import type {
 } from "@/app/components/campaigns/campaign-types";
 import { MilestoneCard } from "@/app/Shelter/campaigns/components/MilestoneCard";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
-import { demoEthMyrRate } from "@/lib/campaign-blockchain";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type CampaignWithMilestones = Campaign & {
   milestones: CampaignMilestone[];
@@ -67,11 +67,10 @@ function formatEth(value: number) {
 }
 
 function formatMyr(value: number) {
-  return new Intl.NumberFormat("en-MY", {
-    style: "currency",
-    currency: "MYR",
+  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", {
     maximumFractionDigits: 2,
-  }).format(Number.isFinite(value) ? value : 0);
+    minimumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0)}`;
 }
 
 function preciseProgress(raised: number, goal: number) {
@@ -149,6 +148,7 @@ function StatCard({
 }
 
 export default function ShelterWithdrawalsPage() {
+  const { rate: liveEthMyrRate } = useEthMyrRate();
   const { address, isConnected } = useAppKitAccount();
   const { open } = useAppKit();
   const publicClient = usePublicClient();
@@ -293,7 +293,7 @@ export default function ShelterWithdrawalsPage() {
     let withdrawnMyr = 0;
 
     items.forEach((campaign) => {
-      const rate = Number(campaign.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
+      const rate = liveEthMyrRate;
       campaign.milestones.forEach((milestone) => {
         const chainMilestone = chainStates[campaign.id]?.milestones[milestone.id];
         if (!chainMilestone) return;
@@ -320,7 +320,7 @@ export default function ShelterWithdrawalsPage() {
       withdrawnEth,
       withdrawnMyr,
     };
-  }, [chainStates, items]);
+  }, [chainStates, items, liveEthMyrRate]);
 
   const filterCounts = useMemo(() => {
     const counts: Record<FilterKey, number> = {
@@ -361,7 +361,7 @@ export default function ShelterWithdrawalsPage() {
 
   if (selectedCampaign) {
     const chain = chainStates[selectedCampaign.id];
-    const rate = Number(selectedCampaign.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
+    const rate = liveEthMyrRate;
     const goalEth = chain?.goalEth ?? (selectedCampaign.goal_wei ? Number(formatEther(BigInt(selectedCampaign.goal_wei))) : Number(selectedCampaign.goal_amount) / rate);
     const raisedEth = chain?.raisedEth ?? Number(selectedCampaign.current_amount ?? 0) / rate;
     const availableEth = selectedCampaign.milestones.reduce((sum, milestone) => {
@@ -450,7 +450,7 @@ export default function ShelterWithdrawalsPage() {
         <div className="mt-5 space-y-4">
           {visibleCampaigns.map((campaign) => {
             const chain = chainStates[campaign.id];
-            const rate = Number(campaign.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
+            const rate = liveEthMyrRate;
             const goalEth = chain?.goalEth ?? (campaign.goal_wei ? Number(formatEther(BigInt(campaign.goal_wei))) : Number(campaign.goal_amount) / rate);
             const raisedEth = chain?.raisedEth ?? Number(campaign.current_amount ?? 0) / rate;
             const progress = preciseProgress(raisedEth, goalEth);
