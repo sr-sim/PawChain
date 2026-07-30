@@ -28,8 +28,14 @@ export async function POST(request: NextRequest) {
       .from("profiles")
       .select("id, role")
       .ilike("wallet_address", walletAddress)
-      .single();
+      .maybeSingle();
     if (donorError) throw donorError;
+    if (!donor) {
+      return NextResponse.json(
+        { message: "This wallet is not registered as a donor." },
+        { status: 404 },
+      );
+    }
     if (donor.role !== "donor") {
       return NextResponse.json(
         { message: "A donor wallet is required." },
@@ -43,11 +49,7 @@ export async function POST(request: NextRequest) {
       .eq("id", campaignId)
       .single();
     if (campaignError) throw campaignError;
-    if (
-      campaign.campaign_status !== "closed" ||
-      !campaign.contract_address ||
-      !isAddress(campaign.contract_address)
-    ) {
+    if (!campaign.contract_address || !isAddress(campaign.contract_address)) {
       return NextResponse.json(
         { message: "This campaign is not open for refunds." },
         { status: 409 },
@@ -111,6 +113,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: existingDonation, error: existingDonationError } =
+      await supabase
+        .from("donations")
+        .select("id, refund_tx_hash")
+        .eq("donor_id", donor.id)
+        .eq("campaign_id", campaignId)
+        .maybeSingle();
+    if (existingDonationError) throw existingDonationError;
+    if (!existingDonation) {
+      return NextResponse.json(
+        { message: "Donation record was not found for this donor." },
+        { status: 404 },
+      );
+    }
+    if (existingDonation.refund_tx_hash === txHash) {
+      return NextResponse.json({ refunded: true, alreadyRecorded: true });
+    }
+
     const { error: updateError } = await supabase
       .from("donations")
       .update({
@@ -119,8 +139,7 @@ export async function POST(request: NextRequest) {
         status: "refunded",
         updated_at: new Date().toISOString(),
       })
-      .eq("donor_id", donor.id)
-      .eq("campaign_id", campaignId);
+      .eq("id", existingDonation.id);
     if (updateError) throw updateError;
 
     await createDonorNotification({

@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useChainId, usePublicClient, useWriteContract } from "wagmi";
-import { isAddress } from "viem";
+import { isAddress, type Address } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
-import { TransactionLinks } from "@/app/components/TransactionLinks";
 import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainId } from "@/lib/campaign-blockchain";
+import { roleNFTAbi } from "@/lib/role-nft-abi";
 
 type Shelter = {
   profile_id: string;
@@ -25,6 +25,8 @@ type Shelter = {
   deactivation_reason: string | null;
   deactivated_at: string | null;
   deactivated_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
   reviewed_at: string | null;
   role_nft_active: boolean;
   active_campaigns: DeactivationCampaign[];
@@ -64,7 +66,7 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-stone-950/45 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-black">{title}</h2>
           <button
@@ -95,13 +97,12 @@ export default function VerifiedSheltersPage() {
   const [actionTarget, setActionTarget] = useState<Shelter | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<{ message: string; hash?: string } | null>(
-    null,
-  );
   const [blockchainSuccess, setBlockchainSuccess] = useState<{
+    status: "pending" | "confirmed" | "failed";
     title: string;
     message: string;
     txHash: string;
+    transactions?: { label: string; hash: string }[];
   } | null>(null);
   const [deactivationSteps, setDeactivationSteps] = useState<
     DeactivationStep[]
@@ -134,12 +135,6 @@ export default function VerifiedSheltersPage() {
     if (address && isConnected) void load();
     else setShelters([]);
   }, [address, isConnected]);
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 7000);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
   const filtered = useMemo(
     () =>
       shelters.filter((shelter) => {
@@ -164,8 +159,9 @@ export default function VerifiedSheltersPage() {
     if (actionTarget.account_status === "active" && !reason.trim()) return;
     setBusy(true);
     setDeactivationSteps([]);
+    const confirmedTransactions: { label: string; hash: string }[] = [];
     try {
-      const changeShelterStatus = async () => {
+      const changeShelterStatus = async (txHash = "") => {
         const response = await fetch("/api/admin/verified-shelters", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -174,6 +170,7 @@ export default function VerifiedSheltersPage() {
             profileId: actionTarget.profile_id,
             action,
             reason: reason.trim(),
+            txHash,
           }),
         });
         const result = await response.json();
@@ -184,6 +181,82 @@ export default function VerifiedSheltersPage() {
           );
         }
         return result;
+      };
+
+      const submitRoleNFTAction = async (
+        requiredStatus:
+          | "role_nft_mint_required"
+          | "role_nft_revocation_required",
+        shelterWalletValue: string,
+      ) => {
+        if (!publicClient) {
+          throw new Error("Blockchain connection is unavailable.");
+        }
+        if (!isAddress(shelterWalletValue)) {
+          throw new Error("The shelter wallet address is invalid.");
+        }
+        const configResponse = await fetch(
+          `/api/admin/role-nft-mint-config?walletAddress=${encodeURIComponent(address)}`,
+          { cache: "no-store" },
+        );
+        const config = await configResponse.json();
+        if (!configResponse.ok) {
+          throw new Error(
+            config.message || "Unable to load RoleNFT configuration.",
+          );
+        }
+        if (chainId !== Number(config.chainId)) {
+          throw new Error(`Switch MetaMask to PawChain ${config.chainId}.`);
+        }
+        const contractAddress = config.contractAddress as Address;
+        const shelterWallet = shelterWalletValue as Address;
+        const connectedWalletIsAdmin = await publicClient.readContract({
+          address: contractAddress,
+          abi: roleNFTAbi,
+          functionName: "isAdmin",
+          args: [address as Address],
+        });
+        if (!connectedWalletIsAdmin) {
+          throw new Error(
+            "This MetaMask wallet is not authorized as a RoleNFT admin.",
+          );
+        }
+
+        const roleNftHash =
+          requiredStatus === "role_nft_mint_required"
+            ? await writeContractAsync({
+                address: contractAddress,
+                abi: roleNFTAbi,
+                functionName: "safeMintShelter",
+                args: [shelterWallet, String(config.metadataCID)],
+              })
+            : await writeContractAsync({
+                address: contractAddress,
+                abi: roleNFTAbi,
+                functionName: "revokeRoleNFT",
+                args: [shelterWallet],
+              });
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: roleNftHash,
+        });
+        if (receipt.status !== "success") {
+          throw new Error(
+            requiredStatus === "role_nft_mint_required"
+              ? "Shelter RoleNFT minting failed."
+              : "Shelter RoleNFT revocation failed.",
+          );
+        }
+        if (requiredStatus === "role_nft_revocation_required") {
+          setDeactivationSteps((current) =>
+            current.map((step) =>
+              step.id === "role-nft-revocation"
+                ? { ...step, status: "confirmed", txHash: roleNftHash }
+                : step,
+            ),
+          );
+        }
+        return roleNftHash;
       };
 
       let result = await changeShelterStatus();
@@ -200,9 +273,18 @@ export default function VerifiedSheltersPage() {
 
         const campaigns = (result.campaigns ??
           []) as DeactivationCampaign[];
-        setDeactivationSteps(
-          campaigns.map((campaign) => ({ ...campaign, status: "pending" })),
-        );
+        setDeactivationSteps([
+          ...campaigns.map((campaign) => ({
+            ...campaign,
+            status: "pending" as const,
+          })),
+          {
+            id: "role-nft-revocation",
+            title: "Revoke Shelter RoleNFT",
+            contract_address: null,
+            status: "pending",
+          },
+        ]);
 
         for (const campaign of campaigns) {
           if (
@@ -219,6 +301,9 @@ export default function VerifiedSheltersPage() {
                 ? { ...step, status: "processing" }
                 : step,
             ),
+          );
+          await new Promise<void>((resolve) =>
+            window.requestAnimationFrame(() => resolve()),
           );
           const cancellationHash = await writeContractAsync({
             address: campaign.contract_address,
@@ -249,6 +334,10 @@ export default function VerifiedSheltersPage() {
                 `Unable to record ${campaign.title} cancellation.`,
             );
           }
+          confirmedTransactions.push({
+            label: `Cancel ${campaign.title}`,
+            hash: cancellationHash,
+          });
           setDeactivationSteps((current) =>
             current.map((step) =>
               step.id === campaign.id
@@ -263,13 +352,64 @@ export default function VerifiedSheltersPage() {
         }
 
         result = await changeShelterStatus();
-        if (result.status !== "deactivated") {
-          throw new Error("Shelter deactivation could not be finalized.");
+      }
+
+      if (
+        result.status === "role_nft_mint_required" ||
+        result.status === "role_nft_revocation_required"
+      ) {
+        if (result.status === "role_nft_revocation_required") {
+          setDeactivationSteps((current) => {
+            const steps = current.some(
+              (step) => step.id === "role-nft-revocation",
+            )
+              ? current
+              : [
+                  ...current,
+                  {
+                    id: "role-nft-revocation",
+                    title: "Revoke Shelter RoleNFT",
+                    contract_address: null,
+                    status: "pending" as const,
+                  },
+                ];
+            return steps.map((step) =>
+              step.id === "role-nft-revocation"
+                ? { ...step, status: "processing" as const }
+                : step,
+            );
+          });
+          await new Promise<void>((resolve) =>
+            window.requestAnimationFrame(() => resolve()),
+          );
         }
+        const roleNftHash = await submitRoleNFTAction(
+          result.status,
+          String(result.shelterWallet ?? actionTarget.wallet_address ?? ""),
+        );
+        confirmedTransactions.push({
+          label:
+            result.status === "role_nft_mint_required"
+              ? "RoleNFT mint"
+              : "RoleNFT revocation",
+          hash: roleNftHash,
+        });
+        result = await changeShelterStatus(roleNftHash);
+      }
+
+      const expectedFinalStatus =
+        action === "deactivate" ? "deactivated" : "active";
+      if (result.status !== expectedFinalStatus) {
+        throw new Error(
+          action === "deactivate"
+            ? "Shelter deactivation could not be finalized."
+            : "Shelter reactivation could not be finalized.",
+        );
       }
 
       if (result.txHash) {
         setBlockchainSuccess({
+          status: "confirmed",
           title:
             action === "deactivate"
               ? "Shelter fully deactivated"
@@ -279,13 +419,23 @@ export default function VerifiedSheltersPage() {
               ? "All active campaigns were cancelled, donor refunds are available, and the Shelter RoleNFT was revoked."
               : "A Shelter RoleNFT was minted and the shelter account is active again.",
           txHash: result.txHash,
+          transactions:
+            confirmedTransactions.length > 1
+              ? confirmedTransactions
+              : undefined,
         });
       } else {
-        setToast({
+        setBlockchainSuccess({
+          status: "confirmed",
+          title:
+            action === "deactivate"
+              ? "Shelter fully deactivated"
+              : "Shelter reactivated",
           message:
             action === "deactivate"
-              ? "Shelter fully deactivated."
-              : "Shelter reactivated.",
+              ? "The shelter account is deactivated and no additional blockchain transaction was required."
+              : "The shelter account is active and its existing Shelter RoleNFT was verified.",
+          txHash: "",
         });
       }
       setActionTarget(null);
@@ -293,7 +443,24 @@ export default function VerifiedSheltersPage() {
       await load();
     } catch (actionError) {
       const typed = actionError as Error & { txHash?: string };
-      setToast({ message: typed.message, hash: typed.txHash });
+      const rejected = /reject|denied|cancel/i.test(typed.message);
+      setBlockchainSuccess({
+        status: "failed",
+        title: rejected
+          ? "Transaction cancelled"
+          : action === "deactivate"
+            ? "Shelter deactivation failed"
+            : "Shelter reactivation failed",
+        message: rejected
+          ? "You rejected the request in MetaMask. No pending wallet transaction was completed."
+          : "The blockchain action could not be completed. Check your wallet network and permissions, then try again.",
+        txHash: typed.txHash ?? "",
+      });
+      if (rejected) {
+        setActionTarget(null);
+        setReason("");
+        setDeactivationSteps([]);
+      }
     } finally {
       setBusy(false);
     }
@@ -378,13 +545,13 @@ export default function VerifiedSheltersPage() {
             </div>
           ) : (
             <>
-              <section className="rounded-[1.6rem] border border-orange-100 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <section className="overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
+                <div className="flex flex-col gap-4 border-b border-orange-100 bg-orange-50/35 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-[var(--color-orange)]">
                       Directory
                     </p>
-                    <h2 className="mt-1 text-2xl font-black">
+                    <h2 className="mt-1 text-base font-black text-stone-950">
                       Shelter accounts
                     </h2>
                   </div>
@@ -393,14 +560,14 @@ export default function VerifiedSheltersPage() {
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Search shelter, ID, or wallet"
-                      className="min-w-72 rounded-full border border-orange-100 px-4 py-2.5 text-sm font-bold outline-none"
+                      className="min-w-72 rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                     />
                     <select
                       value={filter}
                       onChange={(event) =>
                         setFilter(event.target.value as typeof filter)
                       }
-                      className="rounded-full border border-orange-100 bg-white px-4 py-2.5 text-sm font-black"
+                      className="rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-orange-400"
                     >
                       <option value="all">All accounts</option>
                       <option value="active">Active</option>
@@ -409,42 +576,63 @@ export default function VerifiedSheltersPage() {
                   </div>
                 </div>
                 {filtered.length ? (
-                  <div className="mt-5 overflow-x-auto">
-                    <table className="w-full min-w-[1000px] text-left">
-                      <thead>
-                        <tr className="border-b border-stone-100 text-xs uppercase text-stone-400">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1120px] text-left">
+                      <colgroup>
+                        <col className="w-[18%]" />
+                        <col className="w-[18%]" />
+                        <col className="w-[19%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[14%]" />
+                      </colgroup>
+                      <thead className="border-b border-orange-100 bg-[rgba(var(--color-cream-rgb),0.55)]">
+                        <tr className="text-[11px] uppercase tracking-wider text-stone-500">
                           {[
                             "Shelter",
+                            "Contact",
                             "Wallet",
                             "Account",
                             "RoleNFT",
-                            "Verified",
+                            "Active campaigns",
                             "Actions",
                           ].map((item) => (
-                            <th key={item} className="pb-3 pr-4 font-black">
+                            <th
+                              key={item}
+                              className={`py-3 font-black ${item === "Active campaigns" || item === "Actions" ? "px-3" : "px-5"}`}
+                            >
                               {item}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-orange-100">
                         {filtered.map((shelter) => (
                           <tr
                             key={shelter.profile_id}
-                            className="border-b border-stone-100 last:border-0"
+                            className="transition hover:bg-orange-50/35"
                           >
-                            <td className="py-4 pr-4">
-                              <p className="font-black">
+                            <td className="px-5 py-4">
+                              <p className="font-semibold">
                                 {shelter.shelter_name}
                               </p>
-                              <p className="text-xs font-bold text-stone-400">
+                              <p className="text-xs font-medium text-stone-400">
                                 {shelter.registration_id}
                               </p>
                             </td>
-                            <td className="max-w-56 truncate py-4 pr-4 font-mono text-xs">
+                            <td className="px-5 py-4">
+                              <p className="max-w-56 truncate text-sm font-medium text-stone-700">
+                                {shelter.email || "—"}
+                              </p>
+                              <p className="mt-1 text-xs font-medium text-stone-500">
+                                {shelter.contact_phone || "—"}
+                              </p>
+                            </td>
+                            <td className="max-w-56 truncate px-5 py-4 font-mono text-xs text-stone-600">
                               {shelter.wallet_address || "Missing wallet"}
                             </td>
-                            <td className="py-4 pr-4">
+                            <td className="px-5 py-4">
                               <span
                                 className={`rounded-full px-3 py-1 text-xs font-black capitalize ${shelter.account_status === "active" ? "bg-orange-50 text-[var(--color-orange)]" : isDeactivationPending(shelter) ? "bg-amber-100 text-amber-800" : "bg-stone-100 text-stone-600"}`}
                               >
@@ -453,19 +641,34 @@ export default function VerifiedSheltersPage() {
                                   : shelter.account_status}
                               </span>
                             </td>
-                            <td className="py-4 pr-4 text-sm font-black">
+                            <td className="px-5 py-4 text-sm font-semibold">
                               {shelter.role_nft_active ? "Active" : "Not found"}
                             </td>
-                            <td className="py-4 pr-4 text-xs font-bold text-stone-500">
-                              {date(shelter.reviewed_at)}
+                            <td className="px-3 py-4">
+                              <span className="rounded-md border border-orange-100 bg-orange-50 px-2 py-1 text-xs font-bold text-orange-700">
+                                {shelter.active_campaigns.length}
+                              </span>
                             </td>
-                            <td className="py-4">
-                              <div className="flex gap-2">
+                            <td className="px-3 py-4">
+                              <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => setDetails(shelter)}
-                                  className="rounded-full border border-orange-100 px-3 py-2 text-xs font-black text-[var(--color-orange)]"
+                                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:ring-offset-2"
                                 >
-                                  Details
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 text-stone-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                                    <circle cx="12" cy="12" r="2.5" />
+                                  </svg>
+                                  View details
                                 </button>
                                 <button
                                   disabled={!shelter.wallet_address}
@@ -489,7 +692,7 @@ export default function VerifiedSheltersPage() {
                     </table>
                   </div>
                 ) : (
-                  <div className="mt-5 rounded-2xl border border-dashed border-orange-200 p-10 text-center font-bold text-stone-500">
+                  <div className="p-12 text-center text-sm font-semibold text-stone-500">
                     No verified shelters match this view.
                   </div>
                 )}
@@ -506,8 +709,13 @@ export default function VerifiedSheltersPage() {
               ["Email", details.email],
               ["Phone", details.contact_phone],
               ["Wallet", details.wallet_address || "Missing"],
+              ["Website", details.website_url || "—"],
+              ["Shelter address", details.shelter_address || "—"],
               ["Account status", details.account_status],
               ["RoleNFT", details.role_nft_active ? "Active" : "Not found"],
+              ["Verified at", date(details.reviewed_at)],
+              ["Profile created", date(details.created_at)],
+              ["Profile updated", date(details.updated_at)],
               ["Deactivated at", date(details.deactivated_at)],
               ["Deactivated by", details.deactivated_by || "—"],
             ].map(([label, value]) => (
@@ -518,6 +726,44 @@ export default function VerifiedSheltersPage() {
                 <p className="mt-1 break-words text-sm font-bold">{value}</p>
               </div>
             ))}
+          </div>
+          <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/35 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">
+              Organization description
+            </p>
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-stone-700">
+              {details.organization_description ||
+                "No organization description provided."}
+            </p>
+          </div>
+          <div className="mt-4 rounded-xl border border-orange-100 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+                Active campaigns
+              </p>
+              <span className="rounded-md bg-orange-50 px-2 py-1 text-xs font-black text-[var(--color-orange)]">
+                {details.active_campaigns.length}
+              </span>
+            </div>
+            {details.active_campaigns.length ? (
+              <div className="mt-3 divide-y divide-orange-100">
+                {details.active_campaigns.map((campaign) => (
+                  <div key={campaign.id} className="py-3 first:pt-0 last:pb-0">
+                    <p className="font-bold text-stone-900">
+                      {campaign.title}
+                    </p>
+                    <p className="mt-1 break-all font-mono text-xs text-stone-500">
+                      {campaign.contract_address ||
+                        "Contract address not available"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm font-medium text-stone-500">
+                No active campaigns.
+              </p>
+            )}
           </div>
           {details.deactivation_reason ? (
             <div className="mt-4 rounded-xl bg-orange-50 p-4">
@@ -554,33 +800,39 @@ export default function VerifiedSheltersPage() {
                 is cancelled on-chain. Donors can then claim refunds, and the
                 Shelter RoleNFT will be revoked last.
               </p>
-              {actionTarget.active_campaigns.length ? (
-                <div className="mt-3 rounded-2xl border border-red-100 bg-red-50/45 p-4">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-red-700">
-                    Campaigns that must be cancelled
-                  </p>
-                  <div className="mt-2 space-y-1.5">
-                    {actionTarget.active_campaigns.map((campaign, index) => (
-                      <div
-                        key={campaign.id}
-                        className="flex items-center gap-2 text-sm font-bold text-stone-700"
-                      >
-                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
-                          {index + 1}
-                        </span>
-                        <span className="truncate">{campaign.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-xs font-semibold leading-5 text-red-700">
-                    Each campaign requires a separate wallet confirmation.
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                  No active campaigns require cancellation.
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50/45 p-4">
+                <p className="text-xs font-black text-red-800">
+                  {actionTarget.active_campaigns.length + 1} MetaMask confirmation
+                  {actionTarget.active_campaigns.length + 1 === 1 ? "" : "s"} required
                 </p>
-              )}
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-red-600">
+                  Blockchain action order
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  {actionTarget.active_campaigns.map((campaign, index) => (
+                    <div
+                      key={campaign.id}
+                      className="flex items-center gap-2 text-sm font-bold text-stone-700"
+                    >
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
+                        {index + 1}
+                      </span>
+                      <span className="truncate">
+                        Cancel campaign: {campaign.title}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 text-sm font-bold text-stone-700">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
+                      {actionTarget.active_campaigns.length + 1}
+                    </span>
+                    <span>Revoke Shelter RoleNFT</span>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs font-semibold leading-5 text-red-700">
+                  MetaMask opens once for every action listed above.
+                </p>
+              </div>
               {actionTarget.account_status === "active" ? (
                 <textarea
                   value={reason}
@@ -609,11 +861,20 @@ export default function VerifiedSheltersPage() {
                               : "text-stone-400"
                         }`}
                       >
-                        {step.status === "confirmed"
-                          ? "Cancelled"
-                          : step.status === "processing"
-                            ? "Waiting for wallet"
-                            : "Pending"}
+                        {step.status === "confirmed" ? (
+                          step.id === "role-nft-revocation" ? (
+                            "Revoked"
+                          ) : (
+                            "Cancelled"
+                          )
+                        ) : step.status === "processing" ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600 motion-reduce:animate-none" />
+                            Waiting for wallet
+                          </span>
+                        ) : (
+                          "Pending"
+                        )}
                       </span>
                     </div>
                   ))}
@@ -627,13 +888,14 @@ export default function VerifiedSheltersPage() {
             </p>
           )}
           <div className="mt-5 flex justify-end gap-3">
-            <button
-              disabled={busy}
-              onClick={() => setActionTarget(null)}
-              className="rounded-full px-4 py-2.5 text-sm font-black"
-            >
-              Cancel
-            </button>
+            {!busy ? (
+              <button
+                onClick={() => setActionTarget(null)}
+                className="rounded-full px-4 py-2.5 text-sm font-black"
+              >
+                Cancel
+              </button>
+            ) : null}
             <button
               disabled={
                 busy ||
@@ -642,37 +904,32 @@ export default function VerifiedSheltersPage() {
               onClick={() => void runAction()}
               className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40"
             >
-              {busy
-                ? "Processing deactivation..."
-                : actionTarget.account_status === "active"
-                  ? "Cancel campaigns and deactivate"
-                  : isDeactivationPending(actionTarget)
-                    ? "Resume deactivation"
-                    : "Mint and reactivate"}
+              {busy ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none" />
+                  {actionTarget.account_status === "active" ||
+                  isDeactivationPending(actionTarget)
+                    ? "Processing deactivation..."
+                    : "Processing reactivation..."}
+                </span>
+              ) : actionTarget.account_status === "active" ? (
+                "Cancel campaigns and deactivate"
+              ) : isDeactivationPending(actionTarget) ? (
+                "Resume deactivation"
+              ) : (
+                "Mint and reactivate"
+              )}
             </button>
           </div>
         </Modal>
       ) : null}
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-[100] max-w-md rounded-2xl bg-stone-950 px-5 py-4 text-sm font-black text-white shadow-2xl">
-          <p>{toast.message}</p>
-          {toast.hash ? (
-            <div className="mt-2">
-              <TransactionLinks
-                transactions={[
-                  { label: "RoleNFT tx", hash: toast.hash },
-                ]}
-                emptyMessage={false}
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
       <BlockchainSuccessPopup
         open={Boolean(blockchainSuccess)}
+        status={blockchainSuccess?.status ?? "confirmed"}
         title={blockchainSuccess?.title ?? ""}
         message={blockchainSuccess?.message ?? ""}
         txHash={blockchainSuccess?.txHash ?? ""}
+        transactions={blockchainSuccess?.transactions}
         actionLabel="View RoleNFT transaction"
         onClose={() => setBlockchainSuccess(null)}
       />

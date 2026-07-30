@@ -15,6 +15,10 @@ import {
 } from "wagmi";
 import { formatEther, isAddress, parseEther } from "viem";
 import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
+import {
+  EthMyrMarketCard,
+  type EthMyrHistoryPoint,
+} from "@/app/components/EthMyrMarketCard";
 import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
@@ -306,6 +310,7 @@ export default function DonorDonatePage() {
     "coingecko" | "fallback" | "campaign"
   >("campaign");
   const [rateUpdatedAt, setRateUpdatedAt] = useState("");
+  const [rateHistory, setRateHistory] = useState<EthMyrHistoryPoint[]>([]);
   const [rateLoadError, setRateLoadError] = useState("");
 
   useEffect(() => {
@@ -390,6 +395,11 @@ export default function DonorDonatePage() {
         setLiveEthMyrRate(rate);
         setRateSource(result.source === "coingecko" ? "coingecko" : "fallback");
         setRateUpdatedAt(String(result.updatedAt ?? ""));
+        setRateHistory(
+          Array.isArray(result.history)
+            ? (result.history as EthMyrHistoryPoint[])
+            : [],
+        );
         setRateLoadError(
           result.source === "fallback" ? String(result.message ?? "") : "",
         );
@@ -398,6 +408,7 @@ export default function DonorDonatePage() {
           setLiveEthMyrRate(null);
           setRateSource("campaign");
           setRateUpdatedAt("");
+          setRateHistory([]);
           setRateLoadError(
             error instanceof Error
               ? error.message
@@ -977,7 +988,7 @@ export default function DonorDonatePage() {
   return (
     <div className="space-y-5">
       <section className="donor-tech-hero rounded-2xl border border-orange-100 bg-white p-5 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
               Donation
@@ -990,12 +1001,14 @@ export default function DonorDonatePage() {
               in your wallet.
             </p>
           </div>
-          <Link
-            href="/Donor/discover"
-            className="inline-flex w-fit items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-900 transition hover:border-[var(--color-orange)] hover:bg-orange-50"
-          >
-            Browse campaigns
-          </Link>
+          <EthMyrMarketCard
+            rate={ethToMyrRate}
+            source={rateSource === "coingecko" ? "coingecko" : "fallback"}
+            updatedAt={rateUpdatedAt || null}
+            loading={!liveEthMyrRate && !rateLoadError}
+            history={rateHistory}
+            className="lg:max-w-sm"
+          />
         </div>
       </section>
 
@@ -1221,9 +1234,6 @@ export default function DonorDonatePage() {
                   Enter amount
                 </h2>
               </div>
-              <span className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-xs font-semibold text-[var(--color-orange)]">
-                ETH payment
-              </span>
             </div>
 
             <div className="mt-4 overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
@@ -1440,9 +1450,6 @@ export default function DonorDonatePage() {
                     {selectedCampaign.title}
                   </p>
                 </div>
-                <span className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-xs font-black text-[var(--color-orange)]">
-                  Smart contract
-                </span>
               </div>
 
               <div className="mt-4 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 via-white to-white p-4">

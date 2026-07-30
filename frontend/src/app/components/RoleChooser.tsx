@@ -558,7 +558,7 @@ function DeactivatedShelterCard({
             <h1 className="mt-1 text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
               {pending
                 ? "Shelter deactivation in progress"
-                : "Shelter account permanently deactivated"}
+                : "Shelter account deactivated"}
             </h1>
           </div>
         </div>
@@ -569,7 +569,7 @@ function DeactivatedShelterCard({
           PawChain found this wallet, but the linked shelter account has been
           {pending
             ? " blocked while PawChain completes the required campaign cancellations."
-            : " permanently deactivated by an administrator."}{" "}
+            : " deactivated by an administrator."}{" "}
           You cannot access the shelter dashboard or manage campaigns and
           milestone submissions.
         </p>

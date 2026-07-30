@@ -166,6 +166,10 @@ html {
   animation: donor-premium-float 8s ease-in-out infinite;
 }
 
+.donor-dashboard-pet-float {
+  animation: donor-premium-float 7.5s ease-in-out infinite;
+}
+
 .donor-eth-gradient {
   width: fit-content;
   background:
@@ -188,9 +192,15 @@ html {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 0;
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), transparent 42%);
+}
+
+.donor-premium-metric > * {
+  position: relative;
+  z-index: 1;
 }
 
 .donor-premium-primary {
@@ -291,6 +301,44 @@ html {
 
 .donor-badge-glow:hover img {
   transform: scale(1.06);
+}
+
+.donor-badge-current {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(var(--color-orange-rgb), 0.32),
+    0 20px 48px rgba(255, 138, 0, 0.18);
+}
+
+.donor-badge-current::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 42%,
+    transparent 62%
+  );
+  transform: translateX(-120%);
+  animation: donor-premium-sweep 4.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.donor-badge-locked {
+  opacity: 0.48;
+  filter: saturate(0.55);
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease,
+    transform 180ms ease;
+}
+
+.donor-badge-locked:hover {
+  opacity: 0.74;
+  filter: saturate(0.8);
+  transform: translateY(-2px);
 }
 
 .donor-chain-topbar {
