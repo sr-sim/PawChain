@@ -12,11 +12,11 @@ import { TransactionLinks } from "@/app/components/TransactionLinks";
 import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import {
   campaignKeyFromId,
-  demoEthMyrRate,
   getCampaignFactoryAddress,
   getPawChainId,
   myrToWei,
 } from "@/lib/campaign-blockchain";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type Milestone = {
   id: string;
@@ -67,6 +67,7 @@ type Campaign = {
     refundedCount: number;
     donatedAmount: number;
     refundedDonationAmount: number;
+    refundedDonationAmountWei: string;
     latestRefundTxHash: string | null;
     latestRefundedAt: string | null;
   };
@@ -229,6 +230,7 @@ function Modal({
 }
 
 export default function CampaignManagementPage() {
+  const { rate: ethMyrRate, weiToMyr } = useEthMyrRate();
   const { address, isConnected } = useAppKitAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
@@ -481,7 +483,7 @@ export default function CampaignManagementPage() {
 
         const calculatedGoalWei = myrToWei(
           Number(campaign.goal_amount),
-          demoEthMyrRate,
+          ethMyrRate,
         );
         deadline =
           Math.floor(Date.now() / 1000) + campaign.duration_days * 24 * 60 * 60;
@@ -523,7 +525,7 @@ export default function CampaignManagementPage() {
           rejectionReason: reason.trim(),
           txHash,
           goalWei,
-          ethMyrRate: demoEthMyrRate,
+          ethMyrRate,
           deadline,
         }),
       });
@@ -1634,10 +1636,10 @@ export default function CampaignManagementPage() {
                 </div>
                 <div className="rounded-xl bg-white p-3">
                   <p className="text-lg font-black text-stone-950">
-                    {money(details.refund_summary.refundedDonationAmount)}
+                    {money(weiToMyr(details.refund_summary.refundedDonationAmountWei))}
                   </p>
                   <p className="text-xs font-semibold text-stone-500">
-                    refunded donation value
+                    Approx. live MYR refunded value
                   </p>
                 </div>
                 <div className="rounded-xl bg-white p-3">
