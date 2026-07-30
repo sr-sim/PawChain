@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
+import { withLiveCampaignStatus } from "@/lib/shelter-campaign-status";
 import { parseEther } from "viem";
 
 type UrgencyLevel = "medium" | "high" | "critical";
@@ -137,7 +138,12 @@ export async function GET(
       throw milestoneError;
     }
 
-    return NextResponse.json({ campaign, milestones: milestones ?? [] });
+    const liveCampaign = await withLiveCampaignStatus(campaign);
+
+    return NextResponse.json({
+      campaign: liveCampaign,
+      milestones: milestones ?? [],
+    });
   } catch (error) {
     return NextResponse.json(
       {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { withLiveCampaignStatuses } from "@/lib/shelter-campaign-status";
 
 export type ShelterCampaignRecord = {
   id: string;
@@ -9,6 +10,7 @@ export type ShelterCampaignRecord = {
   current_amount: number | string | null;
   campaign_status: string;
   contract_address: string | null;
+  eth_myr_rate: number | string | null;
   created_at: string;
 };
 
@@ -29,8 +31,11 @@ export type ShelterDonationRecord = {
   campaign_id: string;
   donor_id: string;
   amount: number | string;
+  amount_wei: string | null;
   currency: string;
   tx_hash: string;
+  refund_tx_hash: string | null;
+  refunded_at: string | null;
   status: string;
   created_at: string;
   donor_name: string | null;
@@ -48,13 +53,15 @@ export async function getShelterPortalData(userId?: string | null) {
   const supabase = createAdminClient();
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id, title, goal_amount, current_amount, campaign_status, contract_address, created_at")
+    .select("id, title, goal_amount, current_amount, campaign_status, contract_address, eth_myr_rate, created_at")
     .eq("shelter_id", userId)
     .order("created_at", { ascending: false });
 
   if (campaignError || !campaignRows?.length) return empty;
 
-  const campaigns = campaignRows as ShelterCampaignRecord[];
+  const campaigns = await withLiveCampaignStatuses(
+    campaignRows as ShelterCampaignRecord[],
+  );
   const campaignIds = campaigns.map((campaign) => campaign.id);
   const [{ data: milestoneRows }, { data: donationRows }] = await Promise.all([
     supabase
@@ -64,7 +71,7 @@ export async function getShelterPortalData(userId?: string | null) {
       .order("on_chain_index", { ascending: true }),
     supabase
       .from("donations")
-      .select("id, campaign_id, donor_id, amount, currency, tx_hash, status, created_at")
+      .select("id, campaign_id, donor_id, amount, amount_wei, currency, tx_hash, refund_tx_hash, refunded_at, status, created_at")
       .in("campaign_id", campaignIds)
       .order("created_at", { ascending: false }),
   ]);

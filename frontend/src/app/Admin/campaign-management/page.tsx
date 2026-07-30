@@ -62,6 +62,14 @@ type Campaign = {
   updated_at: string;
   rejection_reason: string | null;
   campaign_milestones: Milestone[];
+  refund_summary?: {
+    donationCount: number;
+    refundedCount: number;
+    donatedAmount: number;
+    refundedDonationAmount: number;
+    latestRefundTxHash: string | null;
+    latestRefundedAt: string | null;
+  };
 };
 type Tab =
   | "All Campaigns"
@@ -107,6 +115,7 @@ const date = (value: string) =>
   new Intl.DateTimeFormat("en-MY", { dateStyle: "medium" }).format(
     new Date(value),
   );
+const shortHash = (value: string) => `${value.slice(0, 8)}...${value.slice(-6)}`;
 const isApproved = (status: string) =>
   status === "active" || status === "approved";
 const effectiveCampaignStatus = (campaign: Campaign) =>
@@ -1189,6 +1198,31 @@ export default function CampaignManagementPage() {
                               {campaign.rejection_reason}
                             </div>
                           ) : null}
+                          {campaign.refund_summary?.refundedCount ? (
+                            <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 p-3 text-xs font-bold text-sky-800">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span>
+                                  {campaign.refund_summary.refundedCount} refund
+                                  {campaign.refund_summary.refundedCount === 1
+                                    ? ""
+                                    : "s"}{" "}
+                                  claimed
+                                </span>
+                                {campaign.refund_summary.latestRefundTxHash ? (
+                                  <a
+                                    href={`https://sepolia.etherscan.io/tx/${campaign.refund_summary.latestRefundTxHash}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-black text-sky-700 underline-offset-4 hover:underline"
+                                  >
+                                    {shortHash(
+                                      campaign.refund_summary.latestRefundTxHash,
+                                    )}
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : null}
                           <div className="mt-4 flex flex-wrap gap-2 border-t border-orange-100 pt-3">
                             <button
                               onClick={() => setDetails(campaign)}
@@ -1582,6 +1616,50 @@ export default function CampaignManagementPage() {
                 Rejection reason:
               </span>{" "}
               {details.rejection_reason}
+            </div>
+          ) : null}
+          {details.refund_summary?.refundedCount ? (
+            <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-700">
+                Refund activity
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-lg font-black text-stone-950">
+                    {details.refund_summary.refundedCount}
+                  </p>
+                  <p className="text-xs font-semibold text-stone-500">
+                    donors refunded
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-lg font-black text-stone-950">
+                    {money(details.refund_summary.refundedDonationAmount)}
+                  </p>
+                  <p className="text-xs font-semibold text-stone-500">
+                    refunded donation value
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-xs font-semibold text-stone-500">
+                    Latest refund tx
+                  </p>
+                  {details.refund_summary.latestRefundTxHash ? (
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${details.refund_summary.latestRefundTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-flex break-all text-sm font-black text-sky-700 underline-offset-4 hover:underline"
+                    >
+                      {shortHash(details.refund_summary.latestRefundTxHash)}
+                    </a>
+                  ) : (
+                    <p className="mt-1 text-sm font-black text-stone-950">
+                      No tx
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           ) : null}
           <h3 className="mt-6 text-xl font-black">Milestone plan</h3>

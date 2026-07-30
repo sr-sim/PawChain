@@ -95,6 +95,8 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
       campaign_status:
         chainState?.campaignStatus === 1
           ? "completed"
+          : chainState?.campaignStatus === 2 || chainState?.campaignStatus === 3
+            ? "closed"
           : campaign.campaign_status,
       chainState,
     };

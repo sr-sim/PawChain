@@ -3,6 +3,7 @@ import { readableStatus } from "./campaign-utils";
 
 type StatusBadgeProps = {
   status: CampaignStatus | MilestoneStatus;
+  label?: string;
 };
 
 const statusStyles: Record<CampaignStatus | MilestoneStatus, string> = {
@@ -16,7 +17,7 @@ const statusStyles: Record<CampaignStatus | MilestoneStatus, string> = {
   approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
 };
 
-export function StatusBadge({ status }: StatusBadgeProps) {
+export function StatusBadge({ status, label }: StatusBadgeProps) {
   return (
     <span
       className={[
@@ -24,7 +25,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         statusStyles[status],
       ].join(" ")}
     >
-      {readableStatus(status)}
+      {label ?? readableStatus(status)}
     </span>
   );
 }

@@ -22,7 +22,7 @@ export function getExplorerNetworkName() {
   const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? "31337");
 
   if (chainId === 11155111) {
-    return "Sepolia";
+    return "On-chain";
   }
 
   if (chainId === 1) {

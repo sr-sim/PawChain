@@ -39,6 +39,57 @@ export async function GET(request: NextRequest) {
       : { data: [] };
     const profileMap = new Map((profiles ?? []).map((item) => [item.id, item.full_name]));
     const walletMap = new Map((profiles ?? []).map((item) => [item.id, item.wallet_address]));
+    const campaignIds = (campaigns ?? []).map((item) => item.id);
+    const { data: donationRows } = campaignIds.length
+      ? await supabase
+          .from("donations")
+          .select("campaign_id, amount, amount_wei, status, tx_hash, refund_tx_hash, refunded_at")
+          .in("campaign_id", campaignIds)
+      : { data: [] };
+    const refundSummary = new Map<
+      string,
+      {
+        donationCount: number;
+        refundedCount: number;
+        donatedAmount: number;
+        refundedDonationAmount: number;
+        latestRefundTxHash: string | null;
+        latestRefundedAt: string | null;
+      }
+    >();
+
+    (donationRows ?? []).forEach((donation) => {
+      const existing =
+        refundSummary.get(donation.campaign_id) ?? {
+          donationCount: 0,
+          refundedCount: 0,
+          donatedAmount: 0,
+          refundedDonationAmount: 0,
+          latestRefundTxHash: null,
+          latestRefundedAt: null,
+        };
+
+      existing.donationCount += 1;
+      existing.donatedAmount += Number(donation.amount ?? 0);
+
+      if (donation.refund_tx_hash) {
+        existing.refundedCount += 1;
+        existing.refundedDonationAmount += Number(donation.amount ?? 0);
+
+        if (
+          !existing.latestRefundedAt ||
+          (donation.refunded_at &&
+            new Date(donation.refunded_at).getTime() >
+              new Date(existing.latestRefundedAt).getTime())
+        ) {
+          existing.latestRefundTxHash = donation.refund_tx_hash;
+          existing.latestRefundedAt = donation.refunded_at ?? null;
+        }
+      }
+
+      refundSummary.set(donation.campaign_id, existing);
+    });
+
     const publicClient = getPawChainPublicClient();
     const onChainCampaigns = await Promise.all(
       (campaigns ?? []).map(async (item) => {
@@ -89,6 +140,15 @@ export async function GET(request: NextRequest) {
         ...item,
         shelter_name: profileMap.get(item.shelter_id) ?? null,
         shelter_wallet: walletMap.get(item.shelter_id) ?? null,
+        refund_summary:
+          refundSummary.get(item.id) ?? {
+            donationCount: 0,
+            refundedCount: 0,
+            donatedAmount: 0,
+            refundedDonationAmount: 0,
+            latestRefundTxHash: null,
+            latestRefundedAt: null,
+          },
       })),
     });
   } catch (error) {
