@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
         refundedCount: number;
         donatedAmount: number;
         refundedDonationAmount: number;
+        refundedDonationAmountWei: string;
         latestRefundTxHash: string | null;
         latestRefundedAt: string | null;
       }
@@ -65,6 +66,7 @@ export async function GET(request: NextRequest) {
           refundedCount: 0,
           donatedAmount: 0,
           refundedDonationAmount: 0,
+          refundedDonationAmountWei: "0",
           latestRefundTxHash: null,
           latestRefundedAt: null,
         };
@@ -75,6 +77,10 @@ export async function GET(request: NextRequest) {
       if (donation.refund_tx_hash) {
         existing.refundedCount += 1;
         existing.refundedDonationAmount += Number(donation.amount ?? 0);
+        existing.refundedDonationAmountWei = (
+          BigInt(existing.refundedDonationAmountWei) +
+          BigInt(String(donation.amount_wei ?? "0"))
+        ).toString();
 
         if (
           !existing.latestRefundedAt ||
@@ -146,6 +152,7 @@ export async function GET(request: NextRequest) {
             refundedCount: 0,
             donatedAmount: 0,
             refundedDonationAmount: 0,
+            refundedDonationAmountWei: "0",
             latestRefundTxHash: null,
             latestRefundedAt: null,
           },

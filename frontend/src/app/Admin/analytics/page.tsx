@@ -6,6 +6,7 @@ import { formatEther } from "viem";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type AnalyticsData = {
   range: { from: string; to: string; period: string };
@@ -164,7 +165,7 @@ function MetricCard({
   );
 }
 
-function TrendChart({ data }: { data: AnalyticsData["trend"] }) {
+function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number }) {
   if (!data.length) {
     return <EmptyState text="Donation activity will appear after confirmed donations in this period." />;
   }
@@ -198,7 +199,7 @@ function TrendChart({ data }: { data: AnalyticsData["trend"] }) {
             return (
               <g key={item.date}>
                 <rect x={x(index) - barWidth / 2} y={padding + plotHeight - barHeight} width={barWidth} height={barHeight} rx="4" fill="#fdba74">
-                  <title>{`${item.date}: ${eth(item.amountEth)}, ${item.count} donations, ${money(item.amountMyr)}`}</title>
+                  <title>{`${item.date}: ${eth(item.amountEth)}, ${item.count} donations, ${money(item.amountEth * rate)}`}</title>
                 </rect>
                 {(index === 0 || index === data.length - 1 || index % Math.ceil(data.length / 5) === 0) ? (
                   <text x={x(index)} y={height - 8} textAnchor="middle" fontSize="10" fill="#78716c">
@@ -263,6 +264,7 @@ function EmptyState({ text }: { text: string }) {
 
 export default function AdminAnalyticsPage() {
   const { address, isConnected } = useAppKitAccount();
+  const { rate: ethMyrRate, ethToMyr, weiToMyr } = useEthMyrRate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [period, setPeriod] = useState("30");
   const [campaignId, setCampaignId] = useState("all");
@@ -350,15 +352,15 @@ export default function AdminAnalyticsPage() {
           {!loading && data ? (
             <>
               <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Donations received" value={eth(data.financial.donatedWei)} secondary={money(data.financial.donatedMyr)} change={data.financial.donationChange} />
-                <MetricCard label="Milestone funds released" value={eth(data.financial.releasedWei)} secondary={money(data.financial.releasedMyr)} tone="emerald" />
-                <MetricCard label="Funds currently locked" value={eth(data.financial.lockedWei)} secondary={money(data.financial.lockedMyr)} tone="blue" />
-                <MetricCard label="Refunds returned to donors" value={eth(data.financial.refundedWei)} secondary={money(data.financial.refundedMyr)} tone="stone" />
+                <MetricCard label="Donations received" value={eth(data.financial.donatedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.donatedWei))}`} change={data.financial.donationChange} />
+                <MetricCard label="Milestone funds released" value={eth(data.financial.releasedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.releasedWei))}`} tone="emerald" />
+                <MetricCard label="Funds currently locked" value={eth(data.financial.lockedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.lockedWei))}`} tone="blue" />
+                <MetricCard label="Refunds returned to donors" value={eth(data.financial.refundedWei)} secondary={`Approx. live MYR ${money(weiToMyr(data.financial.refundedWei))}`} tone="stone" />
               </section>
 
               <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
                 <Panel title="Donation activity" description="Confirmed ETH donations and transaction volume during the selected period.">
-                  <TrendChart data={data.trend} />
+                  <TrendChart data={data.trend} rate={ethMyrRate} />
                 </Panel>
                 <Panel title="Donor participation" description="Wallet-based engagement for confirmed donations.">
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -383,7 +385,7 @@ export default function AdminAnalyticsPage() {
                     <Donut center={eth(fundTotal)} data={data.fundDistribution.map((item, index) => ({ label: `${item.label} · ${eth(item.amountEth)}`, value: item.amountEth, color: ["#10b981", "#38bdf8", "#78716c"][index] }))} />
                   ) : <EmptyState text="No confirmed financial distribution is available for this period." />}
                   <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    {data.fundDistribution.map((item) => <div key={item.label} className="rounded-lg bg-stone-50 p-3"><p className="text-[10px] font-bold uppercase text-stone-400">{item.label}</p><p className="mt-1 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">Approx. {money(item.amountMyr)}</p></div>)}
+                    {data.fundDistribution.map((item) => <div key={item.label} className="rounded-lg bg-stone-50 p-3"><p className="text-[10px] font-bold uppercase text-stone-400">{item.label}</p><p className="mt-1 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">Approx. live MYR {money(ethToMyr(item.amountEth))}</p></div>)}
                   </div>
                 </Panel>
                 <Panel title="Campaign portfolio" description="Funding health and time-sensitive campaign indicators." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">Manage campaigns ↗</Link>}>

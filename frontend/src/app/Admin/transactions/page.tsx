@@ -10,6 +10,7 @@ import type {
   FinancialTransaction,
   FinancialTransactionType,
 } from "@/lib/financial-transactions";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type Summary = {
   donationMyr: number;
@@ -84,6 +85,7 @@ function shortWallet(value: string) {
 
 export default function AdminTransactionsPage() {
   const { address, isConnected } = useAppKitAccount();
+  const { weiToMyr, source: rateSource } = useEthMyrRate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [summary, setSummary] = useState(initialSummary);
@@ -283,17 +285,17 @@ export default function AdminTransactionsPage() {
               {
                 label: "Donations received",
                 value: eth(summary.donationWei),
-                secondary: `Approx. ${money(summary.donationMyr)}`,
+                secondary: `Approx. live MYR ${money(weiToMyr(summary.donationWei))}`,
               },
               {
                 label: "Refunds returned to donors",
                 value: eth(summary.refundWei),
-                secondary: `Approx. ${money(summary.refundMyr)}`,
+                secondary: `Approx. live MYR ${money(weiToMyr(summary.refundWei))}`,
               },
               {
                 label: "Milestone funds released",
                 value: eth(summary.fundReleaseWei),
-                secondary: `Approx. ${money(summary.fundReleaseMyr)}`,
+                secondary: `Approx. live MYR ${money(weiToMyr(summary.fundReleaseWei))}`,
               },
             ].map(({ label, value, secondary }, index) => (
               <div key={label} className="relative overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white p-5 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
@@ -319,7 +321,7 @@ export default function AdminTransactionsPage() {
             <div className="border-b border-orange-100 bg-orange-50/35 p-4 sm:p-5">
               <div className="mb-3">
                 <h2 className="text-base font-black text-stone-950">Financial transaction records</h2>
-                <p className="mt-0.5 text-xs font-medium text-stone-500">Search and verify confirmed on-chain financial activity.</p>
+                <p className="mt-0.5 text-xs font-medium text-stone-500">Search and verify confirmed on-chain financial activity. MYR estimates use the {rateSource === "coingecko" ? "live CoinGecko" : "configured fallback"} rate.</p>
               </div>
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(190px,0.75fr)_210px_155px_150px_150px]">
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search hash, wallet, or campaign" className="rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
@@ -365,7 +367,7 @@ export default function AdminTransactionsPage() {
                     <span className="font-mono text-xs text-stone-600">{shortWallet(item.walletAddress)}</span>
                     <div>
                       <p className="text-sm font-bold text-stone-900">{eth(item.amountWei)}</p>
-                      {item.amountMyr !== null ? <p className="mt-0.5 text-[11px] font-medium text-stone-400">≈ {money(item.amountMyr)}</p> : null}
+                      <p className="mt-0.5 text-[11px] font-medium text-stone-400">Approx. live MYR {money(weiToMyr(item.amountWei))}</p>
                       <p className="mt-0.5 text-[10px] font-medium uppercase text-stone-400">{item.status}</p>
                     </div>
                     <span className="text-xs font-medium text-stone-500">{dateTime(item.occurredAt)}</span>
@@ -397,7 +399,7 @@ export default function AdminTransactionsPage() {
               <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">{isDemoDonation ? "Demo donation preview" : "New donation confirmed"}</p><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" /></div>
               {isDemoDonation ? <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-orange-600">Interface preview only · not on-chain</p> : null}
               <p className="mt-1 text-lg font-bold text-stone-950">{eth(displayedDonation.amountWei)}</p>
-              {displayedDonation.amountMyr !== null ? <p className="text-xs font-medium text-stone-400">≈ {money(displayedDonation.amountMyr)}</p> : null}
+              <p className="text-xs font-medium text-stone-400">Approx. live MYR {money(weiToMyr(displayedDonation.amountWei))}</p>
               <p className="mt-1 truncate text-sm font-medium text-stone-600">{displayedDonation.campaignTitle}</p>
               <p className="mt-1 font-mono text-xs text-stone-400">{shortWallet(displayedDonation.walletAddress)}</p>
               {!isDemoDonation ? <div className="mt-3"><TransactionLinks transactions={[{ label: "View donation tx", hash: displayedDonation.txHash }]} emptyMessage={false} /></div> : null}
