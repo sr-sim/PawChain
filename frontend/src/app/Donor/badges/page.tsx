@@ -217,7 +217,7 @@ export default async function DonorBadgesPage({
                 className={[
                   "rounded-2xl border p-4 shadow-sm",
                   active
-                    ? "donor-badge-glow border-[var(--color-orange)] bg-orange-50/45"
+                    ? "donor-badge-current donor-badge-glow border-[var(--color-orange)] bg-gradient-to-br from-orange-50 via-white to-[rgba(var(--color-gold-rgb),0.24)]"
                     : earned
                       ? "donor-badge-glow border-orange-200 bg-white"
                       : "border-orange-100 bg-white/80",

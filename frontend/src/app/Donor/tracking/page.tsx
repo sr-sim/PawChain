@@ -621,7 +621,11 @@ export default async function DonorTrackingPage({
                     ).map(
                       (milestone, index) => (
                         <div
-                          key={`${campaign.id}-${milestone.title}`}
+                          key={`${campaign.id}-${
+                            "id" in milestone && milestone.id
+                              ? milestone.id
+                              : `${index}-${milestone.title}`
+                          }`}
                           className="donor-ledger-row grid gap-3 px-3 py-2.5 sm:grid-cols-[1.75rem_minmax(0,1fr)_6.5rem] sm:items-center"
                         >
                           <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
