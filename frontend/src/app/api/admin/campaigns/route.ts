@@ -9,6 +9,7 @@ import {
 } from "@/lib/campaign-blockchain";
 import { campaignFactoryAbi } from "@/lib/campaign-factory-abi";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { notifyCampaignDonors } from "@/lib/donor-notifications";
 import {
   decodeEventLog,
   isAddress,
@@ -193,7 +194,7 @@ export async function POST(request: NextRequest) {
     }
     const supabase = await authorize(walletAddress);
     const { data: campaign, error: lookupError } = await supabase
-      .from("campaigns").select("id, shelter_id, campaign_status, deployment_tx_hash, contract_address, cancellation_tx_hash, cancelled_at, cancelled_by").eq("id", campaignId).single();
+      .from("campaigns").select("id, shelter_id, title, campaign_status, deployment_tx_hash, contract_address, cancellation_tx_hash, cancelled_at, cancelled_by").eq("id", campaignId).single();
     if (lookupError) throw lookupError;
 
     if (action === "cancel" || action === "finalize_expired") {
@@ -289,6 +290,14 @@ export async function POST(request: NextRequest) {
         )
         .eq("id", campaignId);
       if (cancelError) throw cancelError;
+      if (action === "cancel") {
+        await notifyCampaignDonors({
+          campaignId,
+          title: "Refund available",
+          message: `${campaign.title} was cancelled. You can now claim your eligible donation refund from the campaign contract.`,
+          status: "urgent",
+        });
+      }
       return NextResponse.json({
         status: "closed",
         cancellationTxHash: action === "cancel" ? txHash : null,
