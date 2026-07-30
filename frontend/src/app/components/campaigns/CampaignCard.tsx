@@ -48,6 +48,14 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
     functionName: "totalRaised",
     query: { enabled: Boolean(contractAddress) },
   });
+  const { data: onChainRefundPool } = useReadContract({
+    address: contractAddress,
+    abi: campaignContractAbi,
+    functionName: "refundPool",
+    query: {
+      enabled: Boolean(contractAddress && campaign.campaign_status === "closed"),
+    },
+  });
   const goalEth = onChainGoal !== undefined
     ? Number(formatEther(onChainGoal))
     : campaign.goal_wei
@@ -56,6 +64,9 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
   const raisedEth = onChainRaised !== undefined
     ? Number(formatEther(onChainRaised))
     : Number(campaign.current_amount || 0) / rate;
+  const refundPoolEth = onChainRefundPool !== undefined
+    ? Number(formatEther(onChainRefundPool))
+    : 0;
   const progress = getProgress(raisedEth, goalEth);
   const createdAt = campaign.created_at ? new Date(campaign.created_at).getTime() : Date.now();
   const remainingDays = Math.max(0, Math.ceil((createdAt + campaign.duration_days * 86400000 - Date.now()) / 86400000));
@@ -74,7 +85,12 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
         ) : (
           <div className="grid aspect-[16/7] place-items-center bg-[linear-gradient(135deg,rgba(var(--color-cream-rgb),0.92),rgba(var(--color-peach-rgb),0.44))] text-[var(--color-orange)]"><CampaignIcon /></div>
         )}
-        <div className="absolute bottom-3 left-3"><StatusBadge status={campaign.campaign_status} /></div>
+        <div className="absolute bottom-3 left-3">
+          <StatusBadge
+            status={campaign.campaign_status}
+            label={campaign.campaign_status === "closed" ? "Closed" : undefined}
+          />
+        </div>
       </div>
 
       <div className="p-4">
@@ -94,7 +110,20 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="mt-4 flex items-center justify-between border-t border-orange-100 pt-3 text-[11px] font-bold text-stone-500"><span>{milestoneCount ?? 0} milestone{milestoneCount === 1 ? "" : "s"}</span><span>{campaign.campaign_status === "completed" ? "Completed" : `${remainingDays} days left`}</span></div>
+          {campaign.campaign_status === "closed" ? (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+              <p className="text-[10px] font-black uppercase tracking-wide text-amber-700">
+                Reserved for donor refunds
+              </p>
+              <p className="mt-1 text-sm font-black text-stone-950">
+                {onChainRefundPool !== undefined
+                  ? `${refundPoolEth.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH`
+                  : "Reading on-chain..."}
+              </p>
+              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">about {formatCurrency(refundPoolEth * rate)} · claimed proportionally by donors</p> : null}
+            </div>
+          ) : null}
+          <div className="mt-4 flex items-center justify-between border-t border-orange-100 pt-3 text-[11px] font-bold text-stone-500"><span>{milestoneCount ?? 0} milestone{milestoneCount === 1 ? "" : "s"}</span><span>{campaign.campaign_status === "completed" ? "Completed" : campaign.campaign_status === "closed" ? "Closed" : `${remainingDays} days left`}</span></div>
         </div>
       </div>
     </>
