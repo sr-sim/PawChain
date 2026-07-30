@@ -111,6 +111,7 @@ export default function DonorSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [actionToast, setActionToast] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -167,6 +168,12 @@ export default function DonorSettingsPage() {
     };
   }, [walletAddress]);
 
+  useEffect(() => {
+    if (!actionToast) return;
+    const timer = window.setTimeout(() => setActionToast(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [actionToast]);
+
   async function saveProfile() {
     setIsSaving(true);
     setErrorMessage("");
@@ -194,6 +201,7 @@ export default function DonorSettingsPage() {
       setFullName(result.profile.fullName ?? "");
       setEmail(result.profile.email ?? "");
       setStatusMessage(result.message ?? "Donor profile updated.");
+      setActionToast("Profile changes saved.");
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to save donor profile.",
@@ -358,6 +366,11 @@ export default function DonorSettingsPage() {
             </div>
           </SettingsPanel>
         </section>
+      ) : null}
+      {actionToast ? (
+        <div className="fixed bottom-6 right-6 z-[130] max-w-sm rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-black text-stone-950 shadow-[0_20px_60px_rgba(28,25,23,0.18)]">
+          <p>{actionToast}</p>
+        </div>
       ) : null}
     </div>
   );

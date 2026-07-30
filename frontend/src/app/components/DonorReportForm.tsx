@@ -35,6 +35,7 @@ export default function DonorReportForm() {
   const [confirmReview, setConfirmReview] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submittedRequestId, setSubmittedRequestId] = useState("");
+  const [actionToast, setActionToast] = useState("");
   const selectedCampaign = campaigns.find(
     (campaign) => campaign.id === relatedCampaignId,
   );
@@ -42,6 +43,12 @@ export default function DonorReportForm() {
   const reportReference = useMemo(() => {
     return presetType === "report" ? "RPT-2026-014" : "DRQ-2026-008";
   }, [presetType]);
+
+  useEffect(() => {
+    if (!actionToast) return;
+    const timer = window.setTimeout(() => setActionToast(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [actionToast]);
 
   useEffect(() => {
     let isMounted = true;
@@ -126,6 +133,7 @@ export default function DonorReportForm() {
 
       setSubmittedRequestId(result.request?.id ?? "");
       setSubmitted(true);
+      setActionToast("Report submitted for admin review.");
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Unable to submit report.",
@@ -369,6 +377,11 @@ export default function DonorReportForm() {
           </p>
         </form>
       )}
+      {actionToast ? (
+        <div className="fixed bottom-6 right-6 z-[130] max-w-sm rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-black text-stone-950 shadow-[0_20px_60px_rgba(28,25,23,0.18)]">
+          <p>{actionToast}</p>
+        </div>
+      ) : null}
     </div>
   );
 }
