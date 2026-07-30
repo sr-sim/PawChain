@@ -42,6 +42,9 @@ type WalletProfile = {
   role: DbRole;
   email: string;
   fullName?: string;
+  accountStatus?: "active" | "deactivated";
+  deactivationReason?: string | null;
+  deactivationPending?: boolean;
   application?: ShelterApplicationStatus | null;
   nftVerified?: boolean;
   directDashboard?: boolean;
@@ -317,6 +320,9 @@ export function RoleChooser() {
     : roleOptions;
   const isShelterStatusView =
     walletProfile?.role === "shelter" && isShelterPending;
+  const isDeactivatedShelter =
+    walletProfile?.role === "shelter" &&
+    walletProfile.accountStatus === "deactivated";
 
   if (!isConnected || isComplete) {
     return null;
@@ -349,6 +355,12 @@ export function RoleChooser() {
         <section className="w-full max-w-6xl">
           {isWalletLookupLoading ? (
             <CheckingWalletCard address={address} />
+          ) : isDeactivatedShelter ? (
+            <DeactivatedShelterCard
+              address={address}
+              pending={walletProfile?.deactivationPending}
+              reason={walletProfile?.deactivationReason}
+            />
           ) : isShelterStatusView ? (
             <div
               className={`mx-auto w-full rounded-[2rem] border border-orange-100 bg-white/88 p-5 shadow-[0_24px_80px_rgba(120,72,16,0.18)] backdrop-blur-xl sm:p-6 ${
@@ -519,6 +531,100 @@ export function RoleChooser() {
         </section>
       </main>
 
+    </div>
+  );
+}
+
+function DeactivatedShelterCard({
+  address,
+  pending,
+  reason,
+}: {
+  address?: string;
+  pending?: boolean;
+  reason?: string | null;
+}) {
+  return (
+    <div className="mx-auto max-w-3xl overflow-hidden rounded-[2rem] border border-red-200 bg-white/92 shadow-[0_26px_90px_rgba(127,29,29,0.16)] backdrop-blur-xl">
+      <div className="border-b border-red-100 bg-red-50/80 px-6 py-5 sm:px-8">
+        <div className="flex items-center gap-4">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-red-100 text-2xl font-black text-red-700">
+            !
+          </span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-red-600">
+              Account access blocked
+            </p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
+              {pending
+                ? "Shelter deactivation in progress"
+                : "Shelter account permanently deactivated"}
+            </h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5 px-6 py-6 sm:px-8 sm:py-7">
+        <p className="text-sm font-semibold leading-6 text-stone-600">
+          PawChain found this wallet, but the linked shelter account has been
+          {pending
+            ? " blocked while PawChain completes the required campaign cancellations."
+            : " permanently deactivated by an administrator."}{" "}
+          You cannot access the shelter dashboard or manage campaigns and
+          milestone submissions.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-red-100 bg-red-50/55 p-4">
+            <p className="text-[10px] font-black uppercase tracking-wide text-red-600">
+              RoleNFT status
+            </p>
+            <p className="mt-1.5 text-sm font-black text-stone-950">
+              {pending
+                ? "Revocation pending campaign cancellation"
+                : "Shelter RoleNFT access revoked"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-orange-100 bg-orange-50/55 p-4">
+            <p className="text-[10px] font-black uppercase tracking-wide text-orange-700">
+              Campaign access
+            </p>
+            <p className="mt-1.5 text-sm font-black text-stone-950">
+              {pending
+                ? "Active campaigns are being cancelled"
+                : "All active campaigns cancelled"}
+            </p>
+          </div>
+        </div>
+
+        {reason ? (
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+              Administrator reason
+            </p>
+            <p className="mt-1.5 text-sm font-semibold leading-6 text-stone-700">
+              {reason}
+            </p>
+          </div>
+        ) : null}
+
+        {address ? (
+          <p className="break-all rounded-xl border border-stone-200 bg-white px-4 py-3 font-mono text-xs text-stone-500">
+            {address}
+          </p>
+        ) : null}
+
+        <p className="rounded-2xl border border-orange-200 bg-amber-50 px-4 py-3 text-sm font-bold text-stone-700">
+          If you believe this is a mistake, contact{" "}
+          <a
+            href="mailto:admin@gmail.com"
+            className="text-[var(--color-orange)] underline decoration-2 underline-offset-2"
+          >
+            admin@gmail.com
+          </a>
+          .
+        </p>
+      </div>
     </div>
   );
 }

@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
 
       const { data: profileWithId } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, account_status, deactivation_reason")
         .ilike("wallet_address", walletAddress)
         .maybeSingle();
       const application =
@@ -100,8 +100,11 @@ export async function GET(request: NextRequest) {
       const isPendingShelter =
         profile.role === "shelter" &&
         (application?.status === "pending" || application?.status === "rejected");
+      const isDeactivatedShelter =
+        profile.role === "shelter" &&
+        profileWithId?.account_status === "deactivated";
 
-      if (!roleStatus.hasNFT && !isPendingShelter) {
+      if (!roleStatus.hasNFT && !isPendingShelter && !isDeactivatedShelter) {
         return NextResponse.json({
           profile: null,
           nftVerified: false,
@@ -115,8 +118,12 @@ export async function GET(request: NextRequest) {
           email: profile.email,
           fullName: profile.full_name,
           application,
+          accountStatus: profileWithId?.account_status ?? "active",
+          deactivationReason: profileWithId?.deactivation_reason ?? null,
+          deactivationPending: isDeactivatedShelter && roleStatus.hasNFT,
           nftVerified: roleStatus.hasNFT,
-          directDashboard: roleStatus.hasNFT && !isPendingShelter,
+          directDashboard:
+            roleStatus.hasNFT && !isPendingShelter && !isDeactivatedShelter,
         },
         nftVerified: roleStatus.hasNFT,
         contractRole: roleStatus.contractRole,
@@ -125,7 +132,7 @@ export async function GET(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, role, email, full_name")
+      .select("id, role, email, full_name, account_status, deactivation_reason")
       .ilike("wallet_address", walletAddress)
       .eq("role", roleStatus.hasNFT ? roleStatus.dbRole : "shelter")
       .maybeSingle();
@@ -136,8 +143,11 @@ export async function GET(request: NextRequest) {
     const isPendingShelter =
       profile?.role === "shelter" &&
       (application?.status === "pending" || application?.status === "rejected");
+    const isDeactivatedShelter =
+      profile?.role === "shelter" &&
+      profile.account_status === "deactivated";
 
-    if (!roleStatus.hasNFT && !isPendingShelter) {
+    if (!roleStatus.hasNFT && !isPendingShelter && !isDeactivatedShelter) {
       return NextResponse.json({
         profile: null,
         nftVerified: false,
@@ -153,8 +163,14 @@ export async function GET(request: NextRequest) {
               email: profile.email,
               fullName: profile.full_name,
               application,
+              accountStatus: profile.account_status,
+              deactivationReason: profile.deactivation_reason,
+              deactivationPending: isDeactivatedShelter && roleStatus.hasNFT,
               nftVerified: roleStatus.hasNFT,
-              directDashboard: roleStatus.hasNFT && !isPendingShelter,
+              directDashboard:
+                roleStatus.hasNFT &&
+                !isPendingShelter &&
+                !isDeactivatedShelter,
             }
           : null,
         nftVerified: roleStatus.hasNFT,
