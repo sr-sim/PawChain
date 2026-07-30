@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { ConnectWallet } from "./ConnectWallet";
 
@@ -36,6 +36,7 @@ export function DashboardTopBar({
   onMarkAllNotificationsRead,
 }: DashboardTopBarProps) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement | null>(null);
   const [adminNotifications, setAdminNotifications] = useState<
     NotificationPreview[]
   >([]);
@@ -119,6 +120,35 @@ export function DashboardTopBar({
     };
   }, [address, adminReadStorageKey, isAdmin, isConnected]);
 
+  useEffect(() => {
+    if (!isNotificationOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
+        setIsNotificationOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsNotificationOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isNotificationOpen]);
+
   return (
     <header className="donor-chain-topbar fixed inset-x-0 top-0 z-50 border-b border-orange-100 bg-white/92 shadow-[0_10px_32px_rgba(80,48,12,0.08)] backdrop-blur-2xl">
       <div className="flex min-h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
@@ -178,7 +208,7 @@ export function DashboardTopBar({
         </div>
         <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
           {resolvedNotificationHref ? (
-            <div className="relative">
+            <div ref={notificationRef} className="relative">
               <button
                 type="button"
                 aria-label="Open notifications"

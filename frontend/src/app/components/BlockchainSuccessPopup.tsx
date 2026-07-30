@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type BlockchainSuccessPopupProps = {
   open: boolean;
@@ -33,10 +34,26 @@ export function BlockchainSuccessPopup({
   );
   const hasTransaction = validHash || validTransactions.length > 0;
   const onCloseRef = useRef(onClose);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || !hasTransaction || status !== "confirmed" || autoCloseMs <= 0)
@@ -45,7 +62,7 @@ export function BlockchainSuccessPopup({
     return () => window.clearTimeout(timer);
   }, [autoCloseMs, hasTransaction, open, status]);
 
-  if (!open) return null;
+  if (!mounted || !open) return null;
 
   const pending = status === "pending";
   const failed = status === "failed";
@@ -65,13 +82,13 @@ export function BlockchainSuccessPopup({
       ? "text-red-700"
       : "text-emerald-700";
 
-  return (
-    <div className="fixed inset-0 z-[140] grid place-items-center bg-stone-950/30 p-4 backdrop-blur-sm">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] grid place-items-center overflow-y-auto bg-[rgba(var(--color-cream-rgb),0.78)] p-4 backdrop-blur-sm">
       <aside
         role={failed ? "alert" : "status"}
         aria-live={failed ? "assertive" : "polite"}
         aria-busy={pending}
-        className={`w-[min(27rem,calc(100vw-2rem))] animate-[blockchain-success-in_320ms_ease-out] overflow-hidden rounded-2xl border bg-white shadow-[0_30px_90px_rgba(28,25,23,0.3)] motion-reduce:animate-none ${accent}`}
+        className={`max-h-[calc(100vh-2rem)] w-[min(27rem,calc(100vw-2rem))] animate-[blockchain-success-in_320ms_ease-out] overflow-hidden rounded-2xl border bg-white shadow-[0_30px_90px_rgba(28,25,23,0.18)] motion-reduce:animate-none ${accent}`}
       >
         <div
           className={`h-1 ${
@@ -100,10 +117,10 @@ export function BlockchainSuccessPopup({
                 className={`text-[10px] font-black uppercase tracking-[0.14em] ${labelTone}`}
               >
                 {pending
-                  ? "Pending blockchain confirmation"
+                  ? "Confirmation pending"
                   : failed
                     ? "Transaction not completed"
-                    : "Smart contract confirmed"}
+                    : "Transaction confirmed"}
               </p>
               <h2 className="mt-1 text-base font-black text-stone-950">
                 {title}
@@ -185,6 +202,7 @@ export function BlockchainSuccessPopup({
           }
         `}</style>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
