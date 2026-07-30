@@ -90,7 +90,7 @@ function FieldLabel({
 }) {
   return (
     <div className="block">
-      <span className="text-xs font-black uppercase tracking-[0.14em] text-stone-600">
+      <span className="text-sm font-black uppercase tracking-[0.12em] text-stone-700">
         {label}
       </span>
       <div className="mt-2">{children}</div>
@@ -103,11 +103,13 @@ function ThemedDropdown({
   onChange,
   placeholder,
   options,
+  leadingIcon,
 }: {
   value: string;
   placeholder: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  leadingIcon?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -136,13 +138,13 @@ function ThemedDropdown({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className={[
-          "flex w-full items-center justify-between gap-3 rounded-2xl border bg-orange-50/40 px-4 py-3 text-left text-sm font-black leading-6 text-stone-950 outline-none transition",
+          "flex w-full items-center justify-between gap-3 rounded-2xl border bg-orange-50/40 px-4 py-3 text-left text-base font-black leading-6 text-stone-950 outline-none transition",
           open
             ? "border-[var(--color-orange)] bg-white ring-4 ring-orange-100"
             : "border-orange-100 hover:bg-orange-50",
         ].join(" ")}
       >
-        <span>{selectedLabel || placeholder}</span>
+        <span className="flex items-center gap-3">{leadingIcon}{selectedLabel || placeholder}</span>
         <span
           className={[
             "grid h-5 w-5 shrink-0 place-items-center transition-transform duration-200",
@@ -228,6 +230,20 @@ function normalizeEthInput(value: string) {
   return `${wholePart || "0"}.${decimalParts.join("").slice(0, 18)}`;
 }
 
+function proofRequirementItems(value: string) {
+  const explicitlySeparated = value
+    .split(/\r?\n|[,;•]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (explicitlySeparated.length > 1) return explicitlySeparated;
+
+  return value
+    .split(/\s+(?=[A-Z][A-Za-z-]*(?:\s|$))/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -263,14 +279,14 @@ function MilestoneEditorRow({
   const allocation = Number(goalAmount || 0) * Number(milestone.percentage || 0) / 100;
 
   return (
-    <article className={`relative rounded-2xl border p-4 pl-14 ${index === 0 ? "border-[#FFCD80] bg-[linear-gradient(135deg,#FFFCC9,#FFFFFF)]" : "border-orange-100 bg-white"}`}>
-      <span className="absolute left-3 top-5 grid h-8 w-8 place-items-center rounded-full border border-orange-200 bg-orange-50 text-sm font-black text-[var(--color-orange)]">{index + 1}</span>
-      <div className="grid gap-4 lg:grid-cols-[1.45fr_0.55fr_0.6fr_0.75fr_1fr_auto] lg:items-start">
+    <article className={`relative rounded-2xl border p-5 pl-16 ${index === 0 ? "border-[#FFCD80] bg-[linear-gradient(135deg,#FFFCC9,#FFFFFF)]" : "border-orange-200 bg-white"}`}>
+      <span className="absolute left-3 top-5 grid h-10 w-10 place-items-center rounded-full border border-orange-300 bg-orange-50 text-base font-black text-[var(--color-orange)]">{index + 1}</span>
+      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.55fr_0.6fr_0.8fr_1fr_auto] xl:items-start">
         <div className="space-y-2"><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Milestone title</label><input value={milestone.title} onChange={(event) => onUpdate("title", event.target.value)} placeholder={index === 0 ? "Name the emergency milestone" : `Milestone ${index + 1} title`} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 text-sm font-black outline-none focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100" required /><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Description</label><textarea value={milestone.description} onChange={(event) => onUpdate("description", event.target.value)} placeholder="Describe what this milestone will achieve" rows={2} className="w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required />{index === 0 ? <p className="rounded-lg bg-orange-50 px-2 py-1.5 text-[10px] font-bold text-orange-700">Usage proof is uploaded after this fund is withdrawn.</p> : null}</div>
         <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Percentage</label><div className="relative mt-2"><input value={milestone.percentage} onChange={(event) => onUpdate("percentage", event.target.value)} min="5" max="100" step="5" type="number" onWheel={preventWheelNumberChange} readOnly={index === 0} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 pr-7 text-sm font-black outline-none focus:border-[var(--color-orange)]" required /><span className="absolute right-3 top-2 text-xs font-black text-stone-400">%</span></div>{index === 0 ? <span className="mt-2 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Fixed</span> : null}</div>
         <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Cumulative</p><p className="mt-3 text-sm font-black text-stone-950">{cumulative}%</p></div>
         <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Est. allocation</p><p className="mt-3 text-sm font-black text-stone-950">{formatETH(allocation)}</p><p className="mt-1 text-[10px] font-bold text-stone-400">{formatMYR(allocation * ethMyrRate)}</p></div>
-        <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Proof requirement</label><textarea value={milestone.requirement} onChange={(event) => onUpdate("requirement", event.target.value)} placeholder="Invoices, receipts, reports or photos" rows={3} className="mt-2 w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required /></div>
+        <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Proof requirements</label><textarea value={milestone.requirement} onChange={(event) => onUpdate("requirement", event.target.value)} placeholder={"Add one proof item per line\ne.g. Veterinary invoice\nMedication receipt"} rows={4} className="mt-2 w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required /><p className="mt-1 text-[10px] font-semibold text-stone-400">Use a new line, comma, or semicolon between items.</p></div>
         <div>{index === 0 ? <span className="inline-flex rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Locked 5%</span> : <button type="button" onClick={onRemove} disabled={!canRemove} aria-label={`Remove milestone ${index + 1}`} className="rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 hover:bg-red-50 disabled:opacity-40">Delete</button>}</div>
       </div>
     </article>
@@ -316,9 +332,10 @@ export default function CreateCampaignPage() {
       !form.title.trim() ||
       !form.description.trim() ||
       !form.goalAmount ||
-      Number(form.goalAmount) <= 0
+      Number(form.goalAmount) <= 0 ||
+      !form.imageUrl
     ) {
-      setError("Complete the campaign information and enter a positive ETH goal. Values below 1 ETH are allowed.");
+      setError("Complete every required campaign field, upload a campaign image, and enter a positive ETH goal. Values below 1 ETH are allowed.");
       return false;
     }
 
@@ -464,11 +481,6 @@ export default function CreateCampaignPage() {
           {deactivationReason} Campaign creation is disabled.
         </div>
       ) : null}
-      <section className="flex flex-col gap-5 rounded-3xl border border-orange-100 bg-[linear-gradient(135deg,#FFFFFF,#FFFCC9_160%)] p-5 shadow-[0_18px_45px_rgba(111,69,20,0.08)] sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div><p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Create Campaign</p><h1 className="mt-2 text-3xl font-black text-stone-950 sm:text-4xl">{step === 1 ? "Campaign Information" : step === 2 ? "Set Milestones" : "Review & Submit"}</h1><p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-stone-600">{step === 1 ? "Create a new campaign and provide the information donors will see." : step === 2 ? "Divide the campaign goal into sequential milestone allocations." : "Review every detail before submitting the campaign for admin approval."}</p></div>
-        <div className="shrink-0 rounded-2xl border border-orange-200 bg-white/80 px-4 py-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Network</p><div className="mt-2 flex items-center gap-3 text-xs font-black"><span className="rounded-full bg-violet-50 px-3 py-1 text-violet-700 ring-1 ring-violet-200">Sepolia</span><span>Chain ID: 11155111</span></div></div>
-      </section>
-
       {!isConnected ? (
         <section className="rounded-2xl border border-orange-100 bg-white p-6 text-center shadow-[0_18px_48px_rgba(155,86,20,0.08)]">
           <h2 className="text-xl font-black text-stone-950">
@@ -491,11 +503,11 @@ export default function CreateCampaignPage() {
         onSubmit={(event) => event.preventDefault()}
         className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(155,86,20,0.08)] sm:p-6"
       >
-        <div className="mb-7 grid overflow-hidden rounded-2xl border border-orange-200 sm:grid-cols-3">
+        <div className="mb-7 grid overflow-hidden border-b-2 border-orange-100 sm:grid-cols-3">
           {[
-            { label: "Campaign Info", value: 1 },
-            { label: "Set Milestones", value: 2 },
-            { label: "Review & Submit", value: 3 },
+            { label: "Campaign Info", detail: "Tell us about your campaign", value: 1 },
+            { label: "Set Milestones", detail: "Define goals and milestones", value: 2 },
+            { label: "Review & Submit", detail: "Confirm and launch", value: 3 },
           ].map((item) => (
             <button
               key={item.value}
@@ -506,99 +518,135 @@ export default function CreateCampaignPage() {
                 if (item.value === 3 && validateStepOne() && validateMilestones()) setStep(3);
               }}
               className={[
-                "flex items-center justify-center gap-3 border-orange-100 px-4 py-4 text-sm font-black transition sm:border-r sm:last:border-r-0",
+                "relative flex items-center justify-center gap-3 px-4 py-4 text-left transition after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full",
                 step === item.value
-                  ? "bg-orange-50 text-[var(--color-orange)]"
-                  : step > item.value ? "bg-emerald-50/50 text-emerald-700" : "bg-white text-stone-600 hover:bg-orange-50",
+                  ? "bg-orange-50/40 text-[var(--color-orange)] after:bg-[var(--color-orange)]"
+                  : step > item.value ? "bg-emerald-50/30 text-emerald-700 after:bg-emerald-400" : "bg-white text-stone-600 after:bg-transparent hover:bg-orange-50",
               ].join(" ")}
             >
-              <span className={`grid h-7 w-7 place-items-center rounded-full text-xs ${step === item.value ? "bg-[var(--color-orange)] text-white" : step > item.value ? "bg-emerald-500 text-white" : "bg-stone-100 text-stone-600"}`}>{step > item.value ? "OK" : item.value}</span>{item.label}
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-black ${step === item.value ? "bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200" : step > item.value ? "bg-emerald-500 text-white" : "bg-stone-100 text-stone-700"}`}>{step > item.value ? "✓" : item.value}</span>
+              <span><span className="block text-sm font-black">{item.label}</span><span className="mt-0.5 block text-[11px] font-semibold text-stone-500">{item.detail}</span></span>
             </button>
           ))}
         </div>
 
         {step === 1 ? (
-          <div className="space-y-5 rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,#FFFFFF,#FFFDF7)] p-5 sm:p-6">
-            <div className="flex items-center gap-3 border-b border-orange-100 pb-4"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-lg text-[var(--color-orange)] ring-1 ring-orange-100">+</span><div><h2 className="text-xl font-black text-stone-950">Campaign Information</h2><p className="text-xs font-semibold text-stone-500">Fields marked as required must be completed before continuing.</p></div></div>
-            <FieldLabel label="Campaign Title *">
-              <input
-                value={form.title}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, title: event.target.value }))
-                }
-                placeholder="e.g. Emergency care for street dogs"
-                className="w-full rounded-xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
-                required
-              />
-            </FieldLabel>
+          <div className="space-y-6 rounded-2xl border border-orange-200 bg-[linear-gradient(135deg,#FFFFFF,#FFFDF7)] p-5 sm:p-6">
+            <div className="flex items-center gap-3 border-b-2 border-orange-200 pb-5">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-[var(--color-orange)] ring-1 ring-orange-100" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none"><path d="M7 3h8l3 3v15H7V3Zm8 0v4h4M10 11h5M10 15h5M10 19h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                <div><h2 className="text-2xl font-black text-stone-950">Campaign Information</h2><p className="text-sm font-semibold text-stone-600">Fields marked with <span className="text-[var(--color-orange)]">*</span> are required</p></div>
+              </div>
+            </div>
 
-            <FieldLabel label="Campaign Description *">
-              <textarea
-                value={form.description}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    description: event.target.value,
-                  }))
-                }
-                rows={5}
-                placeholder="Explain the situation, who needs help, and how the funds will be used."
-                className="w-full resize-none rounded-xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold leading-6 text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
-                required
-              />
-            </FieldLabel>
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(15rem,0.65fr)_minmax(14rem,0.55fr)]">
+              <FieldLabel label="Campaign Title *">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-3.5 grid h-6 w-6 place-items-center rounded-lg bg-orange-50" aria-hidden="true"><img src="/images/logo.png" alt="" className="h-5 w-5 object-contain" /></span>
+                  <input
+                    value={form.title}
+                    maxLength={80}
+                    onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                    placeholder="e.g. Emergency care for street dogs"
+                    className="w-full rounded-xl border border-orange-200 bg-white py-3.5 pl-12 pr-14 text-base font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
+                    required
+                  />
+                  <span className="absolute right-3 top-4 text-xs font-bold text-stone-500">{form.title.length}/80</span>
+                </div>
+              </FieldLabel>
 
-            <div className="grid gap-4 md:grid-cols-2">
               <FieldLabel label="Urgency Level *">
                 <ThemedDropdown
                   value={form.urgencyLevel}
                   placeholder="Select urgency"
                   options={urgencyOptions}
-                  onChange={(urgencyLevel) =>
-                    setForm((current) => ({
-                      ...current,
-                      urgencyLevel: urgencyLevel as UrgencyLevel,
-                    }))
-                  }
+                  leadingIcon={<span className="h-2.5 w-2.5 rounded-full bg-[var(--color-orange)]" aria-hidden="true" />}
+                  onChange={(urgencyLevel) => setForm((current) => ({ ...current, urgencyLevel: urgencyLevel as UrgencyLevel }))}
                 />
               </FieldLabel>
-            </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+              <aside className="space-y-3 lg:row-span-2">
+                <div className="relative min-h-36 overflow-hidden rounded-xl border border-orange-200 bg-[linear-gradient(135deg,#FFFDF8,#FFF4E5)] p-4 pr-24">
+                  <p className="flex items-center gap-2 text-sm font-black text-stone-950"><span className="grid h-5 w-5 place-items-center rounded-full bg-violet-700 text-xs text-white">i</span> What&apos;s urgency level?</p>
+                  <p className="mt-3 text-xs font-semibold leading-5 text-stone-600">It helps donors understand how time-sensitive your campaign is.</p>
+                  <img src="/images/donor-dashboard-pets-transparent.png" alt="" className="absolute -bottom-2 -right-2 h-24 w-24 object-contain" aria-hidden="true" />
+                </div>
+              </aside>
+
+              <div className="lg:col-span-2">
+                <FieldLabel label="Campaign Description *">
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-3.5 grid h-6 w-6 place-items-center rounded-lg bg-violet-50" aria-hidden="true"><img src="/images/logo.png" alt="" className="h-5 w-5 object-contain" /></span>
+                    <textarea
+                      value={form.description}
+                      maxLength={1000}
+                      onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                      rows={5}
+                      placeholder="Explain the situation, who needs help, and how the funds will be used."
+                      className="w-full resize-none rounded-xl border border-orange-200 bg-white py-3 pb-8 pl-12 pr-4 text-base font-bold leading-7 text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
+                      required
+                    />
+                    <span className="absolute bottom-3 right-3 text-xs font-bold text-stone-500">{form.description.length}/1000</span>
+                  </div>
+                </FieldLabel>
+              </div>
+
+              <div className="lg:col-start-1">
               <FieldLabel label="Goal Amount (ETH) *">
-                <input
-                  value={form.goalAmount}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      goalAmount: normalizeEthInput(event.target.value),
-                    }))
-                  }
-                  inputMode="decimal"
-                  type="text"
-                  placeholder="e.g. 0.5"
-                  className="w-full rounded-xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
-                  required
-                />
-                <p className="mt-2 text-xs font-bold text-stone-500">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)} at 1 ETH = MYR {ethMyrRate.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-3.5 grid h-6 w-6 place-items-center rounded-lg bg-violet-50" aria-hidden="true"><img src="/images/ethereum-logo.svg" alt="" className="h-4 w-4 object-contain" /></span>
+                  <input
+                    value={form.goalAmount}
+                    onChange={(event) => setForm((current) => ({ ...current, goalAmount: normalizeEthInput(event.target.value) }))}
+                    inputMode="decimal"
+                    type="text"
+                    placeholder="e.g. 0.5"
+                    className="w-full rounded-xl border border-orange-200 bg-white py-3.5 pl-12 pr-14 text-base font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
+                    required
+                  />
+                  <span className="absolute right-4 top-3.5 text-sm font-black text-stone-600">ETH</span>
+                </div>
+                <p className="mt-2 text-xs font-bold text-stone-600">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)} · 1 ETH ≈ MYR {ethMyrRate.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </FieldLabel>
+              </div>
 
+              <div>
               <FieldLabel label="Campaign Duration *">
                 <ThemedDropdown
                   value={form.durationDays}
                   placeholder="Select duration"
                   options={durationOptions}
-                  onChange={(durationDays) =>
-                    setForm((current) => ({
-                      ...current,
-                      durationDays: durationDays as CampaignForm["durationDays"],
-                    }))
-                  }
+                  leadingIcon={<span className="grid h-6 w-6 place-items-center rounded-lg bg-violet-50 text-violet-700" aria-hidden="true"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none"><path d="M4 6h12v10H4V6Zm0 3h12M7 3v4m6-4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>}
+                  onChange={(durationDays) => setForm((current) => ({ ...current, durationDays: durationDays as CampaignForm["durationDays"] }))}
                 />
               </FieldLabel>
+              </div>
             </div>
 
-            <div className="grid items-stretch gap-4 lg:grid-cols-2"><FieldLabel label="Campaign Image"><div className="flex h-full min-h-72 flex-col justify-between rounded-2xl border border-dashed border-orange-300 bg-orange-50/30 p-4 text-center"><div className="grid h-52 place-items-center overflow-hidden rounded-xl bg-white">{form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="max-h-52 w-full object-contain" /> : <p className="text-sm font-black text-stone-600">Upload campaign image<br /><span className="text-xs font-semibold text-stone-400">JPG or PNG</span></p>}</div><input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full text-xs font-semibold file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--color-orange)] file:px-3 file:py-2 file:font-black file:text-white" /></div></FieldLabel><div className="min-h-72 rounded-2xl border border-[#FFCD80] bg-[#FFFCC9]/45 p-5"><p className="text-sm font-black text-stone-950">Image tips</p><ul className="mt-3 space-y-2 text-xs font-semibold leading-5 text-stone-600"><li>Use a clear, high-quality image.</li><li>Images showing the animals usually receive more support.</li><li>Recommended landscape size: 1200 x 800px.</li></ul></div></div>
+            <div className="border-t-2 border-orange-200 pt-5">
+              <div className="grid items-stretch gap-5 lg:grid-cols-[1fr_1fr]">
+                <div className="flex h-full flex-col">
+                  <p className="text-sm font-black uppercase tracking-[0.12em] text-stone-700">Campaign Image <span className="text-[var(--color-orange)]">*</span></p>
+                  <div className="mt-2 flex min-h-60 flex-1 flex-col justify-between rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/20 p-4 text-center">
+                    <div className="grid min-h-36 place-items-center overflow-hidden rounded-xl bg-white">
+                      {form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="max-h-44 w-full object-contain" /> : <div><svg viewBox="0 0 24 24" className="mx-auto h-9 w-9 text-stone-600" fill="none"><path d="M7 17H5a4 4 0 0 1-.4-8A6 6 0 0 1 16.2 7 5 5 0 0 1 17 17h-2M12 12v8m0-8-3 3m3-3 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg><p className="mt-2 text-base font-black text-stone-800">Upload campaign image</p><p className="mt-1 text-xs font-semibold text-stone-500">JPG or PNG · Landscape recommended</p></div>}
+                    </div>
+                    <input required type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full text-sm font-semibold file:mr-3 file:rounded-lg file:border file:border-orange-300 file:bg-white file:px-3 file:py-2 file:font-black file:text-stone-800" />
+                  </div>
+                </div>
+                <div className="flex h-full flex-col">
+                  <p className="text-sm font-black uppercase tracking-[0.12em] text-stone-700">Image Tips</p>
+                <div className="mt-2 min-h-60 flex-1 rounded-2xl border-2 border-orange-200 bg-[linear-gradient(135deg,#FFFDF7,#FFF7EA)] p-5">
+                  <ul className="space-y-4 text-sm font-semibold leading-6 text-stone-700">
+                    {["Use a clear, high-quality image.", "Images showing the animals usually receive more support.", "Recommended landscape size: 1200 × 800px."].map((tip) => <li key={tip} className="flex gap-2"><span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--color-orange)] text-[9px] font-black text-white">✓</span>{tip}</li>)}
+                  </ul>
+                  <div className="mt-5 flex justify-end" aria-hidden="true"><img src="/images/logo.png" alt="" className="h-20 w-20 object-contain opacity-10" /></div>
+                </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : step === 2 ? (
           <div className="space-y-5">
@@ -665,28 +713,54 @@ export default function CreateCampaignPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <section className="rounded-3xl border border-orange-200 bg-[linear-gradient(135deg,#FFFFFF,#FFFCC9_170%)] p-5 shadow-[0_12px_30px_rgba(111,69,20,0.06)] sm:p-6">
-              <div className="flex items-center gap-3 border-b border-orange-100 pb-4"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--color-orange)] text-sm font-black text-white">1</span><div><h2 className="text-xl font-black text-stone-950">Campaign Summary</h2><p className="text-xs font-semibold text-stone-500">Final campaign details before submission</p></div></div>
-              <div className="mt-5 grid gap-6 lg:grid-cols-[15rem_1fr_18rem]">
-                <div className="grid h-64 place-items-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50">{form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="max-h-64 w-full object-contain" /> : <div className="grid h-64 place-items-center text-sm font-black text-orange-400">No campaign image</div>}</div>
-                <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-100">{form.urgencyLevel}</span></div><p className="mt-3 text-sm font-semibold leading-6 text-stone-600">{form.description}</p><dl className="mt-5 grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="font-bold text-stone-500">Goal</dt><dd className="font-black">{formatETH(form.goalAmount)} <span className="block text-xs text-stone-400">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)}</span></dd><dt className="font-bold text-stone-500">Duration</dt><dd className="font-black">{form.durationDays} days</dd></dl></div>
-                <aside className="space-y-4"><div className="rounded-2xl border border-[#FFCD80] bg-[#FFFCC9]/45 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Connected wallet</p><p className="mt-2 font-mono text-sm font-black">{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}</p><span className="mt-3 inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">Sepolia Network</span></div><div className="rounded-2xl border border-orange-100 bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Submission status</p><p className="mt-2 text-sm font-black text-stone-950">Pending admin approval</p><p className="mt-1 text-xs font-semibold leading-5 text-stone-500">The campaign contract is created only after approval succeeds.</p></div></aside>
+            <section className="rounded-3xl border-2 border-orange-200 bg-[linear-gradient(135deg,#FFFFFF,#FFFDF5)] p-5 shadow-[0_12px_30px_rgba(111,69,20,0.06)] sm:p-6">
+              <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--color-orange)] text-base font-black text-white">1</span><div><h2 className="text-2xl font-black text-stone-950">Campaign Summary</h2><p className="text-sm font-semibold text-stone-500">Final campaign details before submission</p></div></div>
+              <div className="mt-5 grid gap-5 xl:grid-cols-[16rem_minmax(0,1fr)_18rem]">
+                <div className="h-80 overflow-hidden rounded-2xl border-2 border-orange-200 bg-orange-50">{form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-base font-black text-orange-400">No campaign image</div>}</div>
+                <div className="rounded-2xl border border-orange-200 bg-white/70 p-5">
+                  <div className="flex flex-wrap items-center gap-3"><h3 className="text-3xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-200">{form.urgencyLevel}</span></div>
+                  <p className="mt-3 line-clamp-3 text-base font-semibold leading-7 text-stone-600">{form.description}</p>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50/30 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Goal</p><p className="mt-2 text-xl font-black">{formatETH(form.goalAmount)}</p><p className="mt-1 text-xs font-bold text-stone-500">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)}</p></div>
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50/30 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Duration</p><p className="mt-2 text-xl font-black">{form.durationDays} days</p><p className="mt-1 text-xs font-bold text-stone-500">Campaign period</p></div>
+                  </div>
+                </div>
+                <aside className="space-y-4">
+                  <div className="rounded-2xl border border-orange-200 bg-[#FFFCC9]/35 p-5"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Connected wallet</p><p className="mt-3 font-mono text-base font-black">{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}</p><span className="mt-3 inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">Sepolia Network</span></div>
+                  <div className="rounded-2xl border border-orange-200 bg-white p-5"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Submission status</p><p className="mt-3 text-base font-black text-[var(--color-orange)]">Pending admin approval</p><p className="mt-2 text-sm font-semibold leading-6 text-stone-500">The campaign contract is created only after approval succeeds.</p></div>
+                </aside>
               </div>
             </section>
 
-            <section className="rounded-3xl border border-orange-200 bg-white p-5 shadow-[0_12px_30px_rgba(111,69,20,0.06)] sm:p-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-sm font-black text-[var(--color-orange)] ring-1 ring-orange-100">2</span><div><h2 className="text-xl font-black text-stone-950">Milestones Overview</h2><p className="text-xs font-semibold text-stone-500">{milestones.length} milestones in total; the first allocation remains fixed at 5%</p></div></div><span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 ring-1 ring-emerald-200">Total: {totalPercentage}%</span></div>
-              <div className="relative mt-5 space-y-3 before:absolute before:bottom-8 before:left-[1.35rem] before:top-8 before:w-px before:bg-orange-200">
+            <section className="rounded-3xl border-2 border-orange-200 bg-white p-5 shadow-[0_12px_30px_rgba(111,69,20,0.06)] sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-[var(--color-orange)] text-base font-black text-white">2</span><div><h2 className="text-2xl font-black text-stone-950">Milestones Overview</h2><p className="text-sm font-semibold text-stone-500">{milestones.length} milestones in total; the first allocation remains fixed at 5%</p></div></div><span className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 ring-1 ring-emerald-200">Total: {totalPercentage}%</span></div>
+              <div className="relative mt-5 space-y-3 before:absolute before:bottom-8 before:left-[1.4rem] before:top-8 before:w-0.5 before:bg-orange-200">
                 {milestones.map((milestone, index) => {
                   const cumulative = milestones.slice(0, index + 1).reduce((sum, item) => sum + Number(item.percentage || 0), 0);
                   const allocation = Number(form.goalAmount || 0) * Number(milestone.percentage || 0) / 100;
-                  return <article key={`review-${index}`} className={`relative grid gap-4 rounded-2xl border p-4 pl-16 md:grid-cols-[1fr_7rem_8rem_10rem] md:items-center ${index === 0 ? "border-[#FFCD80] bg-[#FFFCC9]/35" : "border-orange-100 bg-white"}`}><span className="absolute left-3 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full border border-orange-200 bg-orange-50 text-base font-black text-[var(--color-orange)]">{index + 1}</span><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-black text-stone-950">{milestone.title}</h3>{index === 0 ? <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Fixed allocation</span> : null}</div><p className="mt-1 text-xs font-semibold leading-5 text-stone-500">{milestone.description}</p></div><div><p className="text-[10px] font-black uppercase text-stone-400">Percentage</p><p className="mt-1 text-lg font-black text-[var(--color-orange)]">{milestone.percentage}%</p></div><div><p className="text-[10px] font-black uppercase text-stone-400">Cumulative</p><p className="mt-1 text-sm font-black">{cumulative}%</p></div><div><p className="text-[10px] font-black uppercase text-stone-400">Allocation</p><p className="mt-1 text-sm font-black">{formatETH(allocation)}</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatMYR(allocation * demoEthMyrRate)}</p><p className="mt-1 line-clamp-2 text-[10px] font-semibold text-stone-500">{milestone.requirement}</p></div></article>;
+                  return (
+                    <article key={`review-${index}`} className={`relative rounded-2xl border-2 p-4 pl-16 ${index === 0 ? "border-orange-200 bg-[#FFFCC9]/25" : "border-orange-100 bg-white"}`}>
+                      <span className="absolute left-3 top-5 grid h-11 w-11 place-items-center rounded-full border border-orange-300 bg-orange-50 text-base font-black text-[var(--color-orange)]">{index + 1}</span>
+                      <details open className="group">
+                        <summary className="list-none [&::-webkit-details-marker]:hidden">
+                          <div className="grid cursor-pointer gap-4 md:grid-cols-[minmax(0,1fr)_7rem_8rem_11rem_auto] md:items-center">
+                            <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-base font-black text-stone-950">{milestone.title}</h3>{index === 0 ? <span className="rounded-full bg-violet-50 px-2 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">Fixed allocation</span> : null}</div><p className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-stone-500">{milestone.description}</p></div>
+                            <div><p className="text-xs font-black uppercase text-stone-400">Percentage</p><p className="mt-1 text-lg font-black text-[var(--color-orange)]">{milestone.percentage}%</p></div>
+                            <div><p className="text-xs font-black uppercase text-stone-400">Cumulative</p><p className="mt-1 text-base font-black">{cumulative}%</p></div>
+                            <div><p className="text-xs font-black uppercase text-stone-400">Allocation</p><p className="mt-1 text-base font-black">{formatETH(allocation)}</p><p className="mt-1 text-xs font-bold text-stone-500">{formatMYR(allocation * demoEthMyrRate)}</p></div>
+                            <span className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-center text-xs font-black text-stone-700 group-open:bg-orange-50">View details</span>
+                          </div>
+                        </summary>
+                        <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/55 p-4 text-sm font-semibold leading-6 text-stone-700">
+                          <p className="font-black text-stone-950">Proof required</p>
+                          <ul className="mt-2 list-disc space-y-1 pl-5">{proofRequirementItems(milestone.requirement).map((item, itemIndex) => <li key={`${item}-${itemIndex}`}>{item}</li>)}</ul>
+                        </div>
+                      </details>
+                    </article>
+                  );
                 })}
               </div>
-              <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-sm font-black text-emerald-800">Milestone configuration is valid</p><p className="mt-1 text-xs font-semibold text-emerald-700">Milestone 1 is 5%, the remaining milestones total 95%, and all allocations total 100%.</p></div>
             </section>
-
-            <section className="rounded-3xl border border-[#FFCD80] bg-[linear-gradient(135deg,#FFFDF8,#FFF4D9)] p-5 sm:p-6"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--color-orange)] text-sm font-black text-white">3</span><div><h2 className="text-xl font-black text-stone-950">Final Review & Submit</h2><p className="text-xs font-semibold text-stone-500">Please confirm these checks before submitting.</p></div></div><div className="mt-5 grid gap-3 rounded-2xl border border-orange-100 bg-white/70 p-4 sm:grid-cols-2">{["Campaign information is complete", "Wallet is connected to Sepolia", "Milestones total exactly 100%", "Milestone 1 allocation is fixed at 5%", "Every milestone has a shelter-provided title", "The campaign will enter admin review"].map((item) => <p key={item} className="flex items-center gap-2 text-sm font-bold text-stone-700"><span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500 text-[10px] font-black text-white">OK</span>{item}</p>)}</div></section>
           </div>
         )}
 
@@ -696,7 +770,19 @@ export default function CreateCampaignPage() {
           </p>
         ) : null}
 
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <div className="mt-6 flex flex-col gap-4 border-t-2 border-orange-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          {step === 1 ? (
+            <div className="flex items-center gap-3 text-xs font-semibold leading-5 text-stone-500">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-orange-200 bg-orange-50 text-[var(--color-orange)]" aria-hidden="true"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none"><path d="M12 3 5 6v5c0 4.2 2.8 7.3 7 9 4.2-1.7 7-4.8 7-9V6l-7-3Zm-3 9 2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+              <span className="font-black text-[var(--color-orange)]">Powered by PawChain</span>
+            </div>
+          ) : step === 3 ? (
+            <div className="flex items-center gap-3 text-sm font-semibold text-stone-500">
+              <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-orange-50 ring-1 ring-orange-200"><img src="/images/logo.png" alt="PawChain" className="h-full w-full object-contain" /></span>
+              <span>Powered by <span className="font-black text-[var(--color-orange)]">PawChain</span></span>
+            </div>
+          ) : <span />}
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           {step > 1 ? (
             <button
               type="button"
@@ -741,6 +827,7 @@ export default function CreateCampaignPage() {
               {isSubmitting ? "Submitting..." : "Submit Campaign for Approval"}
             </button>
           )}
+          </div>
         </div>
       </form>
     </div>

@@ -1,0 +1,52 @@
+.portal :global(.text-\[9px\]) {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.portal :global(.text-\[10px\]) {
+  font-size: 0.78rem;
+  line-height: 1.08rem;
+}
+
+.portal :global(.text-\[11px\]) {
+  font-size: 0.82rem;
+  line-height: 1.15rem;
+}
+
+.portal :global(.text-xs) {
+  font-size: 0.9rem;
+  line-height: 1.35rem;
+}
+
+.portal :global(.text-sm) {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.portal :global(.text-base) {
+  font-size: 1.08rem;
+  line-height: 1.65rem;
+}
+
+.portal :global(.text-lg) {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+}
+
+.portal :global(.text-xl) {
+  font-size: 1.45rem;
+  line-height: 1.9rem;
+}
+
+@media (max-width: 640px) {
+  .portal :global(.text-xs) {
+    font-size: 0.82rem;
+    line-height: 1.2rem;
+  }
+
+  .portal :global(.text-sm) {
+    font-size: 0.94rem;
+    line-height: 1.4rem;
+  }
+}
+

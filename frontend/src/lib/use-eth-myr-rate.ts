@@ -13,7 +13,7 @@ type RateResponse = {
   history?: { timestamp: number; rate: number }[];
 };
 
-export function useEthMyrRate() {
+export function useEthMyrRate(refreshIntervalMs = 0) {
   const [rate, setRate] = useState(demoEthMyrRate);
   const [source, setSource] = useState<RateSource>("fallback");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -60,8 +60,15 @@ export function useEthMyrRate() {
     }
 
     void loadRate();
-    return () => controller.abort();
-  }, []);
+    const interval = refreshIntervalMs > 0
+      ? window.setInterval(loadRate, refreshIntervalMs)
+      : undefined;
+
+    return () => {
+      controller.abort();
+      if (interval) window.clearInterval(interval);
+    };
+  }, [refreshIntervalMs]);
 
   return {
     rate,
