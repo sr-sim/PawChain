@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useChainId, usePublicClient, useWriteContract } from "wagmi";
-import { isAddress } from "viem";
+import { isAddress, type Address } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
-import { TransactionLinks } from "@/app/components/TransactionLinks";
 import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainId } from "@/lib/campaign-blockchain";
+import { roleNFTAbi } from "@/lib/role-nft-abi";
 
 type Shelter = {
   profile_id: string;
@@ -95,13 +95,12 @@ export default function VerifiedSheltersPage() {
   const [actionTarget, setActionTarget] = useState<Shelter | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState<{ message: string; hash?: string } | null>(
-    null,
-  );
   const [blockchainSuccess, setBlockchainSuccess] = useState<{
+    status: "pending" | "confirmed" | "failed";
     title: string;
     message: string;
     txHash: string;
+    transactions?: { label: string; hash: string }[];
   } | null>(null);
   const [deactivationSteps, setDeactivationSteps] = useState<
     DeactivationStep[]
@@ -134,12 +133,6 @@ export default function VerifiedSheltersPage() {
     if (address && isConnected) void load();
     else setShelters([]);
   }, [address, isConnected]);
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 7000);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
   const filtered = useMemo(
     () =>
       shelters.filter((shelter) => {
@@ -164,8 +157,9 @@ export default function VerifiedSheltersPage() {
     if (actionTarget.account_status === "active" && !reason.trim()) return;
     setBusy(true);
     setDeactivationSteps([]);
+    const confirmedTransactions: { label: string; hash: string }[] = [];
     try {
-      const changeShelterStatus = async () => {
+      const changeShelterStatus = async (txHash = "") => {
         const response = await fetch("/api/admin/verified-shelters", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -174,6 +168,7 @@ export default function VerifiedSheltersPage() {
             profileId: actionTarget.profile_id,
             action,
             reason: reason.trim(),
+            txHash,
           }),
         });
         const result = await response.json();
@@ -184,6 +179,82 @@ export default function VerifiedSheltersPage() {
           );
         }
         return result;
+      };
+
+      const submitRoleNFTAction = async (
+        requiredStatus:
+          | "role_nft_mint_required"
+          | "role_nft_revocation_required",
+        shelterWalletValue: string,
+      ) => {
+        if (!publicClient) {
+          throw new Error("Blockchain connection is unavailable.");
+        }
+        if (!isAddress(shelterWalletValue)) {
+          throw new Error("The shelter wallet address is invalid.");
+        }
+        const configResponse = await fetch(
+          `/api/admin/role-nft-mint-config?walletAddress=${encodeURIComponent(address)}`,
+          { cache: "no-store" },
+        );
+        const config = await configResponse.json();
+        if (!configResponse.ok) {
+          throw new Error(
+            config.message || "Unable to load RoleNFT configuration.",
+          );
+        }
+        if (chainId !== Number(config.chainId)) {
+          throw new Error(`Switch MetaMask to PawChain ${config.chainId}.`);
+        }
+        const contractAddress = config.contractAddress as Address;
+        const shelterWallet = shelterWalletValue as Address;
+        const connectedWalletIsAdmin = await publicClient.readContract({
+          address: contractAddress,
+          abi: roleNFTAbi,
+          functionName: "isAdmin",
+          args: [address as Address],
+        });
+        if (!connectedWalletIsAdmin) {
+          throw new Error(
+            "This MetaMask wallet is not authorized as a RoleNFT admin.",
+          );
+        }
+
+        const roleNftHash =
+          requiredStatus === "role_nft_mint_required"
+            ? await writeContractAsync({
+                address: contractAddress,
+                abi: roleNFTAbi,
+                functionName: "safeMintShelter",
+                args: [shelterWallet, String(config.metadataCID)],
+              })
+            : await writeContractAsync({
+                address: contractAddress,
+                abi: roleNFTAbi,
+                functionName: "revokeRoleNFT",
+                args: [shelterWallet],
+              });
+
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: roleNftHash,
+        });
+        if (receipt.status !== "success") {
+          throw new Error(
+            requiredStatus === "role_nft_mint_required"
+              ? "Shelter RoleNFT minting failed."
+              : "Shelter RoleNFT revocation failed.",
+          );
+        }
+        if (requiredStatus === "role_nft_revocation_required") {
+          setDeactivationSteps((current) =>
+            current.map((step) =>
+              step.id === "role-nft-revocation"
+                ? { ...step, status: "confirmed", txHash: roleNftHash }
+                : step,
+            ),
+          );
+        }
+        return roleNftHash;
       };
 
       let result = await changeShelterStatus();
@@ -200,9 +271,18 @@ export default function VerifiedSheltersPage() {
 
         const campaigns = (result.campaigns ??
           []) as DeactivationCampaign[];
-        setDeactivationSteps(
-          campaigns.map((campaign) => ({ ...campaign, status: "pending" })),
-        );
+        setDeactivationSteps([
+          ...campaigns.map((campaign) => ({
+            ...campaign,
+            status: "pending" as const,
+          })),
+          {
+            id: "role-nft-revocation",
+            title: "Revoke Shelter RoleNFT",
+            contract_address: null,
+            status: "pending",
+          },
+        ]);
 
         for (const campaign of campaigns) {
           if (
@@ -219,6 +299,9 @@ export default function VerifiedSheltersPage() {
                 ? { ...step, status: "processing" }
                 : step,
             ),
+          );
+          await new Promise<void>((resolve) =>
+            window.requestAnimationFrame(() => resolve()),
           );
           const cancellationHash = await writeContractAsync({
             address: campaign.contract_address,
@@ -249,6 +332,10 @@ export default function VerifiedSheltersPage() {
                 `Unable to record ${campaign.title} cancellation.`,
             );
           }
+          confirmedTransactions.push({
+            label: `Cancel ${campaign.title}`,
+            hash: cancellationHash,
+          });
           setDeactivationSteps((current) =>
             current.map((step) =>
               step.id === campaign.id
@@ -263,13 +350,64 @@ export default function VerifiedSheltersPage() {
         }
 
         result = await changeShelterStatus();
-        if (result.status !== "deactivated") {
-          throw new Error("Shelter deactivation could not be finalized.");
+      }
+
+      if (
+        result.status === "role_nft_mint_required" ||
+        result.status === "role_nft_revocation_required"
+      ) {
+        if (result.status === "role_nft_revocation_required") {
+          setDeactivationSteps((current) => {
+            const steps = current.some(
+              (step) => step.id === "role-nft-revocation",
+            )
+              ? current
+              : [
+                  ...current,
+                  {
+                    id: "role-nft-revocation",
+                    title: "Revoke Shelter RoleNFT",
+                    contract_address: null,
+                    status: "pending" as const,
+                  },
+                ];
+            return steps.map((step) =>
+              step.id === "role-nft-revocation"
+                ? { ...step, status: "processing" as const }
+                : step,
+            );
+          });
+          await new Promise<void>((resolve) =>
+            window.requestAnimationFrame(() => resolve()),
+          );
         }
+        const roleNftHash = await submitRoleNFTAction(
+          result.status,
+          String(result.shelterWallet ?? actionTarget.wallet_address ?? ""),
+        );
+        confirmedTransactions.push({
+          label:
+            result.status === "role_nft_mint_required"
+              ? "RoleNFT mint"
+              : "RoleNFT revocation",
+          hash: roleNftHash,
+        });
+        result = await changeShelterStatus(roleNftHash);
+      }
+
+      const expectedFinalStatus =
+        action === "deactivate" ? "deactivated" : "active";
+      if (result.status !== expectedFinalStatus) {
+        throw new Error(
+          action === "deactivate"
+            ? "Shelter deactivation could not be finalized."
+            : "Shelter reactivation could not be finalized.",
+        );
       }
 
       if (result.txHash) {
         setBlockchainSuccess({
+          status: "confirmed",
           title:
             action === "deactivate"
               ? "Shelter fully deactivated"
@@ -279,13 +417,23 @@ export default function VerifiedSheltersPage() {
               ? "All active campaigns were cancelled, donor refunds are available, and the Shelter RoleNFT was revoked."
               : "A Shelter RoleNFT was minted and the shelter account is active again.",
           txHash: result.txHash,
+          transactions:
+            confirmedTransactions.length > 1
+              ? confirmedTransactions
+              : undefined,
         });
       } else {
-        setToast({
+        setBlockchainSuccess({
+          status: "confirmed",
+          title:
+            action === "deactivate"
+              ? "Shelter fully deactivated"
+              : "Shelter reactivated",
           message:
             action === "deactivate"
-              ? "Shelter fully deactivated."
-              : "Shelter reactivated.",
+              ? "The shelter account is deactivated and no additional blockchain transaction was required."
+              : "The shelter account is active and its existing Shelter RoleNFT was verified.",
+          txHash: "",
         });
       }
       setActionTarget(null);
@@ -293,7 +441,24 @@ export default function VerifiedSheltersPage() {
       await load();
     } catch (actionError) {
       const typed = actionError as Error & { txHash?: string };
-      setToast({ message: typed.message, hash: typed.txHash });
+      const rejected = /reject|denied|cancel/i.test(typed.message);
+      setBlockchainSuccess({
+        status: "failed",
+        title: rejected
+          ? "Transaction cancelled"
+          : action === "deactivate"
+            ? "Shelter deactivation failed"
+            : "Shelter reactivation failed",
+        message: rejected
+          ? "You rejected the request in MetaMask. No pending wallet transaction was completed."
+          : "The blockchain action could not be completed. Check your wallet network and permissions, then try again.",
+        txHash: typed.txHash ?? "",
+      });
+      if (rejected) {
+        setActionTarget(null);
+        setReason("");
+        setDeactivationSteps([]);
+      }
     } finally {
       setBusy(false);
     }
@@ -554,33 +719,39 @@ export default function VerifiedSheltersPage() {
                 is cancelled on-chain. Donors can then claim refunds, and the
                 Shelter RoleNFT will be revoked last.
               </p>
-              {actionTarget.active_campaigns.length ? (
-                <div className="mt-3 rounded-2xl border border-red-100 bg-red-50/45 p-4">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-red-700">
-                    Campaigns that must be cancelled
-                  </p>
-                  <div className="mt-2 space-y-1.5">
-                    {actionTarget.active_campaigns.map((campaign, index) => (
-                      <div
-                        key={campaign.id}
-                        className="flex items-center gap-2 text-sm font-bold text-stone-700"
-                      >
-                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
-                          {index + 1}
-                        </span>
-                        <span className="truncate">{campaign.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="mt-3 text-xs font-semibold leading-5 text-red-700">
-                    Each campaign requires a separate wallet confirmation.
-                  </p>
-                </div>
-              ) : (
-                <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
-                  No active campaigns require cancellation.
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50/45 p-4">
+                <p className="text-xs font-black text-red-800">
+                  {actionTarget.active_campaigns.length + 1} MetaMask confirmation
+                  {actionTarget.active_campaigns.length + 1 === 1 ? "" : "s"} required
                 </p>
-              )}
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-red-600">
+                  Blockchain action order
+                </p>
+                <div className="mt-3 space-y-1.5">
+                  {actionTarget.active_campaigns.map((campaign, index) => (
+                    <div
+                      key={campaign.id}
+                      className="flex items-center gap-2 text-sm font-bold text-stone-700"
+                    >
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
+                        {index + 1}
+                      </span>
+                      <span className="truncate">
+                        Cancel campaign: {campaign.title}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 text-sm font-bold text-stone-700">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white text-[10px] text-red-700">
+                      {actionTarget.active_campaigns.length + 1}
+                    </span>
+                    <span>Revoke Shelter RoleNFT</span>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs font-semibold leading-5 text-red-700">
+                  MetaMask opens once for every action listed above.
+                </p>
+              </div>
               {actionTarget.account_status === "active" ? (
                 <textarea
                   value={reason}
@@ -609,11 +780,20 @@ export default function VerifiedSheltersPage() {
                               : "text-stone-400"
                         }`}
                       >
-                        {step.status === "confirmed"
-                          ? "Cancelled"
-                          : step.status === "processing"
-                            ? "Waiting for wallet"
-                            : "Pending"}
+                        {step.status === "confirmed" ? (
+                          step.id === "role-nft-revocation" ? (
+                            "Revoked"
+                          ) : (
+                            "Cancelled"
+                          )
+                        ) : step.status === "processing" ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600 motion-reduce:animate-none" />
+                            Waiting for wallet
+                          </span>
+                        ) : (
+                          "Pending"
+                        )}
                       </span>
                     </div>
                   ))}
@@ -627,13 +807,14 @@ export default function VerifiedSheltersPage() {
             </p>
           )}
           <div className="mt-5 flex justify-end gap-3">
-            <button
-              disabled={busy}
-              onClick={() => setActionTarget(null)}
-              className="rounded-full px-4 py-2.5 text-sm font-black"
-            >
-              Cancel
-            </button>
+            {!busy ? (
+              <button
+                onClick={() => setActionTarget(null)}
+                className="rounded-full px-4 py-2.5 text-sm font-black"
+              >
+                Cancel
+              </button>
+            ) : null}
             <button
               disabled={
                 busy ||
@@ -642,37 +823,32 @@ export default function VerifiedSheltersPage() {
               onClick={() => void runAction()}
               className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-black text-white disabled:opacity-40"
             >
-              {busy
-                ? "Processing deactivation..."
-                : actionTarget.account_status === "active"
-                  ? "Cancel campaigns and deactivate"
-                  : isDeactivationPending(actionTarget)
-                    ? "Resume deactivation"
-                    : "Mint and reactivate"}
+              {busy ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none" />
+                  {actionTarget.account_status === "active" ||
+                  isDeactivationPending(actionTarget)
+                    ? "Processing deactivation..."
+                    : "Processing reactivation..."}
+                </span>
+              ) : actionTarget.account_status === "active" ? (
+                "Cancel campaigns and deactivate"
+              ) : isDeactivationPending(actionTarget) ? (
+                "Resume deactivation"
+              ) : (
+                "Mint and reactivate"
+              )}
             </button>
           </div>
         </Modal>
       ) : null}
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-[100] max-w-md rounded-2xl bg-stone-950 px-5 py-4 text-sm font-black text-white shadow-2xl">
-          <p>{toast.message}</p>
-          {toast.hash ? (
-            <div className="mt-2">
-              <TransactionLinks
-                transactions={[
-                  { label: "RoleNFT tx", hash: toast.hash },
-                ]}
-                emptyMessage={false}
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
       <BlockchainSuccessPopup
         open={Boolean(blockchainSuccess)}
+        status={blockchainSuccess?.status ?? "confirmed"}
         title={blockchainSuccess?.title ?? ""}
         message={blockchainSuccess?.message ?? ""}
         txHash={blockchainSuccess?.txHash ?? ""}
+        transactions={blockchainSuccess?.transactions}
         actionLabel="View RoleNFT transaction"
         onClose={() => setBlockchainSuccess(null)}
       />

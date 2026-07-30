@@ -8,6 +8,7 @@ type BlockchainSuccessPopupProps = {
   title: string;
   message: string;
   txHash?: string;
+  transactions?: { label: string; hash: string }[];
   actionLabel?: string;
   onClose: () => void;
   autoCloseMs?: number;
@@ -21,11 +22,16 @@ export function BlockchainSuccessPopup({
   title,
   message,
   txHash = "",
+  transactions = [],
   actionLabel = "View transaction",
   onClose,
   autoCloseMs = 0,
 }: BlockchainSuccessPopupProps) {
   const validHash = transactionHashPattern.test(txHash);
+  const validTransactions = transactions.filter((item) =>
+    transactionHashPattern.test(item.hash),
+  );
+  const hasTransaction = validHash || validTransactions.length > 0;
   const onCloseRef = useRef(onClose);
 
   useEffect(() => {
@@ -33,19 +39,16 @@ export function BlockchainSuccessPopup({
   }, [onClose]);
 
   useEffect(() => {
-    if (!open || !validHash || status !== "confirmed" || autoCloseMs <= 0)
+    if (!open || !hasTransaction || status !== "confirmed" || autoCloseMs <= 0)
       return;
     const timer = window.setTimeout(() => onCloseRef.current(), autoCloseMs);
     return () => window.clearTimeout(timer);
-  }, [autoCloseMs, open, status, validHash]);
+  }, [autoCloseMs, hasTransaction, open, status]);
 
-  if (!open || (status !== "failed" && !validHash)) return null;
+  if (!open) return null;
 
   const pending = status === "pending";
   const failed = status === "failed";
-  const shortHash = validHash
-    ? `${txHash.slice(0, 10)}...${txHash.slice(-8)}`
-    : "";
   const accent = pending
     ? "border-orange-200"
     : failed
@@ -117,18 +120,48 @@ export function BlockchainSuccessPopup({
             </button>
           </div>
 
-          {validHash ? (
+          {validTransactions.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              {validTransactions.map((transaction) => (
+                <div
+                  key={`${transaction.label}-${transaction.hash}`}
+                  className="rounded-xl border border-orange-100 bg-[var(--color-cream)] p-3"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-wide text-stone-400">
+                    {transaction.label}
+                  </p>
+                  <p className="mt-1 break-all font-mono text-xs font-bold leading-5 text-stone-700">
+                    {transaction.hash}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : validHash ? (
             <div className="mt-4 rounded-xl border border-orange-100 bg-[var(--color-cream)] p-3">
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-400">
                 Transaction hash
               </p>
-              <p className="mt-1 font-mono text-xs font-bold text-stone-700">
-                {shortHash}
+              <p className="mt-1 break-all font-mono text-xs font-bold leading-5 text-stone-700">
+                {txHash}
               </p>
             </div>
           ) : null}
 
-          {!pending && validHash ? (
+          {!pending && validTransactions.length > 0 ? (
+            <div className="mt-3 grid gap-2">
+              {validTransactions.map((transaction) => (
+                <a
+                  key={`link-${transaction.label}-${transaction.hash}`}
+                  href={`https://sepolia.etherscan.io/tx/${transaction.hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-center text-sm font-black text-white transition hover:bg-orange-600"
+                >
+                  View {transaction.label} {"\u2197"}
+                </a>
+              ))}
+            </div>
+          ) : !pending && validHash ? (
             <a
               href={`https://sepolia.etherscan.io/tx/${txHash}`}
               target="_blank"

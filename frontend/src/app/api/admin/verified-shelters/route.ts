@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createPublicClient,
+  decodeFunctionData,
+  http,
+  type Hash,
+} from "viem";
 import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getRoleNFTStatus, mintRoleNFT, revokeRoleNFT } from "@/lib/role-nft";
+import { getRoleNFTConfig, getRoleNFTStatus } from "@/lib/role-nft";
+import { roleNFTAbi } from "@/lib/role-nft-abi";
 
 class HttpError extends Error {
   constructor(
@@ -40,6 +47,56 @@ function responseError(error: unknown) {
     { message: error instanceof Error ? error.message : "Request failed." },
     { status: 500 },
   );
+}
+
+async function verifyRoleNFTTransaction({
+  adminWallet,
+  shelterWallet,
+  txHash,
+  functionName,
+}: {
+  adminWallet: string;
+  shelterWallet: string;
+  txHash: string;
+  functionName: "safeMintShelter" | "revokeRoleNFT";
+}) {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+    throw new HttpError("A valid RoleNFT transaction hash is required.", 400);
+  }
+  const config = getRoleNFTConfig();
+  const publicClient = createPublicClient({
+    chain: config.chain,
+    transport: http(config.rpcUrl),
+  });
+  const [receipt, transaction] = await Promise.all([
+    publicClient.getTransactionReceipt({ hash: txHash as Hash }),
+    publicClient.getTransaction({ hash: txHash as Hash }),
+  ]);
+  if (
+    receipt.status !== "success" ||
+    receipt.from.toLowerCase() !== adminWallet.toLowerCase() ||
+    receipt.to?.toLowerCase() !== config.address.toLowerCase() ||
+    transaction.to?.toLowerCase() !== config.address.toLowerCase()
+  ) {
+    throw new HttpError(
+      "The RoleNFT transaction does not match this account action.",
+      409,
+    );
+  }
+  try {
+    const decoded = decodeFunctionData({
+      abi: roleNFTAbi,
+      data: transaction.input,
+    });
+    if (
+      decoded.functionName !== functionName ||
+      String(decoded.args[0]).toLowerCase() !== shelterWallet.toLowerCase()
+    ) {
+      throw new Error("RoleNFT action mismatch.");
+    }
+  } catch {
+    throw new HttpError("Unable to verify the RoleNFT transaction.", 409);
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -99,14 +156,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  let txHash: string | null = null;
-  let blockchainConfirmed = false;
   try {
     const body = await request.json();
     const adminWallet = String(body.walletAddress ?? "").trim();
     const profileId = String(body.profileId ?? "").trim();
     const action = String(body.action ?? "");
     const reason = String(body.reason ?? "").trim();
+    const txHash = String(body.txHash ?? "").trim();
     if (!profileId || !["deactivate", "reactivate"].includes(action)) {
       return NextResponse.json({ message: "Invalid account action." }, { status: 400 });
     }
@@ -174,40 +230,68 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (profile.account_status === "deactivated" && !nftStatus.hasNFT) {
-        return NextResponse.json({
-          status: "deactivated",
-          txHash: null,
-          blockchainConfirmed: true,
-          idempotent: true,
-        });
-      }
       if (nftStatus.hasNFT) {
-        const result = await revokeRoleNFT(profile.wallet_address);
-        txHash = result.txHash;
+        if (!txHash) {
+          return NextResponse.json({
+            status: "role_nft_revocation_required",
+            shelterWallet: profile.wallet_address,
+          });
+        }
+        await verifyRoleNFTTransaction({
+          adminWallet,
+          shelterWallet: profile.wallet_address,
+          txHash,
+          functionName: "revokeRoleNFT",
+        });
+        const updatedNftStatus = await getRoleNFTStatus(profile.wallet_address);
+        if (updatedNftStatus.hasNFT) {
+          throw new HttpError(
+            "The Shelter RoleNFT is still active after the submitted transaction.",
+            409,
+          );
+        }
       }
-      blockchainConfirmed = true;
       const { error: updateError } = await supabase.from("profiles").update({
         account_status: "deactivated",
-        deactivation_reason: reason,
+        ...(reason ? { deactivation_reason: reason } : {}),
         deactivated_at: now,
         deactivated_by: adminId,
         updated_at: now,
       }).eq("id", profile.id);
       if (updateError) throw updateError;
-      return NextResponse.json({ status: "deactivated", txHash, blockchainConfirmed });
+      return NextResponse.json({
+        status: "deactivated",
+        txHash: txHash || null,
+        blockchainConfirmed: true,
+      });
     }
 
     if (profile.account_status === "active" && nftStatus.hasNFT) {
       return NextResponse.json({ message: "Shelter is already active." }, { status: 409 });
     }
     if (!nftStatus.hasNFT) {
-      const result = await mintRoleNFT(profile.wallet_address, "shelter");
-      txHash = result.txHash;
+      if (!txHash) {
+        return NextResponse.json({
+          status: "role_nft_mint_required",
+          shelterWallet: profile.wallet_address,
+        });
+      }
+      await verifyRoleNFTTransaction({
+        adminWallet,
+        shelterWallet: profile.wallet_address,
+        txHash,
+        functionName: "safeMintShelter",
+      });
+      const updatedNftStatus = await getRoleNFTStatus(profile.wallet_address);
+      if (!updatedNftStatus.hasNFT || updatedNftStatus.dbRole !== "shelter") {
+        throw new HttpError(
+          "The submitted transaction did not activate a Shelter RoleNFT.",
+          409,
+        );
+      }
     } else if (nftStatus.dbRole !== "shelter") {
       return NextResponse.json({ message: "Wallet owns a different RoleNFT." }, { status: 409 });
     }
-    blockchainConfirmed = true;
     const { error: updateError } = await supabase.from("profiles").update({
       account_status: "active",
       deactivation_reason: null,
@@ -216,15 +300,12 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }).eq("id", profile.id);
     if (updateError) throw updateError;
-    return NextResponse.json({ status: "active", txHash, blockchainConfirmed });
+    return NextResponse.json({
+      status: "active",
+      txHash: txHash || null,
+      blockchainConfirmed: true,
+    });
   } catch (error) {
-    if (blockchainConfirmed) {
-      return NextResponse.json({
-        message: "Blockchain transaction confirmed, but the database update failed. Retry this action to reconcile.",
-        blockchainConfirmed: true,
-        txHash,
-      }, { status: 500 });
-    }
     return responseError(error);
   }
 }
