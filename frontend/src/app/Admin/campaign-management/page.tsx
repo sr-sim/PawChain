@@ -254,6 +254,7 @@ export default function CampaignManagementPage() {
   const [milestoneRejectTarget, setMilestoneRejectTarget] =
     useState<Milestone | null>(null);
   const [milestoneReason, setMilestoneReason] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<Campaign | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [blockchainSuccess, setBlockchainSuccess] = useState<{
@@ -676,10 +677,7 @@ export default function CampaignManagementPage() {
       setToast("Campaign contract is unavailable.");
       return;
     }
-    if (!window.confirm("Cancel this campaign and enable refunds for all locked funds?")) {
-      return;
-    }
-
+    setCancelTarget(null);
     setBusy(true);
     let confirmedTxHash = "";
     try {
@@ -1235,7 +1233,7 @@ export default function CampaignManagementPage() {
                                 </button>
                                 <button
                                   disabled={busy}
-                                  onClick={() => void cancelActiveCampaign(campaign)}
+                                  onClick={() => setCancelTarget(campaign)}
                                   className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-black text-red-700 disabled:opacity-50"
                                 >
                                   Cancel & refund
@@ -1668,6 +1666,53 @@ export default function CampaignManagementPage() {
                 </p>
               </div>
             ))}
+          </div>
+        </Modal>
+      ) : null}
+      {cancelTarget ? (
+        <Modal
+          title="Cancel campaign and enable refunds?"
+          close={() => {
+            if (!busy) setCancelTarget(null);
+          }}
+        >
+          <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4">
+            <p className="text-sm font-black text-red-800">
+              This action cannot be reversed.
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-red-700">
+              <span className="font-black">{cancelTarget.title}</span> will stop
+              accepting donations. All remaining locked contract funds will
+              become available for eligible donors to claim as refunds.
+            </p>
+          </div>
+          <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50/50 p-4">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">
+              Before continuing
+            </p>
+            <ul className="mt-3 space-y-2 text-sm font-semibold text-stone-600">
+              <li>• Your wallet will ask you to confirm the transaction.</li>
+              <li>• PawChain cannot cancel or recover a confirmed transaction.</li>
+              <li>• Donors must claim their refunds from the campaign contract.</li>
+            </ul>
+          </div>
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setCancelTarget(null)}
+              className="rounded-xl border border-stone-200 bg-white px-5 py-2.5 text-sm font-black text-stone-700 transition hover:bg-stone-50 disabled:opacity-50"
+            >
+              Keep campaign active
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void cancelActiveCampaign(cancelTarget)}
+              className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+            >
+              {busy ? "Opening wallet…" : "Cancel campaign & enable refunds"}
+            </button>
           </div>
         </Modal>
       ) : null}

@@ -102,8 +102,6 @@ export default function AdminTransactionsPage() {
   const [donationQueue, setDonationQueue] = useState<FinancialTransaction[]>([]);
   const [activeDonation, setActiveDonation] =
     useState<FinancialTransaction | null>(null);
-  const [demoDonation, setDemoDonation] =
-    useState<FinancialTransaction | null>(null);
   const cursorRef = useRef("");
   const initializedRef = useRef(false);
   const seenHashesRef = useRef(new Set<string>());
@@ -214,17 +212,8 @@ export default function AdminTransactionsPage() {
   }, [activeDonation]);
 
   useEffect(() => {
-    if (!demoDonation) return;
-    const timer = window.setTimeout(() => setDemoDonation(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [demoDonation]);
-
-  useEffect(() => {
     setPage(1);
   }, [search, type, status, dateFrom, dateTo]);
-
-  const displayedDonation = activeDonation ?? demoDonation;
-  const isDemoDonation = !activeDonation && Boolean(demoDonation);
 
   return (
     <>
@@ -243,31 +232,6 @@ export default function AdminTransactionsPage() {
               <p className="mt-1 text-sm text-stone-500">Verified donations, refunds, and milestone fund releases on Sepolia.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  setDemoDonation({
-                    id: `demo-${Date.now()}`,
-                    txHash: "",
-                    transactionType: "donation",
-                    campaignId: "demo",
-                    campaignTitle: "Emergency Care Campaign",
-                    milestoneId: null,
-                    milestoneTitle: null,
-                    walletAddress:
-                      "0x7A42D9cE106A954B2eD8c7388A14b14D34A97f62",
-                    amountWei: "2500000000000000",
-                    amountMyr: 17.61,
-                    chainId: 11155111,
-                    blockNumber: 0,
-                    occurredAt: new Date().toISOString(),
-                    status: "confirmed",
-                  })
-                }
-                className="rounded-full border border-orange-200 bg-white px-4 py-2 text-xs font-bold text-orange-700 shadow-sm transition hover:border-orange-300 hover:bg-orange-50"
-              >
-                Preview live activity
-              </button>
               <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-700 shadow-sm">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" />
                 Live · updates every 3 seconds
@@ -285,17 +249,17 @@ export default function AdminTransactionsPage() {
               {
                 label: "Donations received",
                 value: eth(summary.donationWei),
-                secondary: `Approx. live MYR ${money(weiToMyr(summary.donationWei))}`,
+                secondary: `≈ ${money(weiToMyr(summary.donationWei))}`,
               },
               {
                 label: "Refunds returned to donors",
                 value: eth(summary.refundWei),
-                secondary: `Approx. live MYR ${money(weiToMyr(summary.refundWei))}`,
+                secondary: `≈ ${money(weiToMyr(summary.refundWei))}`,
               },
               {
                 label: "Milestone funds released",
                 value: eth(summary.fundReleaseWei),
-                secondary: `Approx. live MYR ${money(weiToMyr(summary.fundReleaseWei))}`,
+                secondary: `≈ ${money(weiToMyr(summary.fundReleaseWei))}`,
               },
             ].map(({ label, value, secondary }, index) => (
               <div key={label} className="relative overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white p-5 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
@@ -367,11 +331,14 @@ export default function AdminTransactionsPage() {
                     <span className="font-mono text-xs text-stone-600">{shortWallet(item.walletAddress)}</span>
                     <div>
                       <p className="text-sm font-bold text-stone-900">{eth(item.amountWei)}</p>
-                      <p className="mt-0.5 text-[11px] font-medium text-stone-400">Approx. live MYR {money(weiToMyr(item.amountWei))}</p>
-                      <p className="mt-0.5 text-[10px] font-medium uppercase text-stone-400">{item.status}</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-stone-400">≈ {money(weiToMyr(item.amountWei))} <span className="whitespace-nowrap">(current rate)</span></p>
+                      <p className={`mt-0.5 text-[10px] font-bold uppercase ${item.verifiedOnChain ? "text-emerald-600" : "text-stone-400"}`}>{item.verifiedOnChain ? "Verified on-chain" : item.status}</p>
                     </div>
                     <span className="text-xs font-medium text-stone-500">{dateTime(item.occurredAt)}</span>
-                    <TransactionLinks transactions={[{ label: "View tx", hash: item.txHash }]} emptyMessage={false} />
+                    <div>
+                      <TransactionLinks transactions={[{ label: "View tx", hash: item.txHash }]} emptyMessage={false} />
+                      {item.verifiedOnChain ? <p className="mt-1 text-[10px] font-medium text-stone-400">Block #{item.blockNumber.toLocaleString("en-US")} · Log {item.logIndex}</p> : null}
+                    </div>
                   </article>
                 ))
               ) : (
@@ -391,18 +358,17 @@ export default function AdminTransactionsPage() {
         </div>
       </main>
 
-      {displayedDonation ? (
+      {activeDonation ? (
         <aside className="animate-[admin-donation-in_350ms_ease-out] fixed bottom-6 right-6 z-[120] w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-emerald-200 bg-white p-4 shadow-2xl motion-reduce:animate-none" role="status" aria-live="polite">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-lg text-emerald-700">↓</span>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">{isDemoDonation ? "Demo donation preview" : "New donation confirmed"}</p><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" /></div>
-              {isDemoDonation ? <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-orange-600">Interface preview only · not on-chain</p> : null}
-              <p className="mt-1 text-lg font-bold text-stone-950">{eth(displayedDonation.amountWei)}</p>
-              <p className="text-xs font-medium text-stone-400">Approx. live MYR {money(weiToMyr(displayedDonation.amountWei))}</p>
-              <p className="mt-1 truncate text-sm font-medium text-stone-600">{displayedDonation.campaignTitle}</p>
-              <p className="mt-1 font-mono text-xs text-stone-400">{shortWallet(displayedDonation.walletAddress)}</p>
-              {!isDemoDonation ? <div className="mt-3"><TransactionLinks transactions={[{ label: "View donation tx", hash: displayedDonation.txHash }]} emptyMessage={false} /></div> : null}
+              <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">New donation confirmed</p><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" /></div>
+              <p className="mt-1 text-lg font-bold text-stone-950">{eth(activeDonation.amountWei)}</p>
+              <p className="text-xs font-medium text-stone-400">≈ {money(weiToMyr(activeDonation.amountWei))} <span className="whitespace-nowrap">(current rate)</span></p>
+              <p className="mt-1 truncate text-sm font-medium text-stone-600">{activeDonation.campaignTitle}</p>
+              <p className="mt-1 font-mono text-xs text-stone-400">{shortWallet(activeDonation.walletAddress)}</p>
+              <div className="mt-3"><TransactionLinks transactions={[{ label: "View donation tx", hash: activeDonation.txHash }]} emptyMessage={false} /></div>
             </div>
           </div>
         </aside>
