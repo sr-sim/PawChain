@@ -23,6 +23,7 @@ type CampaignRow = {
 };
 
 type MilestoneRow = {
+  id: string;
   campaign_id: string;
   title: string;
   description?: string | null;
@@ -70,6 +71,7 @@ export type DonorCampaign = Omit<(typeof previewCampaigns)[number], "location"> 
   imageUrl?: string | null;
   shelterImageUrl?: string | null;
   milestoneDetails?: {
+    id?: string;
     title: string;
     description: string;
     requirement: string;
@@ -287,7 +289,7 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
 
   const { data: milestoneRows } = await supabase
     .from("campaign_milestones")
-    .select("campaign_id, title, description, requirement, percentage, on_chain_index, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash, created_at")
+    .select("id, campaign_id, title, description, requirement, percentage, on_chain_index, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash, created_at")
     .in("campaign_id", campaignIds)
     .order("on_chain_index", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
@@ -420,6 +422,7 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       milestoneDetails:
         milestones.length > 0
           ? milestones.map((milestone) => ({
+              id: milestone.id,
               title: milestone.title,
               description: milestone.description ?? "",
               requirement: milestone.requirement ?? "",
