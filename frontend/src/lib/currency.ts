@@ -2,6 +2,8 @@ import { demoEthMyrRate } from "@/lib/campaign-blockchain";
 
 const COINGECKO_ETH_MYR_URL =
   "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=myr&include_last_updated_at=true";
+const COINGECKO_ETH_MYR_CHART_URL =
+  "https://api.coingecko.com/api/v3/coins/ethereum/market_chart?vs_currency=myr&days=1";
 
 type CoinGeckoEthMyrResponse = {
   ethereum?: {
@@ -16,6 +18,31 @@ export type EthMyrRateResult = {
   updatedAt: string;
   message?: string;
 };
+
+export type EthMyrHistoryPoint = {
+  timestamp: number;
+  rate: number;
+};
+
+export async function getEthMyrHistory(): Promise<EthMyrHistoryPoint[]> {
+  try {
+    const response = await fetch(COINGECKO_ETH_MYR_CHART_URL, {
+      headers: { accept: "application/json" },
+      next: { revalidate: 300 },
+    });
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as { prices?: [number, number][] };
+    return (data.prices ?? [])
+      .filter(
+        ([timestamp, rate]) =>
+          Number.isFinite(timestamp) && Number.isFinite(rate) && rate > 0,
+      )
+      .map(([timestamp, rate]) => ({ timestamp, rate }));
+  } catch {
+    return [];
+  }
+}
 
 export async function getLatestEthMyrRate(): Promise<EthMyrRateResult> {
   try {

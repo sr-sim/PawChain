@@ -144,6 +144,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       campaigns: onChainCampaigns.map((item) => ({
         ...item,
+        location: null,
         shelter_name: profileMap.get(item.shelter_id) ?? null,
         shelter_wallet: walletMap.get(item.shelter_id) ?? null,
         refund_summary:
@@ -159,9 +160,13 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "Unable to load campaigns.";
     return NextResponse.json(
-      { message: error instanceof Error && error.message === "ADMIN_DENIED" ? "Access denied." : error instanceof Error ? error.message : "Unable to load campaigns." },
-      { status: error instanceof Error && error.message === "ADMIN_DENIED" ? 403 : 500 },
+      { message: message === "ADMIN_DENIED" ? "Access denied." : message },
+      { status: message === "ADMIN_DENIED" ? 403 : 500 },
     );
   }
 }
