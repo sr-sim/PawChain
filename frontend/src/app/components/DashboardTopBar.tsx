@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useAppKitAccount } from "@reown/appkit/react";
 import { ConnectWallet } from "./ConnectWallet";
 
 type NotificationPreview = {
@@ -12,6 +13,7 @@ type NotificationPreview = {
   is_read: boolean;
   created_at: string;
   campaign_id: string | null;
+  href?: string;
 };
 
 type DashboardTopBarProps = {
@@ -25,7 +27,7 @@ type DashboardTopBarProps = {
 };
 
 export function DashboardTopBar({
-  role: _role,
+  role,
   onMenuClick,
   isMenuOpen,
   notificationHref,
@@ -35,8 +37,88 @@ export function DashboardTopBar({
 }: DashboardTopBarProps) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement | null>(null);
-  const unreadCount = Number(notificationCount ?? 0);
+  const [adminNotifications, setAdminNotifications] = useState<
+    NotificationPreview[]
+  >([]);
+  const [adminNotificationCount, setAdminNotificationCount] = useState(0);
+  const { address, isConnected } = useAppKitAccount();
+  const isAdmin = role.toLowerCase() === "admin";
+  const resolvedNotificationHref =
+    notificationHref ?? (isAdmin ? "/Admin/dashboard" : undefined);
+  const resolvedNotificationPreview = isAdmin
+    ? adminNotifications.slice(0, 6)
+    : notificationPreview;
+  const unreadCount = Number(
+    isAdmin ? adminNotificationCount : (notificationCount ?? 0),
+  );
   const hasUnread = unreadCount > 0;
+  const adminReadStorageKey = address
+    ? `pawchain:admin-notifications-read:${address.toLowerCase()}`
+    : "";
+
+  const markAdminNotificationsRead = () => {
+    if (!adminReadStorageKey) return;
+    const readIds = adminNotifications.map((item) => item.id);
+    window.localStorage.setItem(adminReadStorageKey, JSON.stringify(readIds));
+    setAdminNotifications((current) =>
+      current.map((item) => ({ ...item, is_read: true })),
+    );
+    setAdminNotificationCount(0);
+  };
+
+  const resolvedMarkAllNotificationsRead = isAdmin
+    ? markAdminNotificationsRead
+    : onMarkAllNotificationsRead;
+
+  useEffect(() => {
+    if (!isAdmin || !isConnected || !address) {
+      if (isAdmin) {
+        setAdminNotifications([]);
+        setAdminNotificationCount(0);
+      }
+      return;
+    }
+
+    let active = true;
+    const loadAdminNotifications = async () => {
+      try {
+        const response = await fetch(
+          `/api/admin/notifications?walletAddress=${encodeURIComponent(address)}`,
+          { cache: "no-store" },
+        );
+        const result = await response.json();
+        if (!active || !response.ok) return;
+        const storedReadIds = new Set<string>(
+          JSON.parse(
+            window.localStorage.getItem(adminReadStorageKey) || "[]",
+          ) as string[],
+        );
+        const notifications = (
+          Array.isArray(result.notifications) ? result.notifications : []
+        ).map((item: NotificationPreview) => ({
+          ...item,
+          is_read: storedReadIds.has(item.id),
+        }));
+        setAdminNotifications(notifications);
+        setAdminNotificationCount(
+          notifications.filter((item: NotificationPreview) => !item.is_read)
+            .length,
+        );
+      } catch {
+        // Keep the last successful notification state and retry automatically.
+      }
+    };
+
+    void loadAdminNotifications();
+    const interval = window.setInterval(
+      () => void loadAdminNotifications(),
+      30_000,
+    );
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [address, adminReadStorageKey, isAdmin, isConnected]);
 
   useEffect(() => {
     if (!isNotificationOpen) {
@@ -125,7 +207,7 @@ export function DashboardTopBar({
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
-          {notificationHref ? (
+          {resolvedNotificationHref ? (
             <div ref={notificationRef} className="relative">
               <button
                 type="button"
@@ -171,16 +253,18 @@ export function DashboardTopBar({
                       </p>
                       <p className="text-sm font-black text-stone-950">
                         {hasUnread
-                          ? `${unreadCount} unread update${
-                              unreadCount === 1 ? "" : "s"
-                            }`
+                          ? isAdmin
+                            ? `${unreadCount} pending request${unreadCount === 1 ? "" : "s"}`
+                            : `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`
                           : "All caught up"}
                       </p>
                     </div>
-                    {hasUnread && onMarkAllNotificationsRead ? (
+                    {hasUnread && resolvedMarkAllNotificationsRead ? (
                       <button
                         type="button"
-                        onClick={() => void onMarkAllNotificationsRead()}
+                        onClick={() =>
+                          void resolvedMarkAllNotificationsRead()
+                        }
                         suppressHydrationWarning
                         className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-black text-[var(--color-orange)] transition hover:bg-orange-50"
                       >
@@ -190,14 +274,16 @@ export function DashboardTopBar({
                   </div>
 
                   <div className="max-h-80 overflow-y-auto p-2">
-                    {notificationPreview.length > 0 ? (
-                      notificationPreview.map((item) => (
+                    {resolvedNotificationPreview.length > 0 ? (
+                      resolvedNotificationPreview.map((item) => (
                         <Link
                           key={item.id}
                           href={
-                            item.campaign_id
+                            item.href
+                              ? item.href
+                              : item.campaign_id
                               ? `/Donor/campaigns/${item.campaign_id}`
-                              : notificationHref
+                              : resolvedNotificationHref
                           }
                           onClick={() => setIsNotificationOpen(false)}
                           className={[
@@ -226,19 +312,23 @@ export function DashboardTopBar({
                           No notifications yet
                         </p>
                         <p className="mt-1 text-xs font-semibold text-stone-500">
-                          Donation, refund, and milestone updates will appear here.
+                          {isAdmin
+                            ? "Shelter, campaign, and milestone proof requests will appear here."
+                            : "Donation, refund, and milestone updates will appear here."}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  <Link
-                    href={notificationHref}
-                    onClick={() => setIsNotificationOpen(false)}
-                    className="block border-t border-orange-100 px-4 py-3 text-center text-sm font-black text-[var(--color-orange)] transition hover:bg-orange-50"
-                  >
-                    View all notifications
-                  </Link>
+                  {!isAdmin ? (
+                    <Link
+                      href={resolvedNotificationHref}
+                      onClick={() => setIsNotificationOpen(false)}
+                      className="block border-t border-orange-100 px-4 py-3 text-center text-sm font-black text-[var(--color-orange)] transition hover:bg-orange-50"
+                    >
+                      View all notifications
+                    </Link>
+                  ) : null}
                 </div>
               ) : null}
             </div>

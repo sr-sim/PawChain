@@ -5,6 +5,7 @@ import { formatEther } from "viem";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
+import { EthMyrMarketCard } from "@/app/components/EthMyrMarketCard";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
 import type {
   FinancialTransaction,
@@ -85,7 +86,14 @@ function shortWallet(value: string) {
 
 export default function AdminTransactionsPage() {
   const { address, isConnected } = useAppKitAccount();
-  const { weiToMyr, source: rateSource } = useEthMyrRate();
+  const {
+    rate: ethMyrRate,
+    weiToMyr,
+    source: rateSource,
+    updatedAt: rateUpdatedAt,
+    loading: rateLoading,
+    history: rateHistory,
+  } = useEthMyrRate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [summary, setSummary] = useState(initialSummary);
@@ -225,21 +233,28 @@ export default function AdminTransactionsPage() {
       <AdminSidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
       <main className={`min-h-screen bg-[var(--color-cream)] pt-16 transition-[padding] ${sidebarOpen ? "lg:pl-64" : ""}`}>
         <div className="mx-auto max-w-7xl space-y-6 px-4 py-7 sm:px-8">
-          <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+          <header className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">Financial ledger</p>
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-stone-950">Transactions</h1>
               <p className="mt-1 text-sm text-stone-500">Verified donations, refunds, and milestone fund releases on Sepolia.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-700 shadow-sm">
+              <div className="mt-3 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-700 shadow-sm">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" />
                 Live · updates every 3 seconds
               </div>
             </div>
+            <div className="w-full shrink-0 md:w-[26rem] lg:w-[32rem]">
+              <EthMyrMarketCard
+                rate={ethMyrRate}
+                source={rateSource}
+                updatedAt={rateUpdatedAt}
+                loading={rateLoading}
+                history={rateHistory}
+              />
+            </div>
           </header>
 
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
             {[
               {
                 label: "Blockchain transactions",
@@ -262,7 +277,7 @@ export default function AdminTransactionsPage() {
                 secondary: `≈ ${money(weiToMyr(summary.fundReleaseWei))}`,
               },
             ].map(({ label, value, secondary }, index) => (
-              <div key={label} className="relative overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white p-5 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
+              <div key={label} className="relative overflow-hidden rounded-2xl border border-orange-100 bg-white px-4 py-3.5 shadow-[0_10px_28px_rgba(97,55,17,0.06)]">
                 <span
                   className={`absolute inset-y-0 left-0 w-1 ${
                     index === 0
@@ -274,9 +289,9 @@ export default function AdminTransactionsPage() {
                           : "bg-orange-300"
                   }`}
                 />
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">{label}</p>
-                <p className="mt-3 text-2xl font-black tracking-tight text-stone-950">{value}</p>
-                <p className="mt-1.5 text-xs font-medium text-stone-400">{secondary}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-stone-500">{label}</p>
+                <p className="mt-1.5 text-xl font-black tracking-tight text-stone-950">{value}</p>
+                <p className="mt-0.5 text-[11px] font-medium text-stone-400">{secondary}</p>
               </div>
             ))}
           </section>

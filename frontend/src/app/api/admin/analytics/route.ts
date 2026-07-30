@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { formatEther } from "viem";
 import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getVerifiedFinancialEvents } from "@/lib/verified-financial-events";
 
 const validHash = (value: unknown): value is string =>
   typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
       { data: milestones, error: milestoneError },
       { data: applications, error: applicationError },
       { data: profiles, error: profileError },
+      verifiedFinancialEvents,
     ] = await Promise.all([
       supabase
         .from("donations")
@@ -73,6 +75,7 @@ export async function GET(request: NextRequest) {
         .from("shelter_applications")
         .select("id, user_id, shelter_name, status, created_at"),
       supabase.from("profiles").select("id, wallet_address, account_status"),
+      getVerifiedFinancialEvents(),
     ]);
     if (donationError) throw donationError;
     if (campaignError) throw campaignError;
@@ -88,6 +91,9 @@ export async function GET(request: NextRequest) {
         ? campaignRows
         : campaignRows.filter((item) => item.id === campaignFilter);
     const campaignIds = new Set(scopedCampaigns.map((item) => item.id));
+    const scopedEvents = verifiedFinancialEvents.filter((item) =>
+      campaignIds.has(item.campaignId),
+    );
     const scopedDonations = donationRows.filter((item) =>
       campaignIds.has(item.campaign_id),
     );
@@ -104,68 +110,49 @@ export async function GET(request: NextRequest) {
       const time = new Date(value).getTime();
       return time >= previousFrom.getTime() && time < from.getTime();
     };
-    const periodDonations = scopedDonations.filter((item) =>
-      inRange(item.created_at),
+    const confirmed = scopedEvents.filter(
+      (item) =>
+        item.transactionType === "donation" && inRange(item.occurredAt),
     );
-    const previousDonations = scopedDonations.filter((item) =>
-      inPreviousRange(item.created_at),
-    );
-
-    const confirmed = periodDonations.filter(
-      (item) => item.status !== "failed" && validHash(item.tx_hash),
-    );
-    const previousConfirmed = previousDonations.filter(
-      (item) => item.status !== "failed" && validHash(item.tx_hash),
+    const previousConfirmed = scopedEvents.filter(
+      (item) =>
+        item.transactionType === "donation" &&
+        inPreviousRange(item.occurredAt),
     );
     const donationWei = confirmed.reduce(
-      (sum, item) => sum + safeWei(item.amount_wei),
+      (sum, item) => sum + safeWei(item.amountWei),
       BigInt(0),
     );
     const previousDonationWei = previousConfirmed.reduce(
-      (sum, item) => sum + safeWei(item.amount_wei),
+      (sum, item) => sum + safeWei(item.amountWei),
       BigInt(0),
     );
-    const donationMyr = confirmed.reduce(
-      (sum, item) => sum + Number(item.amount ?? 0),
-      0,
+    const released = scopedEvents.filter(
+      (item) =>
+        item.transactionType === "fund_release" && inRange(item.occurredAt),
     );
-
-    let releasedWei = BigInt(0);
-    let releasedMyr = 0;
-    for (const milestone of scopedMilestones) {
-      if (!validHash(milestone.release_tx_hash) || !inRange(milestone.updated_at))
-        continue;
-      const campaign = campaignRows.find(
-        (item) => item.id === milestone.campaign_id,
-      );
-      const basisPoints = BigInt(Math.round(Number(milestone.percentage ?? 0) * 100));
-      releasedWei +=
-        (safeWei(campaign?.goal_wei) * basisPoints) / BigInt(10_000);
-      releasedMyr +=
-        Number(campaign?.goal_amount ?? 0) *
-        (Number(milestone.percentage ?? 0) / 100);
-    }
-
-    const refunded = scopedDonations.filter(
-      (item) => validHash(item.refund_tx_hash) && inRange(item.refunded_at),
+    const releasedWei = released.reduce(
+      (sum, item) => sum + safeWei(item.amountWei),
+      BigInt(0),
+    );
+    const refunded = scopedEvents.filter(
+      (item) => item.transactionType === "refund" && inRange(item.occurredAt),
     );
     const refundWei = refunded.reduce(
-      (sum, item) => sum + safeWei(item.amount_wei),
+      (sum, item) => sum + safeWei(item.amountWei),
       BigInt(0),
-    );
-    const refundMyr = refunded.reduce(
-      (sum, item) => sum + Number(item.amount ?? 0),
-      0,
     );
     const lockedWei =
       donationWei > releasedWei + refundWei
         ? donationWei - releasedWei - refundWei
         : BigInt(0);
-    const lockedMyr = Math.max(0, donationMyr - releasedMyr - refundMyr);
-    const uniqueDonors = new Set(confirmed.map((item) => item.donor_id)).size;
+    const uniqueDonors = new Set(
+      confirmed.map((item) => item.walletAddress.toLowerCase()),
+    ).size;
     const donorCounts = new Map<string, number>();
     for (const item of confirmed) {
-      donorCounts.set(item.donor_id, (donorCounts.get(item.donor_id) ?? 0) + 1);
+      const donor = item.walletAddress.toLowerCase();
+      donorCounts.set(donor, (donorCounts.get(donor) ?? 0) + 1);
     }
     const returningDonors = [...donorCounts.values()].filter(
       (count) => count > 1,
@@ -176,17 +163,16 @@ export async function GET(request: NextRequest) {
       { amountWei: bigint; amountMyr: number; count: number; donors: Set<string> }
     >();
     for (const item of confirmed) {
-      const key = dateKey(item.created_at);
+      const key = dateKey(item.occurredAt);
       const bucket = trendMap.get(key) ?? {
         amountWei: BigInt(0),
         amountMyr: 0,
         count: 0,
         donors: new Set<string>(),
       };
-      bucket.amountWei += safeWei(item.amount_wei);
-      bucket.amountMyr += Number(item.amount ?? 0);
+      bucket.amountWei += safeWei(item.amountWei);
       bucket.count++;
-      bucket.donors.add(item.donor_id);
+      bucket.donors.add(item.walletAddress.toLowerCase());
       trendMap.set(key, bucket);
     }
     const trend = [...trendMap.entries()]
@@ -201,18 +187,21 @@ export async function GET(request: NextRequest) {
 
     const campaignPerformance = scopedCampaigns
       .map((campaign) => {
-        const campaignDonations = scopedDonations.filter(
+        const campaignDonations = scopedEvents.filter(
           (item) =>
-            item.campaign_id === campaign.id &&
-            item.status !== "failed" &&
-            validHash(item.tx_hash),
+            item.campaignId === campaign.id &&
+            item.transactionType === "donation",
         );
-        const donors = new Set(campaignDonations.map((item) => item.donor_id));
-        const refunds = campaignDonations.filter((item) =>
-          validHash(item.refund_tx_hash),
+        const donors = new Set(
+          campaignDonations.map((item) => item.walletAddress.toLowerCase()),
+        );
+        const refunds = scopedEvents.filter(
+          (item) =>
+            item.campaignId === campaign.id &&
+            item.transactionType === "refund",
         );
         const raisedWei = campaignDonations.reduce(
-          (sum, item) => sum + safeWei(item.amount_wei),
+          (sum, item) => sum + safeWei(item.amountWei),
           BigInt(0),
         );
         const goalWei = safeWei(campaign.goal_wei);
@@ -224,10 +213,7 @@ export async function GET(request: NextRequest) {
           title: campaign.title,
           status: campaign.campaign_status,
           raisedEth: weiToEth(raisedWei),
-          raisedMyr: campaignDonations.reduce(
-            (sum, item) => sum + Number(item.amount ?? 0),
-            0,
-          ),
+          raisedMyr: 0,
           goalEth: weiToEth(goalWei),
           progress,
           donors: donors.size,
@@ -239,6 +225,11 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.raisedEth - a.raisedEth);
 
+    const verifiedReleasedMilestoneIds = new Set(
+      scopedEvents
+        .filter((item) => item.transactionType === "fund_release")
+        .map((item) => item.milestoneId),
+    );
     const milestoneStatuses = [
       "pending",
       "submitted",
@@ -249,8 +240,8 @@ export async function GET(request: NextRequest) {
       status,
       count: scopedMilestones.filter((item) =>
         status === "released"
-          ? validHash(item.release_tx_hash)
-          : item.status === status && !validHash(item.release_tx_hash),
+          ? verifiedReleasedMilestoneIds.has(item.id)
+          : item.status === status && !verifiedReleasedMilestoneIds.has(item.id),
       ).length,
     }));
     const reviewed = scopedMilestones.filter(
@@ -288,20 +279,20 @@ export async function GET(request: NextRequest) {
           (item) => item.shelter_id === application.user_id,
         );
         const ids = new Set(shelterCampaigns.map((item) => item.id));
-        const shelterDonations = donationRows.filter(
+        const shelterDonations = verifiedFinancialEvents.filter(
           (item) =>
-            ids.has(item.campaign_id) &&
-            item.status !== "failed" &&
-            validHash(item.tx_hash),
+            ids.has(item.campaignId) &&
+            item.transactionType === "donation",
         );
         const shelterMilestones = milestoneRows.filter((item) =>
           ids.has(item.campaign_id),
         );
         const released = shelterMilestones.filter((item) =>
-          validHash(item.release_tx_hash),
+          verifiedReleasedMilestoneIds.has(item.id),
         );
-        const refundedCount = shelterDonations.filter((item) =>
-          validHash(item.refund_tx_hash),
+        const refundedCount = verifiedFinancialEvents.filter(
+          (item) =>
+            ids.has(item.campaignId) && item.transactionType === "refund",
         ).length;
         return {
           id: application.user_id,
@@ -311,7 +302,7 @@ export async function GET(request: NextRequest) {
           campaigns: shelterCampaigns.length,
           raisedEth: weiToEth(
             shelterDonations.reduce(
-              (sum, item) => sum + safeWei(item.amount_wei),
+              (sum, item) => sum + safeWei(item.amountWei),
               BigInt(0),
             ),
           ),
@@ -325,21 +316,34 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.raisedEth - a.raisedEth);
 
+    const verifiedDonationHashes = new Set(
+      scopedEvents
+        .filter((item) => item.transactionType === "donation")
+        .map((item) => item.txHash.toLowerCase()),
+    );
+    const verifiedRefundHashes = new Set(
+      scopedEvents
+        .filter((item) => item.transactionType === "refund")
+        .map((item) => item.txHash.toLowerCase()),
+    );
     const actions = [
       ...scopedDonations.map((item) => ({
         type: "Donation",
-        status:
-          item.status === "failed"
-            ? "failed"
-            : validHash(item.tx_hash)
-              ? "confirmed"
-              : "pending",
+        status: !validHash(item.tx_hash)
+          ? "pending"
+          : verifiedDonationHashes.has(item.tx_hash.toLowerCase())
+            ? "confirmed"
+            : "failed",
       })),
       ...scopedDonations
         .filter((item) => item.refund_tx_hash)
         .map((item) => ({
           type: "Refund",
-          status: validHash(item.refund_tx_hash) ? "confirmed" : "failed",
+          status:
+            validHash(item.refund_tx_hash) &&
+            verifiedRefundHashes.has(item.refund_tx_hash.toLowerCase())
+              ? "confirmed"
+              : "failed",
         })),
       ...scopedCampaigns
         .filter((item) => item.deployment_tx_hash)
@@ -376,7 +380,9 @@ export async function GET(request: NextRequest) {
           ? [
               {
                 type: "Fund release",
-                status: validHash(item.release_tx_hash) ? "confirmed" : "failed",
+                status: verifiedReleasedMilestoneIds.has(item.id)
+                  ? "confirmed"
+                  : "failed",
               },
             ]
           : []),
@@ -400,13 +406,13 @@ export async function GET(request: NextRequest) {
       campaigns: scopedCampaigns.map(({ id, title }) => ({ id, title })),
       financial: {
         donatedWei: donationWei.toString(),
-        donatedMyr: donationMyr,
+        donatedMyr: 0,
         releasedWei: releasedWei.toString(),
-        releasedMyr,
+        releasedMyr: 0,
         lockedWei: lockedWei.toString(),
-        lockedMyr,
+        lockedMyr: 0,
         refundedWei: refundWei.toString(),
-        refundedMyr: refundMyr,
+        refundedMyr: 0,
         donationChange: percentageChange(
           weiToEth(donationWei),
           weiToEth(previousDonationWei),
@@ -444,9 +450,9 @@ export async function GET(request: NextRequest) {
       },
       campaignPerformance: campaignPerformance.slice(0, 10),
       fundDistribution: [
-        { label: "Released", amountEth: weiToEth(releasedWei), amountMyr: releasedMyr },
-        { label: "Locked", amountEth: weiToEth(lockedWei), amountMyr: lockedMyr },
-        { label: "Refunded", amountEth: weiToEth(refundWei), amountMyr: refundMyr },
+        { label: "Released", amountEth: weiToEth(releasedWei), amountMyr: 0 },
+        { label: "Locked", amountEth: weiToEth(lockedWei), amountMyr: 0 },
+        { label: "Refunded", amountEth: weiToEth(refundWei), amountMyr: 0 },
       ],
       milestoneMetrics: {
         statuses: milestoneStatuses,
@@ -454,7 +460,8 @@ export async function GET(request: NextRequest) {
         delayed: delayedMilestones,
         readyForRelease: scopedMilestones.filter(
           (item) =>
-            item.status === "approved" && !validHash(item.release_tx_hash),
+            item.status === "approved" &&
+            !verifiedReleasedMilestoneIds.has(item.id),
         ).length,
       },
       shelterMetrics: {
