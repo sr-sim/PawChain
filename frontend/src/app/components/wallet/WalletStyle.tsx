@@ -141,6 +141,7 @@ export function WalletStylePicker({
             key={style.id}
             type="button"
             onClick={() => onChange(style.id)}
+            suppressHydrationWarning
             className={`rounded-2xl p-3 text-left transition ${selected ? "bg-orange-50 ring-2 ring-[var(--color-orange)]" : "bg-stone-50 ring-1 ring-stone-200 hover:bg-orange-50/60"}`}
             aria-pressed={selected}
           >

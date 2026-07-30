@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DonorRoleNFTCard } from "@/app/components/DonorRoleNFTCard";
+import { DonorWalletAppearance } from "@/app/components/DonorWalletAppearance";
 import { getDashboardProfile } from "@/lib/dashboard-access";
 
 type ProfileProps = {
@@ -22,6 +23,10 @@ export default async function DonorProfilePage({ searchParams }: ProfileProps) {
   const displayName = profile?.full_name ?? "Anwen";
   const email = profile?.email ?? "anwen@example.com";
   const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? "-";
+  const settingsHref =
+    walletAddress && walletAddress !== "-"
+      ? `/Donor/settings?walletAddress=${encodeURIComponent(walletAddress)}`
+      : "/Donor/settings";
 
   return (
     <div className="space-y-5">
@@ -41,7 +46,7 @@ export default async function DonorProfilePage({ searchParams }: ProfileProps) {
           </div>
 
           <Link
-            href="/Donor/settings"
+            href={settingsHref}
             className="inline-flex w-fit items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-950 transition hover:border-[var(--color-orange)] hover:bg-orange-50"
           >
             Open settings
@@ -86,7 +91,7 @@ export default async function DonorProfilePage({ searchParams }: ProfileProps) {
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Link
-              href="/Donor/settings"
+              href={settingsHref}
               className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-2.5 text-sm font-semibold text-stone-950 transition hover:border-[var(--color-orange)] hover:bg-white"
             >
               Manage settings
@@ -107,6 +112,8 @@ export default async function DonorProfilePage({ searchParams }: ProfileProps) {
           walletAddress={walletAddress}
         />
       </section>
+
+      <DonorWalletAppearance walletAddress={walletAddress} />
     </div>
   );
 }

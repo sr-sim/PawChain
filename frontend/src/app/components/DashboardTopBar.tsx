@@ -102,6 +102,7 @@ export function DashboardTopBar({
                 aria-label="Open notifications"
                 title="Notifications"
                 onClick={() => setIsNotificationOpen((current) => !current)}
+                suppressHydrationWarning
                 className={[
                   "relative grid h-10 w-10 place-items-center rounded-2xl border bg-white text-slate-600 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-[var(--color-orange)]",
                   isNotificationOpen
@@ -150,6 +151,7 @@ export function DashboardTopBar({
                       <button
                         type="button"
                         onClick={() => void onMarkAllNotificationsRead()}
+                        suppressHydrationWarning
                         className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-black text-[var(--color-orange)] transition hover:bg-orange-50"
                       >
                         Mark all
