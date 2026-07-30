@@ -14,6 +14,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { formatEther, isAddress, parseEther } from "viem";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
@@ -106,6 +107,14 @@ function getMilestoneStatusLabel(status: number) {
   ];
 
   return labels[status] ?? "Unknown";
+}
+
+function getContractCampaignStatusLabel(status: number) {
+  if (status === 0) return "Funding";
+  if (status === 1) return "Completed";
+  if (status === 2) return "Refunding";
+  if (status === 3) return "Closed";
+  return "Unknown";
 }
 
 type OnChainMilestone = {
@@ -279,6 +288,12 @@ export default function DonorDonatePage() {
   const [donationError, setDonationError] = useState("");
   const [transactionHash, setTransactionHash] = useState("");
   const [confirmedDonationId, setConfirmedDonationId] = useState("");
+  const [blockchainPopup, setBlockchainPopup] = useState<{
+    status: "pending" | "confirmed" | "failed";
+    title: string;
+    message: string;
+    txHash: string;
+  } | null>(null);
   const [liveEthMyrRate, setLiveEthMyrRate] = useState<number | null>(null);
   const [rateSource, setRateSource] = useState<
     "coingecko" | "fallback" | "campaign"
@@ -310,12 +325,18 @@ export default function DonorDonatePage() {
         const liveCampaigns = Array.isArray(result.campaigns)
           ? (result.campaigns as DonorCampaign[])
           : [];
+        const donationCampaigns = liveCampaigns.filter(
+          (campaign) =>
+            campaign.status === "Active" &&
+            campaign.daysLeft > 0 &&
+            Boolean(campaign.contractAddress),
+        );
 
-        setCampaigns(liveCampaigns);
+        setCampaigns(donationCampaigns);
         setSelectedId((current) =>
-          liveCampaigns.some((campaign) => campaign.id === current)
+          donationCampaigns.some((campaign) => campaign.id === current)
             ? current
-            : (liveCampaigns[0]?.id ?? ""),
+            : (donationCampaigns[0]?.id ?? ""),
         );
       } catch (error) {
         if (isMounted) {
@@ -386,11 +407,177 @@ export default function DonorDonatePage() {
     };
   }, []);
 
-  const selectedCampaign = useMemo(
-    () =>
-      campaigns.find((campaign) => campaign.id === selectedId) ?? campaigns[0],
-    [campaigns, selectedId],
-  );
+  const allCampaignReadContracts = campaigns.flatMap((campaign) => {
+    const contractAddress =
+      campaign.contractAddress && isAddress(campaign.contractAddress)
+        ? (campaign.contractAddress as `0x${string}`)
+        : null;
+
+    return contractAddress
+      ? [
+          {
+            address: contractAddress,
+            abi: campaignContractAbi,
+            functionName: "campaignStatus",
+            chainId: getPawChainId(),
+          },
+          {
+            address: contractAddress,
+            abi: campaignContractAbi,
+            functionName: "totalRaised",
+            chainId: getPawChainId(),
+          },
+          {
+            address: contractAddress,
+            abi: campaignContractAbi,
+            functionName: "currentMilestoneIndex",
+            chainId: getPawChainId(),
+          },
+        ]
+      : [];
+  });
+  const { data: allCampaignReads, isLoading: isLoadingAllCampaignReads } =
+    useReadContracts({
+      contracts: allCampaignReadContracts,
+      query: {
+        enabled: allCampaignReadContracts.length > 0,
+        refetchInterval: 10_000,
+      },
+    });
+  const milestoneReadTargets = campaigns
+    .map((campaign, index) => {
+      const contractAddress =
+        campaign.contractAddress && isAddress(campaign.contractAddress)
+          ? (campaign.contractAddress as `0x${string}`)
+          : null;
+      const currentIndexResult = allCampaignReads?.[index * 3 + 2];
+      const currentIndex =
+        currentIndexResult?.status === "success"
+          ? Number(currentIndexResult.result)
+          : null;
+
+      return contractAddress && currentIndex !== null
+        ? {
+            campaignId: campaign.id,
+            contract: {
+              address: contractAddress,
+              abi: campaignContractAbi,
+              functionName: "getMilestone",
+              args: [BigInt(currentIndex)],
+              chainId: getPawChainId(),
+            },
+          }
+        : null;
+    })
+    .filter(Boolean) as {
+    campaignId: string;
+    contract: {
+      address: `0x${string}`;
+      abi: typeof campaignContractAbi;
+      functionName: "getMilestone";
+      args: [bigint];
+      chainId: number;
+    };
+  }[];
+  const { data: allMilestoneReads, isLoading: isLoadingAllMilestoneReads } =
+    useReadContracts({
+      contracts: milestoneReadTargets.map((target) => target.contract),
+      query: {
+        enabled: milestoneReadTargets.length > 0,
+        refetchInterval: 10_000,
+      },
+    });
+  const campaignFundingSnapshots = new Map<
+    string,
+    {
+      canAccept: boolean;
+      campaignStatus: string;
+      milestoneStatus: string;
+      remainingEth: number;
+      progress: number;
+    }
+  >();
+
+  campaigns.forEach((campaign, index) => {
+    const statusResult = allCampaignReads?.[index * 3];
+    const totalRaisedResult = allCampaignReads?.[index * 3 + 1];
+    const milestoneReadIndex = milestoneReadTargets.findIndex(
+      (target) => target.campaignId === campaign.id,
+    );
+    const milestoneResult =
+      milestoneReadIndex >= 0 ? allMilestoneReads?.[milestoneReadIndex] : null;
+
+    if (
+      statusResult?.status !== "success" ||
+      totalRaisedResult?.status !== "success" ||
+      milestoneResult?.status !== "success"
+    ) {
+      return;
+    }
+
+    const contractStatus = getContractCampaignStatusLabel(
+      Number(statusResult.result),
+    );
+    const totalRaisedWei = totalRaisedResult.result as bigint;
+    const milestone = normalizeOnChainMilestone(milestoneResult.result);
+
+    if (!milestone) {
+      return;
+    }
+
+    const remainingWei =
+      milestone.cumulativeThreshold > totalRaisedWei
+        ? milestone.cumulativeThreshold - totalRaisedWei
+        : BigInt(0);
+    const raisedInStageWei =
+      milestone.allocation > remainingWei
+        ? milestone.allocation - remainingWei
+        : BigInt(0);
+    const milestoneStatus = getMilestoneStatusLabel(milestone.status);
+    const remainingEth = Number(formatEther(remainingWei));
+
+    campaignFundingSnapshots.set(campaign.id, {
+      canAccept:
+        contractStatus === "Funding" &&
+        milestoneStatus === "Active" &&
+        remainingWei > BigInt(0),
+      campaignStatus: contractStatus,
+      milestoneStatus,
+      remainingEth,
+      progress:
+        milestone.allocation > BigInt(0)
+          ? clampPercentage(
+              (Number(raisedInStageWei) / Number(milestone.allocation)) * 100,
+            )
+          : 0,
+    });
+  });
+
+  const donationReadyCampaigns = campaigns.filter((campaign) => {
+    const snapshot = campaignFundingSnapshots.get(campaign.id);
+
+    if (snapshot) {
+      return snapshot.canAccept;
+    }
+
+    if (isLoadingAllCampaignReads || isLoadingAllMilestoneReads) {
+      return campaign.status === "Active";
+    }
+
+    const goalAmount = campaign.goalAmount ?? parseGoal(campaign.goal);
+    const currentAmount =
+      campaign.currentAmount ?? (goalAmount * campaign.raised) / 100;
+    const fallbackStage = getCurrentMilestoneStage(
+      campaign.milestones,
+      goalAmount,
+      currentAmount,
+    );
+
+    return campaign.status === "Active" && Boolean(fallbackStage);
+  });
+  const selectedCampaign =
+    donationReadyCampaigns.find((campaign) => campaign.id === selectedId) ??
+    donationReadyCampaigns[0];
   const selectedContractAddress =
     selectedCampaign?.contractAddress &&
     isAddress(selectedCampaign.contractAddress)
@@ -588,9 +775,6 @@ export default function DonorDonatePage() {
       ? formatEther(currentStage.remainingWei)
       : currentStageEth.toFixed(6);
   const currentStageEthDisplay = formatEthText(currentStageEth);
-  const currentStageTargetDisplay = formatEthText(
-    currentStage?.stageAmountEth ?? 0,
-  );
   const donationEthDisplay = formatEthText(numericAmount);
   const isOpenForFunding =
     Boolean(currentStage) &&
@@ -740,6 +924,13 @@ export default function DonorDonatePage() {
         functionName: "donate",
         value: donationValue,
       });
+      setBlockchainPopup({
+        status: "pending",
+        title: "Donation submitted",
+        message:
+          "Your wallet approved the transaction. PawChain is waiting for blockchain confirmation.",
+        txHash,
+      });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
@@ -766,10 +957,23 @@ export default function DonorDonatePage() {
       setTransactionHash(txHash);
       setConfirmedDonationId(result.donation?.id ?? "");
       setIsSubmitted(true);
+      setBlockchainPopup({
+        status: "confirmed",
+        title: "Donation confirmed",
+        message:
+          "Your ETH donation is confirmed on-chain and saved into your donation history.",
+        txHash,
+      });
     } catch (error) {
-      setDonationError(
-        error instanceof Error ? error.message : "Unable to confirm donation.",
-      );
+      const message =
+        error instanceof Error ? error.message : "Unable to confirm donation.";
+      setDonationError(message);
+      setBlockchainPopup({
+        status: "failed",
+        title: "Donation not completed",
+        message,
+        txHash: transactionHash,
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -800,6 +1004,16 @@ export default function DonorDonatePage() {
         </div>
       </section>
 
+      <BlockchainSuccessPopup
+        open={Boolean(blockchainPopup)}
+        status={blockchainPopup?.status ?? "confirmed"}
+        title={blockchainPopup?.title ?? ""}
+        message={blockchainPopup?.message ?? ""}
+        txHash={blockchainPopup?.txHash ?? ""}
+        actionLabel="View transaction"
+        onClose={() => setBlockchainPopup(null)}
+      />
+
       <section className="grid items-start gap-5 xl:grid-cols-[1.18fr_0.82fr]">
         <div className="donor-donate-card h-fit rounded-2xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex items-end justify-between gap-4">
@@ -814,11 +1028,11 @@ export default function DonorDonatePage() {
             <p className="text-sm font-medium text-stone-500">
               {isLoadingCampaigns
                 ? "Loading..."
-                : `${campaigns.length} active campaigns`}
+                : `${donationReadyCampaigns.length} open campaigns`}
             </p>
           </div>
 
-          <div className="mt-4 h-[50rem] max-h-[calc(100vh-8rem)] space-y-2 overflow-y-auto rounded-xl pr-1">
+          <div className="mt-4 h-[42rem] max-h-[calc(100vh-10rem)] space-y-2 overflow-y-auto rounded-xl pr-1">
             {isLoadingCampaigns ? (
               <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-5 text-center">
                 <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
@@ -835,8 +1049,8 @@ export default function DonorDonatePage() {
                   {campaignLoadError}
                 </p>
               </div>
-            ) : campaigns.length > 0 ? (
-              campaigns.map((campaign) => {
+            ) : donationReadyCampaigns.length > 0 ? (
+              donationReadyCampaigns.map((campaign) => {
                 const selectorGoalAmount =
                   campaign.goalAmount ?? parseGoal(campaign.goal);
                 const selectorCurrentAmount =
@@ -866,6 +1080,23 @@ export default function DonorDonatePage() {
                         selectorStage.cumulativeTarget) *
                       100
                     : 0;
+                const fundingSnapshot = campaignFundingSnapshots.get(campaign.id);
+                const selectorCanAccept = fundingSnapshot
+                  ? fundingSnapshot.canAccept
+                  : selectorStage
+                    ? selectorStage.remainingAmount > 0
+                    : false;
+                const selectorDisplayProgress =
+                  fundingSnapshot?.progress ?? selectorStageProgress;
+                const selectorDisplayRemainingEth =
+                  fundingSnapshot?.remainingEth ?? selectorRemainingEth;
+                const selectorDisplayRemainingMyr =
+                  fundingSnapshot?.remainingEth !== undefined
+                    ? fundingSnapshot.remainingEth * ethToMyrRate
+                    : (selectorStage?.remainingAmount ?? 0);
+                const selectorDisplayStatus =
+                  fundingSnapshot?.milestoneStatus ??
+                  (selectorCanAccept ? "Active" : "Waiting");
 
                 return (
                   <button
@@ -894,8 +1125,15 @@ export default function DonorDonatePage() {
                             <span className="truncate">{campaign.shelter}</span>
                           </p>
                         </div>
-                        <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[0.68rem] font-semibold text-emerald-700">
-                          {campaign.status}
+                        <span
+                          className={[
+                            "shrink-0 rounded-full border px-2 py-0.5 text-[0.68rem] font-semibold",
+                            selectorCanAccept
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-amber-200 bg-amber-50 text-amber-700",
+                          ].join(" ")}
+                        >
+                          {selectorCanAccept ? "Open" : "Waiting"}
                         </span>
                       </div>
 
@@ -906,7 +1144,7 @@ export default function DonorDonatePage() {
                               {selectorMilestone.title}
                             </span>
                             <span className="shrink-0 text-[var(--color-orange)]">
-                              {selectorMilestone.percentage}%
+                              {Math.round(selectorDisplayProgress)}%
                             </span>
                           </div>
                           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
@@ -915,15 +1153,25 @@ export default function DonorDonatePage() {
                               style={{
                                 width: `${Math.max(
                                   0,
-                                  Math.min(100, selectorStageProgress),
+                                  Math.min(100, selectorDisplayProgress),
                                 )}%`,
                               }}
                             />
                           </div>
                           <div className="mt-1 flex items-center justify-between gap-2 text-[0.7rem] font-medium text-stone-500">
-                            <span>Need {formatEthText(selectorRemainingEth)}</span>
+                            <span>
+                              {selectorCanAccept
+                                ? `Need ${formatEthText(selectorDisplayRemainingEth)}`
+                                : selectorDisplayStatus === "Withdrawable"
+                                  ? "Funded"
+                                  : "Not open"}
+                            </span>
                             <span className="shrink-0 text-stone-400">
-                              {formatMyr(selectorStage.remainingAmount)}
+                              {selectorCanAccept
+                                ? formatMyr(selectorDisplayRemainingMyr)
+                                : selectorDisplayStatus === "Withdrawable"
+                                  ? "Awaiting withdrawal"
+                                  : selectorDisplayStatus}
                             </span>
                           </div>
                         </div>
@@ -936,14 +1184,8 @@ export default function DonorDonatePage() {
                       )}
 
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[0.68rem] font-medium text-sky-700">
-                          {campaign.location}
-                        </span>
                         <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.68rem] font-medium text-[var(--color-orange)]">
                           {campaign.daysLeft} days left
-                        </span>
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[0.68rem] font-medium text-amber-700">
-                          {campaign.milestones.length} milestones
                         </span>
                       </div>
                     </div>
@@ -953,11 +1195,11 @@ export default function DonorDonatePage() {
             ) : (
               <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
                 <p className="text-sm font-black text-stone-950">
-                  No active campaigns available
+                  No campaigns open for donation
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                  Donations can start after Admin approves at least one shelter
-                  campaign.
+                  Donations reopen when an active campaign has a milestone that
+                  is accepting funds.
                 </p>
                 <Link
                   href="/Donor/discover"
@@ -1184,216 +1426,123 @@ export default function DonorDonatePage() {
                 </span>
               </span>
             </button>
-            <details className="group mt-3 rounded-xl border border-orange-100 bg-white/80 px-3 py-2.5">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-stone-950 [&::-webkit-details-marker]:hidden">
-                <span>Milestone details</span>
-                <span className="text-[var(--color-orange)] transition group-open:rotate-45">
-                  +
-                </span>
-              </summary>
-              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                <div className="rounded-lg bg-orange-50/60 p-2">
-                  <p className="font-semibold text-stone-500">Target</p>
-                  <p className="mt-1 font-black text-stone-950">
-                    {currentStageTargetDisplay}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-orange-50/60 p-2">
-                  <p className="font-semibold text-stone-500">Status</p>
-                  <p className="mt-1 font-black text-stone-950">
-                    {milestoneStatusSimple}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-orange-50/60 p-2">
-                  <p className="font-semibold text-stone-500">Source</p>
-                  <p className="mt-1 font-black text-stone-950">
-                    {currentStage?.source ?? "No active stage"}
-                  </p>
-                </div>
-              </div>
-            </details>
-            <details className="group mt-3 rounded-xl border border-orange-100 bg-white/80 px-3 py-2.5">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-stone-950 [&::-webkit-details-marker]:hidden">
-                <span>Rate details</span>
-                <span className="text-[var(--color-orange)] transition group-open:rotate-45">
-                  +
-                </span>
-              </summary>
-              <div className="mt-3 flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-semibold text-stone-600">
-                  {rateLabel}: 1 ETH = {formatMyr(ethToMyrRate)}
-                </p>
-                {rateTimestamp ? (
-                  <p className="font-semibold text-stone-500">
-                    Updated {rateTimestamp}
-                  </p>
-                ) : null}
-              </div>
-              {rateLoadError ? (
-                <p className="mt-2 text-xs font-semibold text-amber-700">
-                  Live rate unavailable, using the latest saved estimate.
-                </p>
-              ) : null}
-            </details>
           </div>
 
           {selectedCampaign ? (
             <div className="donor-donate-card rounded-2xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
-                    Review
+                    Confirm
                   </p>
                   <h2 className="mt-1 text-xl font-black text-stone-950">
-                    Checkout
+                    Transaction review
                   </h2>
+                  <p className="mt-1 truncate text-sm font-semibold text-stone-500">
+                    {selectedCampaign.title}
+                  </p>
                 </div>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                  On-chain
+                <span className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-xs font-black text-[var(--color-orange)]">
+                  Smart contract
                 </span>
               </div>
 
-              <div className="mt-4 rounded-xl border border-orange-100 bg-white/80 p-3">
-                <div className="flex items-start justify-between gap-3">
+              <div className="mt-4 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 via-white to-white p-4">
+                <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-stone-950">
-                      {selectedCampaign.title}
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-400">
+                      You donate
                     </p>
-                    <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--color-orange)]">
-                      <span>{selectedCampaign.shelter}</span>
+                    <p className="mt-1 text-2xl font-black text-stone-950">
+                      {donationEthDisplay}
+                    </p>
+                    <p className="text-sm font-semibold text-stone-500">
+                      Approx. {formatMyr(myrEstimate)}
                     </p>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
-                    {selectedCampaign.status}
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                  <div>
-                    <p className="font-semibold text-stone-950">
-                      {nextMilestone?.title}
+                  <div className="text-right">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-400">
+                      Stage
                     </p>
-                    <p className="mt-0.5 font-medium text-stone-500">
-                      Current milestone
+                    <p className="mt-1 text-sm font-black text-stone-950">
+                      {currentStage ? `#${currentStage.index + 1}` : "-"}
                     </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-stone-950">
-                      {currentStageEthDisplay}
-                    </p>
-                    <p className="mt-0.5 font-medium text-stone-500">
-                      Still needed
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-stone-950">
+                    <p className="text-xs font-semibold text-stone-500">
                       {milestoneStatusSimple}
                     </p>
-                    <p className="mt-0.5 font-medium text-stone-500">
-                      Stage status
-                    </p>
                   </div>
                 </div>
-              </div>
 
-              <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                <div className="rounded-xl border border-orange-100 bg-orange-50/25 px-3 py-2.5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-                    ETH donation
-                  </p>
-                  <p className="mt-1 text-lg font-black text-stone-950">
-                    {donationEthDisplay}
-                  </p>
-                  <p className="text-xs font-semibold text-stone-500">
-                    Approx. {formatMyr(myrEstimate)}
-                  </p>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
+                  <div
+                    className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
+                    style={{
+                      width: `${clampPercentage(currentStage?.progress ?? 0)}%`,
+                    }}
+                  />
                 </div>
-                <div className="rounded-xl border border-orange-100 bg-orange-50/25 px-3 py-2.5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-                    Milestone status
-                  </p>
-                  <p className="mt-1 text-lg font-black text-stone-950">
-                    {milestoneStatusSimple}
-                  </p>
-                  <p className="text-xs font-semibold text-stone-500">
-                    {currentStage
-                      ? `Stage ${currentStage.index + 1}`
-                      : "No active stage"}
-                  </p>
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs font-semibold text-stone-500">
+                  <span className="truncate">
+                    {nextMilestone?.title ?? "Current milestone"}
+                  </span>
+                  <span className="shrink-0">
+                    Need {currentStageEthDisplay}
+                  </span>
                 </div>
               </div>
 
-              <details className="group mt-5 overflow-hidden rounded-xl border border-orange-100 bg-white">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-orange-100 bg-gradient-to-r from-orange-50 to-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-orange)] [&::-webkit-details-marker]:hidden">
-                  <span>Fee and gas estimate</span>
-                  <span className="text-sm transition group-open:rotate-45">+</span>
+              <details className="group mt-4 overflow-hidden rounded-xl border border-orange-100 bg-white">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-stone-500 [&::-webkit-details-marker]:hidden">
+                  <span>Gas and rate</span>
+                  <span className="text-[var(--color-orange)] transition group-open:rotate-45">
+                    +
+                  </span>
                 </summary>
-                <div className="divide-y divide-orange-100 text-sm">
-                  <div className="flex items-center justify-between gap-4 px-3 py-2.5">
-                    <span className="text-stone-500">ETH donation</span>
-                    <span className="font-semibold text-stone-950">
-                      {donationEthDisplay}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 px-3 py-2.5">
-                    <span className="text-stone-500">Approx. MYR value</span>
-                    <span className="font-semibold text-stone-950">
-                      {formatMyr(myrEstimate)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 px-3 py-2.5">
-                    <span className="text-stone-500">Estimated gas buffer</span>
-                    <span className="text-right">
-                      <span className="block font-semibold text-stone-950">
-                        {formatEthText(estimatedGasEth)}
+                <div className="divide-y divide-orange-100 border-t border-orange-100 text-sm">
+                  {[
+                    ["ETH donation", donationEthDisplay],
+                    ["MYR estimate", formatMyr(myrEstimate)],
+                    ["Gas buffer", `${formatEthText(estimatedGasEth)} / ${formatMyr(estimatedGasMyr)}`],
+                    ["Estimated total", `${requiredTotalEthDisplay} / ${formatMyr(requiredTotalMyr)}`],
+                    ["Rate", `${rateLabel}: 1 ETH = ${formatMyr(ethToMyrRate)}`],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="flex items-center justify-between gap-4 px-3 py-2.5"
+                    >
+                      <span className="text-stone-500">{label}</span>
+                      <span className="text-right font-semibold text-stone-950">
+                        {value}
                       </span>
-                      <span className="block text-xs font-semibold text-stone-500">
-                        Approx. {formatMyr(estimatedGasMyr)}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4 px-3 py-2.5">
-                    <span className="font-semibold text-stone-950">
-                      Estimated ETH needed
-                    </span>
-                    <span className="text-right">
-                      <span className="block font-black text-stone-950">
-                        {requiredTotalEthDisplay}
-                      </span>
-                      <span className="block text-xs font-semibold text-stone-500">
-                        Approx. {formatMyr(requiredTotalMyr)}
-                      </span>
-                    </span>
-                  </div>
+                    </div>
+                  ))}
+                  {rateTimestamp || rateLoadError ? (
+                    <div className="px-3 py-2.5 text-xs font-semibold text-stone-500">
+                      {rateTimestamp ? <p>Updated {rateTimestamp}</p> : null}
+                      {rateLoadError ? (
+                        <p className="mt-1 text-amber-700">
+                          Live rate unavailable, using latest estimate.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </details>
 
               {isSubmitted ? (
-                <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-sm font-black text-emerald-800">
-                    Donation confirmed
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {[
-                      ["Wallet confirmation", "Confirmed on-chain"],
-                      ["Transaction hash", shortTxHash || "Recorded"],
-                      [
-                        "Amount",
-                        `${donationEthDisplay} (${formatMyr(myrEstimate)})`,
-                      ],
-                      ["Tracking", "Saved into donation history"],
-                    ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="flex items-center justify-between gap-4 text-sm"
-                      >
-                        <span className="font-medium text-emerald-700">
-                          {label}
-                        </span>
-                        <span className="text-right font-semibold text-emerald-950">
-                          {value}
-                        </span>
-                      </div>
-                    ))}
+                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-black text-emerald-800">
+                        Donation confirmed
+                      </p>
+                      <p className="mt-1 font-mono text-xs font-semibold text-emerald-700">
+                        {shortTxHash || "Transaction recorded"}
+                      </p>
+                    </div>
+                    <p className="text-sm font-black text-emerald-950">
+                      {donationEthDisplay}
+                    </p>
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     <Link
@@ -1427,25 +1576,21 @@ export default function DonorDonatePage() {
                     }
                     onClick={() => void handleDonate()}
                     suppressHydrationWarning
-                    className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-orange-200"
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-600 disabled:cursor-not-allowed disabled:translate-y-0 disabled:bg-orange-200"
                   >
                     {isProcessing
                       ? "Confirming transaction..."
                       : isConnected
                         ? isOpenForFunding
                           ? `Donate ${donationEthDisplay}`
-                          : "Milestone not open for donation"
-                        : "Connect wallet and confirm"}
+                          : "Milestone not open"
+                        : "Connect wallet"}
                   </button>
-                  {isOpenForFunding ? (
-                    <p className="mt-3 text-center text-xs font-medium text-stone-500">
-                      MetaMask will show the final gas fee before you confirm.
-                    </p>
-                  ) : (
+                  {!isOpenForFunding ? (
                     <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800">
                       {milestoneGateMessage}
                     </p>
-                  )}
+                  ) : null}
                 </>
               )}
               {donationError ? (

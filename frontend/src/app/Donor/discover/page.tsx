@@ -32,7 +32,7 @@ type DonorCampaign = Campaign & {
 const urgencies = ["All", "Critical", "High", "Medium"];
 const locations = ["All", "Kuala Lumpur", "Selangor", "Penang", "Johor"];
 const sortOptions = ["Most urgent", "Deadline soon", "Most progress", "Most donors"];
-const tabs = ["Campaigns", "Completed", "Shelters", "Saved"] as const;
+const tabs = ["Campaigns", "Completed", "Closed", "Shelters", "Saved"] as const;
 const urgencyRank: Record<string, number> = { Critical: 0, High: 1, Medium: 2 };
 
 function getUrgencyStyle(urgency: string) {
@@ -177,6 +177,7 @@ export default function DonorDiscoverPage() {
   const [campaignLoadError, setCampaignLoadError] = useState("");
   const [savedLoadError, setSavedLoadError] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [urgency, setUrgency] = useState("All");
   const [location, setLocation] = useState("All");
@@ -283,6 +284,12 @@ export default function DonorDiscoverPage() {
     };
   }, [walletAddress]);
 
+  useEffect(() => {
+    if (!actionToast) return;
+    const timer = window.setTimeout(() => setActionToast(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [actionToast]);
+
   function clearFilters() {
     setSearchTerm("");
     setUrgency("All");
@@ -319,6 +326,10 @@ export default function DonorDiscoverPage() {
       if (!response.ok) {
         throw new Error(result.message ?? "Unable to update saved campaign.");
       }
+
+      setActionToast(
+        isSaved ? "Campaign removed from saved list." : "Campaign saved.",
+      );
     } catch (error) {
       setSavedIds(savedIds);
       setSavedLoadError(
@@ -340,7 +351,6 @@ export default function DonorDiscoverPage() {
         [
           campaign.title,
           campaign.shelter,
-          campaign.location,
           campaign.story,
         ]
           .join(" ")
@@ -348,9 +358,7 @@ export default function DonorDiscoverPage() {
           .includes(normalizedSearch);
 
       const matchesUrgency = urgency === "All" || campaign.urgency === urgency;
-      const matchesLocation = location === "All" || campaign.location === location;
-
-      return matchesSearch && matchesUrgency && matchesLocation;
+      return matchesSearch && matchesUrgency;
     });
   }, [location, searchTerm, urgency]);
 
@@ -383,10 +391,9 @@ export default function DonorDiscoverPage() {
   );
   const shelters = useMemo(() => getShelters(campaigns), [campaigns]);
   const locationOptions = useMemo(() => {
-    const campaignLocations = campaigns.map((campaign) => campaign.location);
     const shelterLocations = shelters.map((shelter) => shelter.location);
 
-    return ["All", ...Array.from(new Set([...campaignLocations, ...shelterLocations]))];
+    return ["All", ...Array.from(new Set(shelterLocations))];
   }, [campaigns, shelters]);
 
   const filteredShelters = useMemo(() => {
@@ -443,14 +450,20 @@ export default function DonorDiscoverPage() {
     () => sortedCampaigns.filter((campaign) => campaign.status === "Completed"),
     [sortedCampaigns],
   );
+  const closedCampaigns = useMemo(
+    () => sortedCampaigns.filter((campaign) => campaign.status === "Closed"),
+    [sortedCampaigns],
+  );
   const displayedCampaigns =
     activeTab === "Saved"
       ? savedCampaigns
       : activeTab === "Completed"
         ? completedCampaigns
-        : activeCampaigns.length === 0 && campaigns.length > 0
-          ? campaigns.filter((campaign) => campaign.status === "Active")
-          : activeCampaigns;
+        : activeTab === "Closed"
+          ? closedCampaigns
+          : activeCampaigns.length === 0 && campaigns.length > 0
+            ? campaigns.filter((campaign) => campaign.status === "Active")
+            : activeCampaigns;
 
   const sortedShelters = useMemo(() => {
     return [...filteredShelters].sort((first, second) => {
@@ -485,6 +498,7 @@ export default function DonorDiscoverPage() {
   const tabCounts: Record<(typeof tabs)[number], number> = {
     Campaigns: campaigns.filter((campaign) => campaign.status === "Active").length,
     Completed: campaigns.filter((campaign) => campaign.status === "Completed").length,
+    Closed: campaigns.filter((campaign) => campaign.status === "Closed").length,
     Shelters: shelters.length,
     Saved: savedIds.length,
   };
@@ -494,6 +508,8 @@ export default function DonorDiscoverPage() {
       ? "No saved campaigns yet"
       : activeTab === "Completed"
         ? "No completed campaigns yet"
+      : activeTab === "Closed"
+        ? "No closed campaigns yet"
       : hasActiveFilters && campaigns.length > 0
         ? "No campaigns match these filters"
         : "No active campaigns found";
@@ -502,6 +518,8 @@ export default function DonorDiscoverPage() {
       ? "Tap the heart on a campaign to keep it in this list."
       : activeTab === "Completed"
         ? "Completed campaign records will appear here after milestone release is finished."
+      : activeTab === "Closed"
+        ? "Closed campaigns will appear here after refund or closure actions."
       : hasActiveFilters && campaigns.length > 0
         ? "Active campaigns are available, but the current search or filter selection is hiding them."
         : "No active campaigns are available yet. Check again after Admin approves a shelter campaign.";
@@ -1033,7 +1051,7 @@ export default function DonorDiscoverPage() {
                 </h2>
                 <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--color-orange)]">
                   <span>
-                    {selectedCampaign.shelter} - {selectedCampaign.location}
+                    {selectedCampaign.shelter}
                   </span>
                 </p>
               </div>
@@ -1231,7 +1249,7 @@ export default function DonorDiscoverPage() {
                   Shelter profile
                 </p>
                 <p className="mt-2 text-sm leading-6 text-stone-600">
-                  Verified shelter based in {selectedCampaign.location}.
+                  Verified shelter on PawChain.
                 </p>
               </div>
             </div>
@@ -1353,6 +1371,11 @@ export default function DonorDiscoverPage() {
               )}
             </div>
           </div>
+        </div>
+      ) : null}
+      {actionToast ? (
+        <div className="fixed bottom-6 right-6 z-[130] max-w-sm rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-black text-stone-950 shadow-[0_20px_60px_rgba(28,25,23,0.18)]">
+          <p>{actionToast}</p>
         </div>
       ) : null}
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useChainId, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { decodeEventLog, formatEther, isAddress, type Address } from "viem";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { demoEthMyrRate, getPawChainId } from "@/lib/campaign-blockchain";
 import {
@@ -44,6 +45,12 @@ export function RefundClaimButton({
   );
   const [gasFeeEth, setGasFeeEth] = useState<number | null>(null);
   const [ethMyrRate, setEthMyrRate] = useState(demoEthMyrRate);
+  const [blockchainPopup, setBlockchainPopup] = useState<{
+    status: "pending" | "confirmed" | "failed";
+    title: string;
+    message: string;
+    txHash: string;
+  } | null>(null);
   const validContract =
     contractAddress && isAddress(contractAddress) ? contractAddress : undefined;
   const { data: refundable, refetch } = useReadContract({
@@ -111,6 +118,13 @@ export function RefundClaimButton({
         functionName: "claimRefund",
       });
       setClaimedTxHash(txHash);
+      setBlockchainPopup({
+        status: "pending",
+        title: "Refund claim submitted",
+        message:
+          "Your wallet approved the claim. PawChain is waiting for the campaign contract to confirm the refund.",
+        txHash,
+      });
       setMessage("Refund transaction submitted. Waiting for confirmation...");
       setMessageType("info");
       const receipt = await publicClient.waitForTransactionReceipt({
@@ -161,6 +175,13 @@ export function RefundClaimButton({
       }
       setMessage("Refund confirmed on-chain.");
       setMessageType("success");
+      setBlockchainPopup({
+        status: "confirmed",
+        title: "Refund received",
+        message:
+          "The campaign contract sent your refund as an internal transfer. The proof is available on Etherscan.",
+        txHash,
+      });
       await refetch();
     } catch (error) {
       const rawMessage =
@@ -175,6 +196,12 @@ export function RefundClaimButton({
 
       setMessage(friendlyMessage);
       setMessageType("error");
+      setBlockchainPopup({
+        status: "failed",
+        title: "Refund not completed",
+        message: friendlyMessage,
+        txHash: claimedTxHash,
+      });
     } finally {
       setBusy(false);
     }
@@ -182,6 +209,15 @@ export function RefundClaimButton({
 
   return (
     <div className="mt-3 rounded-2xl border border-orange-100 bg-gradient-to-br from-white via-orange-50/45 to-white p-3 shadow-sm">
+      <BlockchainSuccessPopup
+        open={Boolean(blockchainPopup)}
+        status={blockchainPopup?.status ?? "confirmed"}
+        title={blockchainPopup?.title ?? ""}
+        message={blockchainPopup?.message ?? ""}
+        txHash={blockchainPopup?.txHash ?? ""}
+        actionLabel="View refund proof"
+        onClose={() => setBlockchainPopup(null)}
+      />
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

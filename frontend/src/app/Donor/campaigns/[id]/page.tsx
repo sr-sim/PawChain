@@ -127,25 +127,35 @@ export default async function DonorCampaignDetailPage({
         Back to discover
       </Link>
 
-      <section className="donor-tech-hero overflow-hidden rounded-3xl border border-orange-100 shadow-[0_24px_70px_rgba(120,72,0,0.10)]">
-        <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="relative min-h-[20rem] bg-orange-50/45 p-4 sm:p-5">
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt=""
-                className="h-full min-h-[18rem] w-full rounded-2xl object-cover shadow-[0_18px_42px_rgba(68,64,60,0.16)]"
-              />
-            ) : (
-              <div
-                className={[
-                  "h-full min-h-[18rem] rounded-2xl bg-gradient-to-br shadow-[0_18px_42px_rgba(68,64,60,0.16)]",
-                  campaign.imageClass,
-                ].join(" ")}
-              />
-            )}
-            <div className="absolute left-7 top-7 rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[var(--color-orange)] shadow-sm">
-              Campaign record
+      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+        {imageUrl ? (
+          <div className="flex h-56 items-center justify-center bg-orange-50/45 p-3 sm:h-64">
+            <img
+              src={imageUrl}
+              alt=""
+              className="max-h-full w-full rounded-xl object-contain"
+            />
+          </div>
+        ) : (
+          <div
+            className={[
+              "h-56 bg-gradient-to-br sm:h-64",
+              campaign.imageClass,
+            ].join(" ")}
+          />
+        )}
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                Campaign detail
+              </p>
+              <h1 className="mt-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
+                {campaign.title}
+              </h1>
+              <p className="mt-2 text-sm font-semibold text-[var(--color-orange)]">
+                {campaign.shelter}
+              </p>
             </div>
             {contractUrl && campaign.contractAddress ? (
               <a

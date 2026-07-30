@@ -17,14 +17,12 @@ import type {
   CampaignMilestone,
   UrgencyLevel,
 } from "@/app/components/campaigns/campaign-types";
-import { malaysianStates } from "@/app/components/campaigns/campaign-utils";
 import { demoEthMyrRate } from "@/lib/campaign-blockchain";
 import { formatEther } from "viem";
 
 type CampaignForm = {
   title: string;
   description: string;
-  location: string;
   urgencyLevel: UrgencyLevel;
   goalAmount: string;
   durationDays: "30" | "60" | "90";
@@ -107,7 +105,6 @@ function toCampaignForm(campaign: Campaign): CampaignForm {
   return {
     title: campaign.title,
     description: campaign.description,
-    location: campaign.location,
     urgencyLevel: campaign.urgency_level,
     goalAmount: goalEth,
     durationDays: String(campaign.duration_days) as CampaignForm["durationDays"],
@@ -214,7 +211,6 @@ export default function EditCampaignPage() {
     if (
       !form.title.trim() ||
       !form.description.trim() ||
-      !form.location ||
       Number(form.goalAmount) <= 0
     ) {
       setError("Complete campaign info and enter a positive ETH goal. Values below 1 ETH are allowed.");
@@ -304,7 +300,6 @@ export default function EditCampaignPage() {
           walletAddress: address,
           title: form.title,
           description: form.description,
-          location: form.location,
           urgencyLevel: form.urgencyLevel,
           goalAmount: Number(form.goalAmount) * demoEthMyrRate,
           goalEth: form.goalAmount,
@@ -395,23 +390,6 @@ export default function EditCampaignPage() {
               />
             </FieldLabel>
 
-            <FieldLabel label="Location">
-              <select
-                value={form.location}
-                onChange={(event) =>
-                  setForm({ ...form, location: event.target.value })
-                }
-                className="w-full rounded-2xl border border-orange-100 bg-orange-50/40 px-4 py-3 text-sm font-black text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:bg-white focus:ring-4 focus:ring-orange-100"
-                required
-              >
-                <option value="">Select state</option>
-                {malaysianStates.map((state) => (
-                  <option key={state} value={state}>
-                    {state}
-                  </option>
-                ))}
-              </select>
-            </FieldLabel>
           </div>
 
           <FieldLabel label="Description">
