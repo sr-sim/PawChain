@@ -4,14 +4,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
-const shelterNavigation = [
-  { name: "Dashboard", href: "/Shelter/dashboard", icon: DashboardIcon },
-  { name: "Campaigns", href: "/Shelter/campaigns", icon: CampaignsIcon },
-  { name: "Create Campaign", href: "/Shelter/campaigns/create", icon: PlusIcon },
-  { name: "Donations", href: "/Shelter/donations", icon: CoinsIcon },
-  { name: "Withdraw Funds", href: "/Shelter/withdrawals", icon: WalletIcon },
-  { name: "Refunds", href: "/Shelter/refunds", icon: RefundIcon },
-  { name: "Profile", href: "/Shelter/profile", icon: ProfileIcon },
+const shelterNavigationGroups = [
+  {
+    label: "Overview",
+    items: [
+      { name: "Dashboard", href: "/Shelter/dashboard", icon: DashboardIcon },
+    ],
+  },
+  {
+    label: "Campaign Features",
+    items: [
+      { name: "Campaigns", href: "/Shelter/campaigns", icon: CampaignsIcon },
+      { name: "Create Campaign", href: "/Shelter/campaigns/create", icon: PlusIcon },
+    ],
+  },
+  {
+    label: "Fund Features",
+    items: [
+      { name: "Donations", href: "/Shelter/donations", icon: CoinsIcon },
+      { name: "Withdraw Funds", href: "/Shelter/withdrawals", icon: WalletIcon },
+      { name: "Refunds", href: "/Shelter/refunds", icon: RefundIcon },
+    ],
+  },
+  {
+    label: "Account Features",
+    items: [
+      { name: "Notifications", href: "/Shelter/notifications", icon: NotificationIcon },
+      { name: "Profile", href: "/Shelter/profile", icon: ProfileIcon },
+    ],
+  },
 ];
 
 function isActiveRoute(pathname: string, href: string) {
@@ -137,6 +158,22 @@ function RefundIcon() {
   );
 }
 
+function NotificationIcon() {
+  return (
+    <NavIcon>
+      <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none">
+        <path
+          d="M5.2 8.2a4.8 4.8 0 0 1 9.6 0v3.1l1.4 2.3H3.8l1.4-2.3V8.2Zm3 7.3a2 2 0 0 0 3.6 0"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </NavIcon>
+  );
+}
+
 function ToggleIcon({ open }: { open: boolean }) {
   return (
     <span className="relative h-5 w-5" aria-hidden="true">
@@ -165,72 +202,91 @@ function ToggleIcon({ open }: { open: boolean }) {
 function SidebarContent({
   collapsed = false,
   onNavigate,
+  onToggleCollapsed,
 }: {
   collapsed?: boolean;
   onNavigate?: () => void;
+  onToggleCollapsed?: () => void;
 }) {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div
         className={[
           "min-h-[88px] border-b border-orange-100 py-4 transition-all duration-300 ease-out",
           collapsed ? "px-3 text-center" : "px-5",
         ].join(" ")}
       >
-        {!collapsed ? <div className="flex items-center gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-orange-50 ring-1 ring-orange-100"><img src="/images/logo.png" alt="PawChain" className="h-full w-full object-contain" /></span><div><p className="text-sm font-black uppercase leading-4 tracking-[0.12em] text-[var(--color-orange)]">Shelter</p><p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--color-orange)]">Portal</p></div></div> : null}
+        {!collapsed ? <div className="flex items-center gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-orange-50 ring-1 ring-orange-100"><img src="/images/logo.png" alt="PawChain" className="h-full w-full object-contain" /></span><div><p className="text-sm font-black uppercase leading-4 tracking-[0.12em] text-[var(--color-orange)]">Shelter</p><p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--color-orange)]">Portal</p></div>{onToggleCollapsed ? <button type="button" aria-label="Collapse shelter navigation" aria-expanded="true" onClick={onToggleCollapsed} className="ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-orange-100 bg-white text-stone-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-orange-50 hover:text-[var(--color-orange)]"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true"><path d="m12 5-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button> : null}</div> : null}
         {collapsed ? (
-          <span className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-sm font-black text-[var(--color-orange)] ring-1 ring-orange-100">
-            SP
-          </span>
+          <div className="flex items-center justify-center gap-1">
+            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">SP</span>
+            {onToggleCollapsed ? <button type="button" aria-label="Expand shelter navigation" aria-expanded="false" onClick={onToggleCollapsed} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-orange-100 bg-white text-stone-700 shadow-sm transition hover:bg-orange-50 hover:text-[var(--color-orange)]"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" aria-hidden="true"><path d="m8 5 5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button> : null}
+          </div>
         ) : null}
       </div>
 
       <nav
-        className={[
-          "flex-1 space-y-2 py-4 transition-all duration-300 ease-out",
-          collapsed ? "px-3" : "px-3",
-        ].join(" ")}
+        className="flex-1 overflow-y-auto px-3 py-4 transition-all duration-300 ease-out"
         aria-label="Shelter portal"
       >
-        {shelterNavigation.map((item) => {
-          const active = isActiveRoute(pathname, item.href);
-          const Icon = item.icon;
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              aria-label={collapsed ? item.name : undefined}
-              title={collapsed ? item.name : undefined}
-              onClick={onNavigate}
-              className={[
-                "group relative flex min-h-11 items-center rounded-2xl text-sm font-black transition-all duration-300 ease-out",
-                collapsed ? "justify-center px-0 py-3" : "gap-3 px-4 py-3",
-                active
-                  ? "bg-orange-50 text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100"
-                  : "text-stone-800 hover:bg-orange-50 hover:text-stone-950",
-              ].join(" ")}
-            >
-              <Icon />
-              <span
-                className={[
-                  "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
-                  collapsed ? "w-0 opacity-0" : "w-auto opacity-100",
-                ].join(" ")}
+        {shelterNavigationGroups.map((group, groupIndex) => (
+          <section
+            key={group.label}
+            aria-labelledby={collapsed ? undefined : `shelter-nav-${groupIndex}`}
+            className={groupIndex === 0 ? "" : collapsed ? "mt-3 border-t border-orange-100 pt-3" : "mt-5"}
+          >
+            {!collapsed ? (
+              <h2
+                id={`shelter-nav-${groupIndex}`}
+                className="mb-2 px-4 text-[0.68rem] font-black uppercase tracking-[0.16em] text-stone-400"
               >
-                {item.name}
-              </span>
-              {collapsed ? (
-                <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-black text-stone-950 opacity-0 shadow-lg shadow-orange-200/50 transition-opacity duration-200 group-hover:opacity-100">
-                  {item.name}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })}
+                {group.label}
+              </h2>
+            ) : null}
+
+            <div className="space-y-2">
+              {group.items.map((item) => {
+                const active = isActiveRoute(pathname, item.href);
+                const Icon = item.icon;
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    aria-label={collapsed ? item.name : undefined}
+                    title={collapsed ? item.name : undefined}
+                    onClick={onNavigate}
+                    className={[
+                      "group relative flex min-h-11 items-center rounded-2xl text-sm font-black transition-all duration-300 ease-out",
+                      collapsed ? "justify-center px-0 py-3" : "gap-3 px-4 py-3",
+                      active
+                        ? "bg-orange-50 text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100"
+                        : "text-stone-800 hover:bg-orange-50 hover:text-stone-950",
+                    ].join(" ")}
+                  >
+                    <Icon />
+                    <span
+                      className={[
+                        "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
+                        collapsed ? "w-0 opacity-0" : "w-auto opacity-100",
+                      ].join(" ")}
+                    >
+                      {item.name}
+                    </span>
+                    {collapsed ? (
+                      <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-black text-stone-950 opacity-0 shadow-lg shadow-orange-200/50 transition-opacity duration-200 group-hover:opacity-100">
+                        {item.name}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </nav>
     </div>
   );
@@ -254,30 +310,16 @@ export function ShelterSidebar() {
 
       <aside
         className={[
-          "sticky top-16 z-30 hidden h-[calc(100vh-4rem)] shrink-0 self-start overflow-visible border-r border-orange-100 bg-white shadow-[18px_0_46px_rgba(155,86,20,0.08)] transition-[width] duration-300 ease-out md:block",
+          "relative z-30 hidden shrink-0 self-stretch border-r border-orange-100 bg-white shadow-[18px_0_46px_rgba(155,86,20,0.08)] transition-[width] duration-300 ease-out md:block",
           collapsed ? "w-[5.5rem]" : "w-56",
         ].join(" ")}
       >
-        <div className="flex justify-end px-3 pt-4">
-          <button
-            type="button"
-            aria-label={collapsed ? "Expand shelter navigation" : "Collapse shelter navigation"}
-            aria-expanded={!collapsed}
-            onClick={() => setCollapsed((current) => !current)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-orange-100 bg-white text-stone-950 shadow-lg shadow-orange-200/50 transition hover:-translate-y-0.5 hover:bg-orange-50"
-          >
-            <span
-              className={[
-                "text-lg font-black leading-none transition-transform duration-300",
-                collapsed ? "rotate-180" : "rotate-0",
-              ].join(" ")}
-              aria-hidden="true"
-            >
-              {"<"}
-            </span>
-          </button>
+        <div className="sticky top-16 flex h-[calc(100dvh-4rem)] flex-col overflow-visible">
+          <SidebarContent
+            collapsed={collapsed}
+            onToggleCollapsed={() => setCollapsed((current) => !current)}
+          />
         </div>
-        <SidebarContent collapsed={collapsed} />
       </aside>
 
       <div
@@ -299,11 +341,11 @@ export function ShelterSidebar() {
         />
         <aside
           className={[
-            "relative h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-orange-100 bg-white shadow-2xl shadow-stone-950/20 transition-transform duration-300 ease-out",
+            "relative flex h-full w-[min(20rem,calc(100vw-2rem))] flex-col overflow-y-auto border-r border-orange-100 bg-white shadow-2xl shadow-stone-950/20 transition-transform duration-300 ease-out",
             drawerOpen ? "translate-x-0" : "-translate-x-full",
           ].join(" ")}
         >
-          <div className="flex justify-end px-4 pt-4">
+          <div className="flex shrink-0 justify-end px-4 pt-4">
             <button
               type="button"
               aria-label="Close shelter navigation"
