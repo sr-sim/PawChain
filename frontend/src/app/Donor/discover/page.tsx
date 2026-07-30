@@ -204,10 +204,12 @@ function CampaignImage({
   imageClass,
   imageUrl,
   size = "card",
+  rounded = true,
 }: {
   imageClass: string;
   imageUrl?: string | null;
   size?: "compact" | "card" | "hero";
+  rounded?: boolean;
 }) {
   const imageHeight =
     size === "hero"
@@ -222,7 +224,8 @@ function CampaignImage({
         src={imageUrl}
         alt=""
         className={[
-          "w-full rounded-xl object-cover",
+          "w-full object-cover",
+          rounded ? "rounded-xl" : "",
           imageHeight,
         ].join(" ")}
       />
@@ -232,7 +235,8 @@ function CampaignImage({
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-xl bg-gradient-to-br",
+        "relative overflow-hidden bg-gradient-to-br",
+        rounded ? "rounded-xl" : "",
         imageClass,
         imageHeight,
       ].join(" ")}
@@ -821,7 +825,7 @@ export default function DonorDiscoverPage() {
         </div>
 
         {activeTab !== "Shelters" ? (
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid auto-rows-fr items-stretch justify-items-center gap-3 lg:grid-cols-2 xl:grid-cols-3">
             {isLoadingCampaigns ? (
               <div className="rounded-2xl border border-orange-100 bg-white p-6 text-center lg:col-span-2 xl:col-span-3">
                 <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
@@ -855,17 +859,18 @@ export default function DonorDiscoverPage() {
                   }
                 }}
                 className={[
-                  "donor-gradient-card cursor-pointer overflow-hidden rounded-2xl border bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-200",
+                  "group/card donor-gradient-card relative flex h-full w-full [zoom:0.88] cursor-pointer flex-col overflow-hidden rounded-2xl border border-orange-100 bg-transparent shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-200",
                   selectedCampaign?.id === campaign.id
-                    ? "border-[var(--color-orange)]"
-                    : "border-orange-100",
+                    ? "ring-2 ring-[var(--color-orange)]"
+                    : "",
                 ].join(" ")}
               >
-                <div className="relative">
+                <div className="relative h-40 shrink-0 overflow-hidden transition-[height] duration-500 ease-in-out group-hover/card:h-[6.75rem] group-focus-within/card:h-[6.75rem] motion-reduce:transition-none sm:h-44 sm:group-hover/card:h-[7.75rem] sm:group-focus-within/card:h-[7.75rem]">
                   <CampaignImage
                     imageClass={campaign.imageClass}
                     imageUrl={campaign.imageUrl}
-                    size="compact"
+                    size="card"
+                    rounded={false}
                   />
                   <button
                     type="button"
@@ -910,7 +915,7 @@ export default function DonorDiscoverPage() {
                   </button>
                 </div>
 
-                <div className="group/info rounded-b-2xl bg-white px-1 py-3 transition-all duration-300 md:hover:pb-4">
+                <div className="group/info relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-100 bg-white px-3 pb-2 pt-4 transition-colors group-hover/card:border-orange-200">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="line-clamp-2 text-base font-black leading-5 text-stone-950">
@@ -997,15 +1002,17 @@ export default function DonorDiscoverPage() {
                     )}
                   </div>
 
-                  {campaign.status === "Active" ? (
-                    <Link
-                      href={`/Donor/donate?campaign=${campaign.id}`}
-                      onClick={(event) => event.stopPropagation()}
-                      className="mt-3 inline-flex w-full translate-y-0 items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white opacity-100 shadow-sm transition duration-300 hover:bg-orange-600 md:max-h-0 md:-translate-y-1 md:overflow-hidden md:py-0 md:opacity-0 md:group-hover/info:max-h-12 md:group-hover/info:translate-y-0 md:group-hover/info:py-2.5 md:group-hover/info:opacity-100"
-                    >
-                      Donate Now
-                    </Link>
-                  ) : null}
+                  <div className="mt-auto h-0 overflow-hidden pt-0 opacity-0 transition-[height,padding,opacity] duration-500 ease-in-out group-hover/card:h-[52px] group-hover/card:pt-3 group-hover/card:opacity-100 group-focus-within/card:h-[52px] group-focus-within/card:pt-3 group-focus-within/card:opacity-100 motion-reduce:transition-none">
+                    {campaign.status === "Active" ? (
+                      <Link
+                        href={`/Donor/donate?campaign=${campaign.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-600"
+                      > 
+                        Donate Now
+                      </Link>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             ))
