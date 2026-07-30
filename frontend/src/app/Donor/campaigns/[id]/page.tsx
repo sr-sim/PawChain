@@ -32,6 +32,19 @@ function formatMyr(value: number) {
   }).format(value);
 }
 
+function formatEth(value: number | undefined | null) {
+  const numeric = Number(value ?? 0);
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "0 ETH";
+  }
+
+  return `${numeric.toLocaleString("en-MY", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  })} ETH`;
+}
+
 function getMilestoneAmount(goalAmount: number | undefined, percentage: number) {
   const goal = Number(goalAmount ?? 0);
   const releasePercentage = Number(percentage);
@@ -87,6 +100,23 @@ export default async function DonorCampaignDetailPage({
     ? getTransactionExplorerUrl(campaign.deploymentTxHash)
     : "";
   const canDonate = campaign.status === "Active";
+  const progressWidth = Math.min(100, Math.max(0, campaign.raised));
+  const raisedDisplay =
+    typeof campaign.onChainTotalRaisedEth === "number"
+      ? formatEth(campaign.onChainTotalRaisedEth)
+      : `${campaign.raised}% funded`;
+  const goalDisplay =
+    typeof campaign.onChainGoalEth === "number"
+      ? formatEth(campaign.onChainGoalEth)
+      : campaign.goal;
+  const getStageAmount = (percentage: number) =>
+    typeof campaign.onChainGoalEth === "number"
+      ? formatEth((campaign.onChainGoalEth * Number(percentage || 0)) / 100)
+      : formatMyr(getMilestoneAmount(campaign.goalAmount, percentage));
+  const getCumulativeAmount = (percentage: number) =>
+    typeof campaign.onChainGoalEth === "number"
+      ? formatEth((campaign.onChainGoalEth * Number(percentage || 0)) / 100)
+      : formatMyr(getMilestoneAmount(campaign.goalAmount, percentage));
 
   return (
     <div className="space-y-5">
@@ -97,138 +127,235 @@ export default async function DonorCampaignDetailPage({
         Back to discover
       </Link>
 
-      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
-        {imageUrl ? (
-          <div className="flex h-56 items-center justify-center bg-orange-50/45 p-3 sm:h-64">
-            <img
-              src={imageUrl}
-              alt=""
-              className="max-h-full w-full rounded-xl object-contain"
-            />
-          </div>
-        ) : (
-          <div
-            className={[
-              "h-56 bg-gradient-to-br sm:h-64",
-              campaign.imageClass,
-            ].join(" ")}
-          />
-        )}
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
-                Campaign detail
-              </p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
-                {campaign.title}
-              </h1>
-              <p className="mt-2 text-sm font-semibold text-[var(--color-orange)]">
-                {campaign.shelter} - {campaign.location}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span
+      <section className="donor-tech-hero overflow-hidden rounded-3xl border border-orange-100 shadow-[0_24px_70px_rgba(120,72,0,0.10)]">
+        <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="relative min-h-[20rem] bg-orange-50/45 p-4 sm:p-5">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt=""
+                className="h-full min-h-[18rem] w-full rounded-2xl object-cover shadow-[0_18px_42px_rgba(68,64,60,0.16)]"
+              />
+            ) : (
+              <div
                 className={[
-                  "rounded-full border px-3 py-1 text-xs font-semibold",
-                  getUrgencyStyle(campaign.urgency),
+                  "h-full min-h-[18rem] rounded-2xl bg-gradient-to-br shadow-[0_18px_42px_rgba(68,64,60,0.16)]",
+                  campaign.imageClass,
                 ].join(" ")}
-              >
-                {campaign.urgency}
-              </span>
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                {campaign.status}
-              </span>
+              />
+            )}
+            <div className="absolute left-7 top-7 rounded-full border border-white/80 bg-white/90 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-[var(--color-orange)] shadow-sm">
+              Campaign record
             </div>
+            {contractUrl && campaign.contractAddress ? (
+              <a
+                href={contractUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="absolute bottom-7 left-7 rounded-full border border-orange-200 bg-white/95 px-3 py-1.5 text-xs font-black text-[var(--color-orange)] shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-50"
+              >
+                Contract {shortAddress(campaign.contractAddress)}
+              </a>
+            ) : null}
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_0.85fr]">
-            <div className="space-y-4">
-              <div className="rounded-xl border border-orange-100 p-4">
+          <div className="flex flex-col justify-between p-5 sm:p-7">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={[
+                    "rounded-full border px-3 py-1 text-xs font-black",
+                    getUrgencyStyle(campaign.urgency),
+                  ].join(" ")}
+                >
+                  {campaign.urgency}
+                </span>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                  {campaign.status}
+                </span>
+                <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-stone-700">
+                  {getExplorerNetworkName()}
+                </span>
+              </div>
+              <h1 className="mt-5 text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
+                {campaign.title}
+              </h1>
+              <p className="mt-3 text-sm font-black text-[var(--color-orange)]">
+                {campaign.shelter} <span className="text-stone-400">-</span>{" "}
+                {campaign.location}
+              </p>
+              <p className="mt-5 line-clamp-4 text-sm leading-7 text-stone-600">
+                {campaign.story}
+              </p>
+            </div>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/80 p-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">
+                  Raised
+                </p>
+                <p className="mt-1 text-lg font-black text-stone-950">
+                  {raisedDisplay}
+                </p>
+              </div>
+              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/80 p-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">
+                  Goal
+                </p>
+                <p className="mt-1 text-lg font-black text-stone-950">
+                  {goalDisplay}
+                </p>
+              </div>
+              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/80 p-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">
+                  Progress
+                </p>
+                <p className="mt-1 text-lg font-black text-stone-950">
+                  {campaign.raised}%
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1fr_22rem]">
+          <div className="space-y-5">
+            <div className="donor-gradient-card rounded-2xl border border-orange-100 p-5 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                    Funding progress
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-stone-950">
+                    {campaign.raised}% funded on-chain
+                  </h2>
+                </div>
+                <span className="w-fit rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-stone-700">
+                  {campaign.donors} donors
+                </span>
+              </div>
+              <div className="mt-5 h-3 overflow-hidden rounded-full bg-orange-100">
+                <div
+                  className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
+                  style={{ width: `${progressWidth}%` }}
+                />
+              </div>
+              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
+                  <p className="text-xs font-semibold text-stone-500">
+                    Amount raised
+                  </p>
+                  <p className="mt-1 font-black text-stone-950">
+                    {raisedDisplay}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
+                  <p className="text-xs font-semibold text-stone-500">
+                    Campaign goal
+                  </p>
+                  <p className="mt-1 font-black text-stone-950">
+                    {goalDisplay}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
+                  <p className="text-xs font-semibold text-stone-500">
+                    Time remaining
+                  </p>
+                  <p className="mt-1 font-black text-stone-950">
+                    {campaign.daysLeft} days
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
                 <h2 className="text-base font-black text-stone-950">
                   Background story
                 </h2>
-                <p className="mt-2 text-sm leading-7 text-stone-600">
+                <p className="mt-3 text-sm leading-7 text-stone-600">
                   {campaign.story}
                 </p>
               </div>
-              <div className="rounded-xl border border-orange-100 p-4">
+              <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
                 <h2 className="text-base font-black text-stone-950">
                   Usage plan
                 </h2>
-                <p className="mt-2 text-sm leading-7 text-stone-600">
+                <p className="mt-3 text-sm leading-7 text-stone-600">
                   {campaign.campaignDetails}
                 </p>
               </div>
             </div>
+          </div>
 
-            <aside className="space-y-4">
-              <div className="rounded-xl border border-orange-100 bg-orange-50/25 p-4">
-                <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
-                  <span>Funding progress</span>
-                  <span>
-                    {campaign.raised}% of {campaign.goal}
-                  </span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100">
-                  <div
-                    className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
-                    style={{ width: `${campaign.raised}%` }}
-                  />
-                </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-                  <div>
-                    <p className="font-black text-stone-950">
-                      {campaign.donors}
-                    </p>
-                    <p className="text-xs font-medium text-stone-500">Donors</p>
-                  </div>
-                  <div>
-                    <p className="font-black text-stone-950">
-                      {campaign.daysLeft}
-                    </p>
-                    <p className="text-xs font-medium text-stone-500">Days</p>
-                  </div>
-                  <div>
-                    <p className="font-black text-stone-950">
-                      {campaign.milestones.length}
-                    </p>
-                    <p className="text-xs font-medium text-stone-500">
-                      Milestones
-                    </p>
-                  </div>
-                </div>
-              </div>
-
+          <aside className="space-y-4">
+            <div className="donor-donate-card rounded-2xl border border-orange-100 p-5 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                Donor action
+              </p>
+              <h2 className="mt-2 text-lg font-black text-stone-950">
+                Support this campaign
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Donations are recorded after wallet confirmation and linked to
+                the campaign contract.
+              </p>
               {canDonate ? (
                 <Link
                   href={`/Donor/donate?campaign=${campaign.id}`}
-                  className="inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
+                  className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-3 text-sm font-black text-white shadow-[0_14px_28px_rgba(255,138,0,0.22)] transition hover:-translate-y-0.5 hover:bg-orange-600"
                 >
                   Donate to this campaign
                 </Link>
               ) : (
-                <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-800">
+                <div className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-center text-sm font-black text-emerald-800">
                   This campaign is {campaign.status.toLowerCase()}.
                 </div>
               )}
               <Link
                 href={`/Donor/help?type=report&campaign=${campaign.id}`}
-                className="inline-flex w-full items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-900 transition hover:border-[var(--color-orange)] hover:bg-orange-50"
+                className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-black text-stone-900 transition hover:-translate-y-0.5 hover:border-[var(--color-orange)] hover:bg-orange-50"
               >
                 Report concern
               </Link>
-            </aside>
-          </div>
+            </div>
 
-          <div className="mt-5 rounded-xl border border-orange-100 bg-orange-50/25 p-4">
+            <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                Campaign facts
+              </p>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold text-stone-500">Milestones</span>
+                  <span className="font-black text-stone-950">
+                    {campaign.milestones.length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold text-stone-500">Network</span>
+                  <span className="font-black text-stone-950">
+                    {getExplorerNetworkName()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-semibold text-stone-500">Release model</span>
+                  <span className="font-black text-stone-950">
+                    Milestone gated
+                  </span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <div className="lg:col-span-2">
+            <div className="rounded-2xl border border-orange-100 bg-orange-50/25 p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
                   Campaign trust
                 </p>
-                <h2 className="mt-1 text-base font-black text-stone-950">
-                  Verified campaign controls
+                <h2 className="mt-1 text-lg font-black text-stone-950">
+                  Verified on-chain controls
                 </h2>
               </div>
               <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
@@ -293,52 +420,81 @@ export default async function DonorCampaignDetailPage({
             </div>
           </div>
 
-          <div className="mt-5 rounded-xl border border-orange-100 p-4">
-            <h2 className="text-base font-black text-stone-950">
-              Milestone release plan
-            </h2>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="mt-5 rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                    Milestone transparency
+                  </p>
+                  <h2 className="mt-1 text-lg font-black text-stone-950">
+                    Release plan and proof trail
+                  </h2>
+                </div>
+                <p className="text-xs font-semibold text-stone-500">
+                  Funds unlock by approved stages.
+                </p>
+              </div>
+              <div className="mt-5 space-y-3 border-l border-orange-100 pl-5">
               {milestoneItems.map((milestone, index) => (
                 <div
                   key={milestone.title}
-                  className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"
+                  className="donor-ledger-row donor-chain-node rounded-2xl border border-orange-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200"
                 >
-                  <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
-                    {index + 1}
-                  </span>
-                  <p className="mt-3 text-sm font-semibold text-stone-950">
-                    {milestone.title}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-[var(--color-orange)]">
-                    Stage {index + 1}: {milestone.percentage}% release
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-stone-500">
-                    Stage amount:{" "}
-                    {formatMyr(
-                      getMilestoneAmount(campaign.goalAmount, milestone.percentage),
-                    )}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-stone-500">
-                    Cumulative target:{" "}
-                    {formatMyr(
-                      getMilestoneAmount(
-                        campaign.goalAmount,
-                        getCumulativeMilestonePercentage(milestoneItems, index),
-                      ),
-                    )}
-                  </p>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="grid h-8 w-8 place-items-center rounded-xl bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
+                          {index + 1}
+                        </span>
+                        <p className="text-sm font-black text-stone-950">
+                          {milestone.title}
+                        </p>
+                        <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-[var(--color-orange)]">
+                          {milestone.percentage}% release
+                        </span>
+                      </div>
                   {milestone.description ? (
-                    <p className="mt-2 text-xs leading-5 text-stone-600">
+                    <p className="mt-3 text-xs leading-5 text-stone-600">
                       {milestone.description}
                     </p>
                   ) : null}
                   {milestone.requirement ? (
-                    <p className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
+                    <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
                       Release condition: {milestone.requirement}
                     </p>
                   ) : null}
-                  <div className="mt-2 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
-                    Proof status: {milestone.status}
+                    </div>
+                    <div className="grid shrink-0 gap-2 sm:grid-cols-3 lg:w-[28rem]">
+                      <div className="rounded-xl bg-white p-3 ring-1 ring-orange-100">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">
+                          Stage amount
+                        </p>
+                        <p className="mt-1 text-sm font-black text-stone-950">
+                          {getStageAmount(milestone.percentage)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-white p-3 ring-1 ring-orange-100">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">
+                          Target
+                        </p>
+                        <p className="mt-1 text-sm font-black text-stone-950">
+                          {getCumulativeAmount(
+                            getCumulativeMilestonePercentage(
+                              milestoneItems,
+                              index,
+                            ),
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-white p-3 ring-1 ring-orange-100">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-stone-500">
+                          Proof
+                        </p>
+                        <p className="mt-1 text-sm font-black text-stone-950">
+                          {milestone.status}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                   <div className="mt-3">
                     <TransactionLinks
@@ -349,6 +505,7 @@ export default async function DonorCampaignDetailPage({
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           </div>
         </div>

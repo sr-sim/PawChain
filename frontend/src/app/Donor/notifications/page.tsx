@@ -143,6 +143,45 @@ export default function DonorNotificationsPage() {
     }
   }
 
+  async function markAllAsRead() {
+    if (!walletAddress || unreadCount === 0) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/donor/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          markAll: true,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to update notifications.");
+      }
+
+      const readAt = new Date().toISOString();
+      setNotifications((current) =>
+        current.map((item) => ({
+          ...item,
+          is_read: true,
+          read_at: item.read_at ?? readAt,
+        })),
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to update notifications.",
+      );
+    }
+  }
+
   const unreadCount = notifications.filter((item) => !item.is_read).length;
   const readCount = notifications.length - unreadCount;
   const filteredNotifications =
@@ -208,6 +247,14 @@ export default function DonorNotificationsPage() {
               {tab}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={markAllAsRead}
+            disabled={!walletAddress || unreadCount === 0}
+            className="ml-auto rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            Mark all as read
+          </button>
         </div>
 
         {errorMessage ? (
@@ -277,8 +324,9 @@ export default function DonorNotificationsPage() {
                 No donor notifications yet
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                Admin replies, report updates, and milestone notices will appear
-                here after records are added to `donor_notifications`.
+                Admin replies, report updates, refund confirmations, and
+                milestone notices will appear here when there is activity on
+                your supported campaigns.
               </p>
             </div>
           )}

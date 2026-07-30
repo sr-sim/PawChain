@@ -3,6 +3,7 @@ import {
 } from "@nomicfoundation/hardhat-toolbox-viem/network-helpers";
 import { expect } from "chai";
 import hre from "hardhat";
+import { parseEther } from "viem";
 
 const DonorLevel = {
   None: 0,
@@ -220,6 +221,103 @@ describe("RoleNFT", function () {
     );
     expect(await roleNFT.read.tokenURI([tokenId])).to.equal(
       "https://ipfs.io/ipfs/hero-cid",
+    );
+  });
+
+  it("records campaign donations and upgrades donor badges by threshold", async function () {
+    const { roleNFT, donor, otherAccount } =
+      await loadFixture(deployRoleNFTFixture);
+    const roleNFTAsAdmin = await getRoleNFTAsAdmin(roleNFT.address);
+    const roleNFTAsRecorder = await hre.viem.getContractAt(
+      "RoleNFT",
+      roleNFT.address,
+      { client: { wallet: otherAccount } },
+    );
+
+    await roleNFTAsAdmin.write.safeMintDonor([
+      donor.account.address,
+      "donor-cid",
+    ]);
+    await roleNFTAsAdmin.write.setDonorLevelMetadataCIDs([
+      "normal-cid",
+      "bronze-cid",
+      "silver-cid",
+      "gold-cid",
+      "hero-cid",
+    ]);
+    await roleNFTAsAdmin.write.authorizeDonationRecorder([
+      otherAccount.account.address,
+      true,
+    ]);
+
+    const tokenId = await roleNFT.read.userTokenId([donor.account.address]);
+
+    await roleNFTAsRecorder.write.recordDonation([
+      donor.account.address,
+      parseEther("0.049"),
+    ]);
+    expect(await roleNFT.read.donorLevelOf([tokenId])).to.equal(
+      DonorLevel.Normal,
+    );
+
+    await roleNFTAsRecorder.write.recordDonation([
+      donor.account.address,
+      parseEther("0.001"),
+    ]);
+    expect(await roleNFT.read.donorTotalContributed([
+      donor.account.address,
+    ])).to.equal(parseEther("0.05"));
+    expect(await roleNFT.read.donorLevelOf([tokenId])).to.equal(
+      DonorLevel.Bronze,
+    );
+    expect(await roleNFT.read.tokenURI([tokenId])).to.equal(
+      "https://ipfs.io/ipfs/bronze-cid",
+    );
+
+    await roleNFTAsRecorder.write.recordDonation([
+      donor.account.address,
+      parseEther("0.15"),
+    ]);
+    expect(await roleNFT.read.donorLevelOf([tokenId])).to.equal(
+      DonorLevel.Silver,
+    );
+    expect(await roleNFT.read.tokenURI([tokenId])).to.equal(
+      "https://ipfs.io/ipfs/silver-cid",
+    );
+
+    await roleNFTAsRecorder.write.recordDonation([
+      donor.account.address,
+      parseEther("0.8"),
+    ]);
+    expect(await roleNFT.read.donorLevelOf([tokenId])).to.equal(
+      DonorLevel.Hero,
+    );
+    expect(await roleNFT.read.tokenURI([tokenId])).to.equal(
+      "https://ipfs.io/ipfs/hero-cid",
+    );
+  });
+
+  it("rejects donation recording from unauthorized campaigns", async function () {
+    const { roleNFT, donor, otherAccount } =
+      await loadFixture(deployRoleNFTFixture);
+    const roleNFTAsAdmin = await getRoleNFTAsAdmin(roleNFT.address);
+    const roleNFTAsOtherAccount = await hre.viem.getContractAt(
+      "RoleNFT",
+      roleNFT.address,
+      { client: { wallet: otherAccount } },
+    );
+
+    await roleNFTAsAdmin.write.safeMintDonor([
+      donor.account.address,
+      "donor-cid",
+    ]);
+
+    await expectRevert(
+      roleNFTAsOtherAccount.write.recordDonation([
+        donor.account.address,
+        parseEther("0.05"),
+      ]),
+      "Only donation recorder",
     );
   });
 

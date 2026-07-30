@@ -158,26 +158,14 @@ export default async function DonorTrackingPage({
   const latestTxHash = donationData.summary.latestDonation?.txHash ?? "";
   const latestTxUrl = latestTxHash ? getTransactionExplorerUrl(latestTxHash) : "";
   const fundedCampaigns = campaigns.filter((campaign) => campaign.raised > 0).length;
-  const lockedDonationStats = [
-    {
-      label: "Total donated",
-      value:
-        donationData.summary.totalEth > 0
-          ? formatEth(donationData.summary.totalEth)
-          : "0 ETH",
-      detail: `${formatAmount(
-        donationData.summary.totalAmount,
-        donationData.summary.currency,
-      )} estimated value`,
-    },
-    {
-      label: "Transaction hashes",
-      value: String(donationData.summary.donationCount),
-      detail: "Saved donation history",
-    },
-    { label: "Tracked campaigns", value: String(campaigns.length), detail: "Active and donated campaigns" },
-    { label: "Milestone plans", value: String(milestoneCount), detail: "Campaign milestone plans" },
-  ];
+  const totalDonatedDisplay =
+    donationData.summary.totalEth > 0
+      ? formatEth(donationData.summary.totalEth)
+      : "0 ETH";
+  const totalDonatedEstimate = `${formatAmount(
+    donationData.summary.totalAmount,
+    donationData.summary.currency,
+  )} estimated value`;
 
   return (
     <div className="space-y-5">
@@ -204,71 +192,113 @@ export default async function DonorTrackingPage({
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-4">
-        {lockedDonationStats.map((stat) => (
-          <div
-            key={stat.label}
-            className="donor-tech-metric rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-              {stat.label}
+      <section className="donor-gradient-card overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-[0_22px_60px_rgba(120,72,0,0.09)]">
+        <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="p-5 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+              Ledger overview
             </p>
-            <p className="mt-2 text-2xl font-black text-stone-950">
-              {stat.value}
-            </p>
-            <p className="mt-1 text-xs font-medium text-stone-500">
-              {stat.detail}
-            </p>
-          </div>
-        ))}
-      </section>
-
-      <section className="donor-gradient-card rounded-2xl border border-orange-100 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
-              On-chain proof
-            </p>
-            <h2 className="mt-1 text-xl font-black text-stone-950">
-              Verification summary
-            </h2>
-          </div>
-          <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-            {getExplorerNetworkName()}
-          </span>
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          {[
-            ["Network", getExplorerNetworkName()],
-            ["Verified tx", String(donationData.summary.confirmedCount)],
-            ["Contract campaigns", String(contractConnectedCampaigns.length)],
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className="rounded-xl border border-orange-100 bg-orange-50/30 px-3 py-2.5"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-                {label}
-              </p>
-              <p className="mt-1 text-lg font-black text-stone-950">{value}</p>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-stone-500">
+                  Total donated
+                </p>
+                <h2 className="mt-1 text-4xl font-black tracking-tight text-stone-950">
+                  {totalDonatedDisplay}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-stone-500">
+                  {totalDonatedEstimate}
+                </p>
+              </div>
+              <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                {donationData.summary.confirmedCount} verified tx
+              </span>
             </div>
-          ))}
-          <div className="rounded-xl border border-orange-100 bg-orange-50/30 px-3 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
-              Latest tx
-            </p>
-            {latestTxUrl ? (
-              <a
-                href={latestTxUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-flex text-sm font-black text-[var(--color-orange)] transition hover:text-stone-950"
-              >
-                {shortHash(latestTxHash)}
-              </a>
-            ) : (
-              <p className="mt-1 text-sm font-black text-stone-950">No tx yet</p>
-            )}
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <div className="donor-tech-metric rounded-2xl bg-white/80 p-4 ring-1 ring-orange-100">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-stone-400">
+                  Transactions
+                </p>
+                <p className="mt-1 text-2xl font-black text-stone-950">
+                  {donationData.summary.donationCount}
+                </p>
+              </div>
+              <div className="donor-tech-metric rounded-2xl bg-white/80 p-4 ring-1 ring-orange-100">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-stone-400">
+                  Campaigns
+                </p>
+                <p className="mt-1 text-2xl font-black text-stone-950">
+                  {campaigns.length}
+                </p>
+              </div>
+              <div className="donor-tech-metric rounded-2xl bg-white/80 p-4 ring-1 ring-orange-100">
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-stone-400">
+                  Milestones
+                </p>
+                <p className="mt-1 text-2xl font-black text-stone-950">
+                  {milestoneCount}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-orange-100 bg-white/72 p-5 sm:p-6 lg:border-l lg:border-t-0">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                  On-chain proof
+                </p>
+                <h2 className="mt-1 text-xl font-black text-stone-950">
+                  Transaction verification
+                </h2>
+              </div>
+              <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-black text-[var(--color-orange)]">
+                {getExplorerNetworkName()}
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm font-semibold text-stone-500">
+                    Contract-linked campaigns
+                  </span>
+                  <span className="text-lg font-black text-stone-950">
+                    {contractConnectedCampaigns.length}
+                  </span>
+                </div>
+              </div>
+              <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm font-semibold text-stone-500">
+                    Funded campaigns
+                  </span>
+                  <span className="text-lg font-black text-stone-950">
+                    {fundedCampaigns}
+                  </span>
+                </div>
+              </div>
+              <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4">
+                <p className="text-sm font-semibold text-stone-500">
+                  Latest transaction
+                </p>
+                {latestTxUrl ? (
+                  <a
+                    href={latestTxUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex break-all text-sm font-black text-[var(--color-orange)] transition hover:text-stone-950"
+                  >
+                    {shortHash(latestTxHash)}
+                  </a>
+                ) : (
+                  <p className="mt-2 text-sm font-black text-stone-950">
+                    No transaction yet
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -343,6 +373,56 @@ export default async function DonorTrackingPage({
                         Approx. {formatAmount(donation.amount, donation.currency)}
                       </p>
                     ) : null}
+                    {donation.refundTxHash ? (
+                      <details className="group mt-2 overflow-hidden rounded-xl border border-emerald-100 bg-emerald-50/45 transition open:bg-white">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 [&::-webkit-details-marker]:hidden">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                              Refund
+                            </p>
+                            <p className="mt-0.5 text-xs font-black text-stone-950">
+                              +{donation.refundAmountEth > 0
+                                ? formatEth(donation.refundAmountEth)
+                                : "Confirmed"}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-[10px] font-black text-[var(--color-orange)] transition group-open:text-emerald-700">
+                            View proof
+                          </span>
+                        </summary>
+                        <div className="border-t border-emerald-100 px-2.5 py-2">
+                          <div className="grid gap-2 text-[11px] font-semibold text-stone-500">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>Transfer type</span>
+                              <span className="text-right text-stone-800">
+                                Internal contract transfer
+                              </span>
+                            </div>
+                            {donation.refundedAt ? (
+                              <div className="flex items-center justify-between gap-3">
+                                <span>Confirmed</span>
+                                <span className="text-right text-stone-800">
+                                  {formatDate(donation.refundedAt)}
+                                </span>
+                              </div>
+                            ) : null}
+                            <div className="flex items-center justify-between gap-3">
+                              <span>Refund tx</span>
+                              <a
+                                href={getTransactionExplorerUrl(
+                                  donation.refundTxHash,
+                                )}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-right font-black text-[var(--color-orange)] transition hover:text-stone-950"
+                              >
+                                {shortHash(donation.refundTxHash)}
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      </details>
+                    ) : null}
                   </div>
                   <div>
                     {getTransactionExplorerUrl(donation.txHash) ? (
@@ -359,9 +439,6 @@ export default async function DonorTrackingPage({
                         {shortHash(donation.txHash)}
                       </p>
                     )}
-                    <p className="mt-1 text-xs font-semibold text-stone-500">
-                      Etherscan
-                    </p>
                   </div>
                   <p className="font-medium text-stone-500">
                     {formatDate(donation.createdAt)}

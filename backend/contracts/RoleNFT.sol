@@ -21,6 +21,10 @@ contract RoleNFT {
 
     uint8 public constant MAX_DONOR_SUPPLY = 50;
     uint8 public constant MAX_SHELTER_SUPPLY = 50;
+    uint256 public constant BRONZE_DONOR_THRESHOLD = 0.05 ether;
+    uint256 public constant SILVER_DONOR_THRESHOLD = 0.2 ether;
+    uint256 public constant GOLD_DONOR_THRESHOLD = 0.5 ether;
+    uint256 public constant HERO_DONOR_THRESHOLD = 1 ether;
 
     uint8 public donorSupply;
     uint8 public shelterSupply;
@@ -30,6 +34,10 @@ contract RoleNFT {
     mapping(address => uint256) public userTokenId; //Stores which NFT token belongs to a wallet.
     mapping(uint256 => bool) public isShelterRole; //Stores whether a token is Shelter. If true, it is Shelter. If false, it is Donor.
     mapping(uint256 => DonorLevel) public donorLevelOf;
+    mapping(address => uint256) public donorTotalContributed;
+    mapping(address => bool) public authorizedDonationRecorders;
+    mapping(address => bool) public authorizedRecorderManagers;
+    mapping(DonorLevel => string) public donorLevelMetadataCID;
     mapping(uint256 => address) private _owners; 
     mapping(address => uint256) private _balances;
     mapping(uint256 => string) private _tokenURIs;
@@ -38,6 +46,15 @@ contract RoleNFT {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event TokenURIUpdated(uint256 indexed tokenId, string tokenURI);
     event DonorLevelUpdated(address indexed user, uint256 indexed tokenId, DonorLevel level);
+    event DonationRecorderAuthorized(address indexed recorder, bool authorized);
+    event RecorderManagerAuthorized(address indexed manager, bool authorized);
+    event DonorContributionRecorded(
+        address indexed donor,
+        address indexed recorder,
+        uint256 amount,
+        uint256 totalContributed,
+        DonorLevel level
+    );
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
@@ -49,9 +66,19 @@ contract RoleNFT {
         _;
     }
 
+    modifier onlyDonationRecorder() {
+        require(authorizedDonationRecorders[msg.sender], "Only donation recorder");
+        _;
+    }
+
     constructor(address initialOwner) {
         require(initialOwner != address(0), "Owner required");
         owner = initialOwner;
+        donorLevelMetadataCID[DonorLevel.Normal] = "QmXVYMkA9WBY1Hu8vCiB17NnwHmfKqw6RvaPtCHAXrWiLV";
+        donorLevelMetadataCID[DonorLevel.Bronze] = "QmaDZkDy3hZ7AcgXbwsiiCWy2YucPB7qY63PxMPe7anc4G";
+        donorLevelMetadataCID[DonorLevel.Silver] = "QmSqF24Y7qUKFk1E1aucz3WmhVwXmyBEJ6wpv37dhaptfK";
+        donorLevelMetadataCID[DonorLevel.Gold] = "QmeBFgu4fCEqV1p4mxc8cfrRXwS7pj92SDwaUZCkXQu8ji";
+        donorLevelMetadataCID[DonorLevel.Hero] = "QmR1U4FEp8ywBtdTzbesrdobtJMHFE7n9z2jr4GBA3eb1e";
         emit OwnershipTransferred(address(0), initialOwner);
     }
 
@@ -133,6 +160,95 @@ contract RoleNFT {
 
     function updateTokenURI(uint256 tokenId, string memory metadataCID) public onlyOwner {
         _updateTokenURI(tokenId, metadataCID);
+    }
+
+    function setDonorLevelMetadataCID(
+        DonorLevel level,
+        string memory metadataCID
+    ) external onlyAdmin {
+        require(level != DonorLevel.None, "Invalid donor level");
+        donorLevelMetadataCID[level] = metadataCID;
+    }
+
+    function setDonorLevelMetadataCIDs(
+        string memory normalCID,
+        string memory bronzeCID,
+        string memory silverCID,
+        string memory goldCID,
+        string memory heroCID
+    ) external onlyAdmin {
+        donorLevelMetadataCID[DonorLevel.Normal] = normalCID;
+        donorLevelMetadataCID[DonorLevel.Bronze] = bronzeCID;
+        donorLevelMetadataCID[DonorLevel.Silver] = silverCID;
+        donorLevelMetadataCID[DonorLevel.Gold] = goldCID;
+        donorLevelMetadataCID[DonorLevel.Hero] = heroCID;
+    }
+
+    function authorizeRecorderManager(address manager, bool authorized) external onlyAdmin {
+        require(manager != address(0), "Zero address");
+        authorizedRecorderManagers[manager] = authorized;
+        emit RecorderManagerAuthorized(manager, authorized);
+    }
+
+    function authorizeDonationRecorder(address recorder, bool authorized) external {
+        require(isAdmin(msg.sender) || authorizedRecorderManagers[msg.sender], "Only recorder manager");
+        require(recorder != address(0), "Zero address");
+        authorizedDonationRecorders[recorder] = authorized;
+        emit DonationRecorderAuthorized(recorder, authorized);
+    }
+
+    function recordDonation(
+        address donor,
+        uint256 amount
+    ) external onlyDonationRecorder returns (uint8) {
+        require(donor != address(0), "Zero address");
+        require(amount > 0, "Donation required");
+        require(hasRoleNFT[donor], "User does not own a RoleNFT");
+
+        uint256 tokenId = userTokenId[donor];
+        require(!isShelterRole[tokenId], "Shelter cannot have donor level");
+
+        donorTotalContributed[donor] += amount;
+        DonorLevel newLevel = getDonorLevelForAmount(
+            donorTotalContributed[donor]
+        );
+
+        if (newLevel > donorLevelOf[tokenId]) {
+            donorLevelOf[tokenId] = newLevel;
+            string memory metadataCID = donorLevelMetadataCID[newLevel];
+            if (bytes(metadataCID).length > 0) {
+                _updateTokenURI(tokenId, metadataCID);
+            }
+            emit DonorLevelUpdated(donor, tokenId, newLevel);
+        }
+
+        emit DonorContributionRecorded(
+            donor,
+            msg.sender,
+            amount,
+            donorTotalContributed[donor],
+            donorLevelOf[tokenId]
+        );
+
+        return uint8(donorLevelOf[tokenId]);
+    }
+
+    function getDonorLevelForAmount(
+        uint256 totalContributed
+    ) public pure returns (DonorLevel) {
+        if (totalContributed >= HERO_DONOR_THRESHOLD) {
+            return DonorLevel.Hero;
+        }
+        if (totalContributed >= GOLD_DONOR_THRESHOLD) {
+            return DonorLevel.Gold;
+        }
+        if (totalContributed >= SILVER_DONOR_THRESHOLD) {
+            return DonorLevel.Silver;
+        }
+        if (totalContributed >= BRONZE_DONOR_THRESHOLD) {
+            return DonorLevel.Bronze;
+        }
+        return DonorLevel.Normal;
     }
 
     function _updateTokenURI(uint256 tokenId, string memory metadataCID) internal {

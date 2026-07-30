@@ -63,6 +63,8 @@ describe("Campaign and CampaignFactory", function () {
     ]);
 
     const campaignAddress = await factory.read.campaignByKey([campaignKey]);
+    await roleNFT.write.mintDonor([donorOne.account.address]);
+    await roleNFT.write.mintDonor([donorTwo.account.address]);
     const campaign = await hre.viem.getContractAt(
       "Campaign",
       campaignAddress,
@@ -238,6 +240,7 @@ describe("Campaign and CampaignFactory", function () {
       campaign,
       campaignAsDonorOne,
       donorOne,
+      roleNFT,
       publicClient,
       campaignAddress,
     } = await loadFixture(deployFixture);
@@ -256,6 +259,9 @@ describe("Campaign and CampaignFactory", function () {
     expect(await campaign.read.totalRaised()).to.equal(parseEther("0.5"));
     expect(
       await campaign.read.donorContributions([donorOne.account.address]),
+    ).to.equal(parseEther("0.5"));
+    expect(
+      await roleNFT.read.donorTotalContributed([donorOne.account.address]),
     ).to.equal(parseEther("0.5"));
     expect(await publicClient.getBalance({ address: campaignAddress })).to.equal(
       parseEther("0.5"),

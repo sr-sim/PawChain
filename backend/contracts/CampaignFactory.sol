@@ -55,6 +55,11 @@ contract CampaignFactory {
         );
 
         campaignAddress = address(campaign);
+        try roleNFT.authorizeDonationRecorder(campaignAddress, true) {
+        } catch {
+            // Campaign creation should still work if recorder authorization is configured later.
+        }
+
         campaignByKey[campaignKey] = campaignAddress;
         _campaignsByShelter[shelter].push(campaignAddress);
         _allCampaigns.push(campaignAddress);

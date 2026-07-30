@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getShelters, type Campaign } from "../campaignData";
 import {
@@ -186,6 +186,7 @@ export default function DonorDiscoverPage() {
     searchParams.get("campaign"),
   );
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const modalPanelRef = useRef<HTMLDivElement | null>(null);
   const hasActiveFilters =
     searchTerm.trim().length > 0 ||
     urgency !== "All" ||
@@ -416,6 +417,24 @@ export default function DonorDiscoverPage() {
   const savedCampaigns = useMemo(() => {
     return sortedCampaigns.filter((campaign) => savedIds.includes(campaign.id));
   }, [savedIds, sortedCampaigns]);
+
+  useEffect(() => {
+    if (!selectedCampaign) {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => {
+      if (modalPanelRef.current) {
+        modalPanelRef.current.scrollTop = 0;
+      }
+    });
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [selectedCampaign]);
   const activeCampaigns = useMemo(
     () => sortedCampaigns.filter((campaign) => campaign.status === "Active"),
     [sortedCampaigns],
@@ -469,6 +488,7 @@ export default function DonorDiscoverPage() {
     Shelters: shelters.length,
     Saved: savedIds.length,
   };
+  const openCampaignCount = tabCounts.Campaigns;
   const emptyCampaignTitle =
     activeTab === "Saved"
       ? "No saved campaigns yet"
@@ -506,7 +526,7 @@ export default function DonorDiscoverPage() {
           <div className="grid grid-cols-2 gap-2 rounded-2xl border border-orange-100 bg-orange-50/45 p-2.5">
             <div className="donor-tech-metric rounded-xl bg-white px-3 py-2.5 shadow-sm">
               <p className="text-sm font-black text-stone-950">
-                {campaigns.length} total campaigns
+                {openCampaignCount} open campaigns
               </p>
               <p className="text-xs font-semibold text-stone-500">
                 Open for support
@@ -999,14 +1019,16 @@ export default function DonorDiscoverPage() {
       </section>
 
       {selectedCampaign ? (
-        <div className="fixed inset-0 z-[120] overflow-y-auto bg-stone-950/45 p-4 backdrop-blur-sm sm:p-6">
-          <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:p-5">
-            <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="fixed inset-x-0 bottom-0 top-20 z-[120] flex items-start justify-center overflow-hidden bg-stone-950/50 p-3 backdrop-blur-md sm:p-6">
+          <div
+            className="animate-fade-up flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.26)]"
+          >
+            <div className="shrink-0 flex items-start justify-between gap-4 border-b border-orange-100 bg-white/95 p-4 backdrop-blur-xl sm:p-5">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
-                  Campaign details
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                  On-chain campaign record
                 </p>
-                <h2 className="mt-1 text-xl font-black text-stone-950 sm:text-2xl">
+                <h2 className="mt-1 line-clamp-1 text-xl font-black text-stone-950 sm:text-2xl">
                   {selectedCampaign.title}
                 </h2>
                 <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--color-orange)]">
@@ -1037,12 +1059,29 @@ export default function DonorDiscoverPage() {
               </button>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-              <CampaignImage
-                imageClass={selectedCampaign.imageClass}
-                imageUrl={selectedCampaign.imageUrl}
-                size="hero"
-              />
+            <div ref={modalPanelRef} className="min-h-0 flex-1 overflow-y-auto pb-4">
+            <div className="grid items-start gap-5 p-4 sm:p-5 lg:grid-cols-[0.9fr_1.1fr]">
+              <div className="relative self-start overflow-hidden rounded-3xl border border-orange-100 bg-orange-50/45 p-3 shadow-sm">
+                <CampaignImage
+                  imageClass={selectedCampaign.imageClass}
+                  imageUrl={selectedCampaign.imageUrl}
+                  size="hero"
+                />
+                <div className="absolute left-6 top-6 rounded-full border border-white/80 bg-white/95 px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--color-orange)] shadow-sm">
+                  Blockchain verified
+                </div>
+                {selectedCampaign.contractAddress &&
+                getAddressExplorerUrl(selectedCampaign.contractAddress) ? (
+                  <a
+                    href={getAddressExplorerUrl(selectedCampaign.contractAddress)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute bottom-6 left-6 rounded-full border border-orange-200 bg-white/95 px-3 py-1.5 text-xs font-black text-[var(--color-orange)] shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-50"
+                  >
+                    {shortAddress(selectedCampaign.contractAddress)}
+                  </a>
+                ) : null}
+              </div>
 
               <div>
                 <div className="flex flex-wrap gap-2">
@@ -1076,9 +1115,9 @@ export default function DonorDiscoverPage() {
                     </a>
                   ) : null}
                 </div>
-                <div className="mt-4 grid gap-2 rounded-xl border border-orange-100 bg-orange-50/25 p-3 text-xs font-semibold text-stone-600 sm:grid-cols-2">
-                  <span>RoleNFT shelter verification</span>
-                  <span>{getExplorerNetworkName()}</span>
+                <div className="donor-gradient-card mt-4 grid gap-2 rounded-2xl border border-orange-100 p-3 text-xs font-semibold text-stone-600 sm:grid-cols-2">
+                  <span className="donor-chain-node pl-2">Shelter RoleNFT verified</span>
+                  <span className="donor-chain-node pl-2">{getExplorerNetworkName()}</span>
                   <span>
                     {selectedCampaign.contractAddress &&
                     getAddressExplorerUrl(selectedCampaign.contractAddress) ? (
@@ -1094,7 +1133,7 @@ export default function DonorDiscoverPage() {
                       "Contract pending"
                     )}
                   </span>
-                  <span>Milestone-gated release rules</span>
+                  <span className="donor-chain-node pl-2">Milestone-gated release</span>
                 </div>
 
                 <p className="mt-4 text-sm leading-7 text-stone-600">
@@ -1102,13 +1141,13 @@ export default function DonorDiscoverPage() {
                 </p>
 
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl bg-orange-50/70 p-3">
+                  <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
                     <p className="font-black text-stone-950">
                       {selectedCampaign.verifiedSince}
                     </p>
                     <p className="text-xs font-medium text-stone-500">Verified</p>
                   </div>
-                  <div className="rounded-2xl bg-orange-50/70 p-3">
+                  <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
                     <p className="font-black text-stone-950">
                       {selectedCampaign.animalsHelped}
                     </p>
@@ -1116,7 +1155,7 @@ export default function DonorDiscoverPage() {
                       Animals helped
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-orange-50/70 p-3">
+                  <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
                     <p className="font-black text-stone-950">
                       {shelterCampaigns.length}
                     </p>
@@ -1127,7 +1166,7 @@ export default function DonorDiscoverPage() {
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-orange-50/70 p-3">
+                  <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
                     <p className="font-black text-stone-950">
                       {selectedCampaign.duration}
                     </p>
@@ -1135,7 +1174,7 @@ export default function DonorDiscoverPage() {
                       Campaign duration
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-orange-50/70 p-3">
+                  <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
                     <p className="font-black text-stone-950">
                       {selectedCampaign.goal}
                     </p>
@@ -1145,20 +1184,22 @@ export default function DonorDiscoverPage() {
                   </div>
                 </div>
 
-                <div className="mt-5">
-                  <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
-                    <span>Funding progress</span>
+                <div className="donor-donate-card mt-5 rounded-2xl border border-orange-100 p-4 shadow-sm">
+                  <div className="flex items-center justify-between text-xs font-black text-stone-500">
+                    <span className="uppercase tracking-[0.14em]">
+                      Funding progress
+                    </span>
                     <span>
                       {selectedCampaign.raised}% of {selectedCampaign.goal}
                     </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100">
+                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-orange-100">
                     <div
                       className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
                       style={{ width: `${selectedCampaign.raised}%` }}
                     />
                   </div>
-                  <p className="mt-2 text-xs font-medium text-stone-500">
+                  <p className="mt-3 text-xs font-bold text-stone-600">
                     Next milestone: {selectedCampaign.milestones[0].title} (
                     {selectedCampaign.milestones[0].percentage}% release)
                   </p>
@@ -1175,8 +1216,8 @@ export default function DonorDiscoverPage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-orange-100 p-4 lg:col-span-2">
+            <div className="mx-4 mt-1 grid gap-4 sm:mx-5 lg:grid-cols-3">
+              <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4 shadow-sm lg:col-span-2">
                 <p className="text-sm font-semibold text-stone-950">
                   Campaign usage plan
                 </p>
@@ -1185,7 +1226,7 @@ export default function DonorDiscoverPage() {
                 </p>
               </div>
 
-              <div className="rounded-xl border border-orange-100 p-4">
+              <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4 shadow-sm">
                 <p className="text-sm font-semibold text-stone-950">
                   Shelter profile
                 </p>
@@ -1195,9 +1236,12 @@ export default function DonorDiscoverPage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-orange-100 p-4">
-              <p className="text-sm font-semibold text-stone-950">
+            <div className="mx-4 mt-4 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm sm:mx-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
                 Milestone plan
+              </p>
+              <p className="mt-1 text-lg font-black text-stone-950">
+                Transparent release stages
               </p>
               <div className="mt-3 grid gap-2 md:grid-cols-3">
                 {(selectedCampaign.milestoneDetails ??
@@ -1209,7 +1253,7 @@ export default function DonorDiscoverPage() {
                   }))).map((milestone, index) => (
                   <div
                     key={milestone.title}
-                    className="rounded-xl bg-orange-50/40 p-3"
+                    className="donor-ledger-row rounded-2xl border border-orange-100 p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200"
                   >
                     <div className="flex items-start gap-3">
                       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-[var(--color-orange)]">
@@ -1258,7 +1302,7 @@ export default function DonorDiscoverPage() {
             </div>
 
             {otherShelterCampaigns.length > 0 ? (
-              <div className="mt-4 rounded-xl border border-orange-100 p-4">
+              <div className="mx-4 mt-4 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm sm:mx-5">
                 <p className="text-sm font-semibold text-stone-950">
                   Other campaigns by this shelter
                 </p>
@@ -1269,7 +1313,7 @@ export default function DonorDiscoverPage() {
                       type="button"
                       onClick={() => setSelectedId(campaign.id)}
                       suppressHydrationWarning
-                      className="rounded-xl bg-orange-50/40 p-3 text-left transition hover:bg-orange-100/70"
+                      className="rounded-xl bg-orange-50/40 p-3 text-left transition hover:-translate-y-0.5 hover:bg-orange-100/70"
                     >
                       <p className="text-sm font-semibold text-stone-950">
                         {campaign.title}
@@ -1283,7 +1327,9 @@ export default function DonorDiscoverPage() {
               </div>
             ) : null}
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            </div>
+
+            <div className="shrink-0 flex flex-col gap-3 border-t border-orange-100 bg-white/95 p-4 backdrop-blur-xl sm:flex-row sm:justify-end sm:p-5">
               <Link
                 href={`/Donor/help?type=report&campaign=${selectedCampaign.id}`}
                 className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-semibold text-stone-900 transition hover:border-[var(--color-orange)] hover:bg-orange-50"

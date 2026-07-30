@@ -6,9 +6,22 @@ import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { DonorSidebar } from "@/app/components/DonorSidebar";
 
+type NotificationPreview = {
+  id: string;
+  title: string;
+  message: string;
+  status: string;
+  is_read: boolean;
+  created_at: string;
+  campaign_id: string | null;
+};
+
 export function DonorShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationPreview, setNotificationPreview] = useState<
+    NotificationPreview[]
+  >([]);
   const { address, isConnected } = useAppKitAccount();
   const pathname = usePathname();
   const router = useRouter();
@@ -53,10 +66,16 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
 
         if (isMounted && response.ok) {
           setUnreadCount(Number(result.unreadCount) || 0);
+          setNotificationPreview(
+            Array.isArray(result.notifications)
+              ? result.notifications.slice(0, 4)
+              : [],
+          );
         }
       } catch {
         if (isMounted) {
           setUnreadCount(0);
+          setNotificationPreview([]);
         }
       }
     }
@@ -68,6 +87,41 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
     };
   }, [address, isConnected, pathname]);
 
+  async function markAllNotificationsRead() {
+    if (!isConnected || !address || unreadCount === 0) {
+      return;
+    }
+
+    const readAt = new Date().toISOString();
+    setUnreadCount(0);
+    setNotificationPreview((current) =>
+      current.map((item) => ({
+        ...item,
+        is_read: true,
+        read_at: readAt,
+      })),
+    );
+
+    try {
+      const response = await fetch("/api/donor/notifications", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress: address,
+          markAll: true,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to mark notifications as read.");
+      }
+    } catch {
+      // The notifications page will reload the authoritative state if this fails.
+    }
+  }
+
   return (
     <>
       <DashboardTopBar
@@ -75,6 +129,8 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
         isMenuOpen={isSidebarOpen}
         notificationCount={unreadCount}
         notificationHref={notificationHref}
+        notificationPreview={notificationPreview}
+        onMarkAllNotificationsRead={markAllNotificationsRead}
         onMenuClick={() => setIsSidebarOpen((current) => !current)}
       />
       <div className="donor-chain-bg flex min-h-screen bg-[var(--color-cream)] pt-16 text-stone-950">

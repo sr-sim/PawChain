@@ -480,29 +480,6 @@ export default function DonorDonatePage() {
     !Number.isFinite(parsedAmount) ||
     parsedAmount <= 0;
   const numericAmount = hasInvalidAmount ? 0 : parsedAmount;
-  const milestoneDonationStateLoaded =
-    currentMilestone !== undefined && onChainTotalRaised !== undefined;
-  const currentMilestoneRemainingWei =
-    currentMilestone &&
-    onChainTotalRaised !== undefined &&
-    Number(currentMilestone.status) === 1 &&
-    currentMilestone.cumulativeThreshold > onChainTotalRaised
-      ? currentMilestone.cumulativeThreshold - onChainTotalRaised
-      : BigInt(0);
-  const maximumDonationEth = Number(formatEther(currentMilestoneRemainingWei));
-  const parsedAmountWei = useMemo(() => {
-    if (hasInvalidAmount) return null;
-    try {
-      return parseEther(trimmedAmount);
-    } catch {
-      return null;
-    }
-  }, [hasInvalidAmount, trimmedAmount]);
-  const amountExceedsCurrentMilestone =
-    isSequentialFlow &&
-    milestoneDonationStateLoaded &&
-    parsedAmountWei !== null &&
-    parsedAmountWei > currentMilestoneRemainingWei;
   const myrEstimate = numericAmount * ethToMyrRate;
   const walletBalanceEth = walletBalance
     ? Number(formatEther(walletBalance.value))
@@ -549,10 +526,15 @@ export default function DonorDonatePage() {
       : 0;
   const onChainCurrentMilestone =
     onChainCurrentMilestoneIndex !== null
-      ? (selectedCampaign?.milestones[onChainCurrentMilestoneIndex] ?? {
-          title: `Milestone ${onChainCurrentMilestoneIndex + 1}`,
-          percentage: onChainStage ? onChainStage.percentageBps / 100 : 0,
-        })
+      ? {
+          title:
+            selectedCampaign?.milestones[onChainCurrentMilestoneIndex]?.title ??
+            `Milestone ${onChainCurrentMilestoneIndex + 1}`,
+          percentage: onChainStage
+            ? onChainStage.percentageBps / 100
+            : (selectedCampaign?.milestones[onChainCurrentMilestoneIndex]
+                ?.percentage ?? 0),
+        }
       : null;
   const currentStage = hasOnChainMilestoneData
     ? {
@@ -715,7 +697,7 @@ export default function DonorDonatePage() {
       try {
         await switchChainAsync({ chainId: getPawChainId() });
         setDonationError(
-          "Network switched to Sepolia. Please click Donate again.",
+          "Network switched successfully. Please click Donate again.",
         );
       } catch {
         setDonationError(
@@ -860,11 +842,19 @@ export default function DonorDonatePage() {
                 const selectorCurrentAmount =
                   campaign.currentAmount ??
                   (selectorGoalAmount * campaign.raised) / 100;
-                const selectorStage = getCurrentMilestoneStage(
+                const fallbackSelectorStage = getCurrentMilestoneStage(
                   campaign.milestones,
                   selectorGoalAmount,
                   selectorCurrentAmount,
                 );
+                const selectorStage =
+                  campaign.id === selectedCampaign?.id && currentStage
+                    ? currentStage
+                    : fallbackSelectorStage;
+                const selectorMilestone = selectorStage?.milestone ?? {
+                  title: "Current milestone",
+                  percentage: 0,
+                };
                 const selectorRemainingEth =
                   selectorStage && ethToMyrRate > 0
                     ? selectorStage.remainingAmount / ethToMyrRate
@@ -913,10 +903,10 @@ export default function DonorDonatePage() {
                         <div className="mt-1.5 rounded-lg border border-orange-100 bg-white/78 px-2 py-1.5">
                           <div className="flex items-center justify-between gap-2 text-xs font-semibold">
                             <span className="min-w-0 truncate text-stone-950">
-                              {selectorStage.milestone.title}
+                              {selectorMilestone.title}
                             </span>
                             <span className="shrink-0 text-[var(--color-orange)]">
-                              {selectorStage.milestone.percentage}%
+                              {selectorMilestone.percentage}%
                             </span>
                           </div>
                           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
@@ -1422,16 +1412,6 @@ export default function DonorDonatePage() {
                         View on Etherscan
                       </a>
                     ) : null}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSubmitted(false);
-                        setDonationError("");
-                      }}
-                      className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-white sm:col-span-2"
-                    >
-                      Edit donation
-                    </button>
                   </div>
                 </div>
               ) : (
