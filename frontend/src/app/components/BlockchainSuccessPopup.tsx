@@ -89,7 +89,7 @@ export function BlockchainSuccessPopup({
               ) : failed ? (
                 "!"
               ) : (
-                "✓"
+                "\u2713"
               )}
             </span>
             <div className="min-w-0 flex-1">
@@ -113,7 +113,7 @@ export function BlockchainSuccessPopup({
               aria-label="Close transaction popup"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
             >
-              ×
+              {"\u00d7"}
             </button>
           </div>
 
@@ -135,7 +135,7 @@ export function BlockchainSuccessPopup({
               rel="noopener noreferrer"
               className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-black text-white transition hover:bg-orange-600"
             >
-              {actionLabel} ↗
+              {actionLabel} {"\u2197"}
             </a>
           ) : null}
         </div>
