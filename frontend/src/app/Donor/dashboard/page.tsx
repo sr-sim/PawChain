@@ -161,7 +161,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     <div className="space-y-5">
       <section className="overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="relative overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50/70 p-5 sm:p-6">
+          <div className="donor-dashboard-premium relative overflow-hidden p-5 sm:p-6">
             <div className="relative z-10">
               <h1 className="max-w-2xl text-2xl font-black tracking-tight text-stone-950 sm:text-4xl">
                 Welcome back, {displayName}.
@@ -169,9 +169,9 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-stone-400">
-                    Confirmed donated
+                    Total donated
                   </p>
-                  <p className="mt-1 text-4xl font-black tracking-tight text-stone-950 sm:text-5xl">
+                  <p className="donor-eth-gradient mt-1 text-5xl font-black tracking-tight sm:text-6xl">
                     {formatEth(donationData.summary.totalEth)}
                   </p>
                   <p className="mt-2 text-sm font-semibold text-stone-500">
@@ -179,34 +179,32 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-64">
-                  <div className="relative rounded-2xl border border-orange-100 bg-white/85 p-3">
-                    <p className="font-black uppercase tracking-[0.12em] text-stone-400">
+                  <div className="donor-premium-metric relative rounded-2xl border border-orange-100 bg-white/85 p-3">
+                    <p className="font-black uppercase tracking-[0.12em] text-stone-700">
                       Verified actions
                     </p>
-                    <p className="mt-1 text-lg font-black text-stone-950">
+                    <p className="mt-1 text-2xl font-black text-stone-950">
                       {donationData.summary.confirmedCount}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-semibold text-stone-500">
+                    <p className="mt-0.5 text-[11px] font-bold text-stone-600">
                       confirmed records
                     </p>
                   </div>
-                  <div className="relative overflow-visible rounded-2xl border border-orange-100 bg-white/85 p-3">
-                    <div className="donor-smart-shiba" aria-hidden="true">
-                      <span className="donor-smart-paw donor-smart-paw-one" />
-                      <span className="donor-smart-paw donor-smart-paw-two" />
+                  <div className="donor-premium-metric relative overflow-visible rounded-2xl border border-orange-100 bg-white/85 p-3">
+                    <div className="donor-dashboard-pets" aria-hidden="true">
                       <img
-                        src="/images/donor-shiba-cutout.png"
+                        src="/images/donor-dashboard-pets-transparent.png"
                         alt=""
-                        className="donor-smart-shiba-img"
+                        className="donor-dashboard-pet-icon"
                       />
                     </div>
-                    <p className="relative font-black uppercase tracking-[0.12em] text-stone-400">
+                    <p className="relative font-black uppercase tracking-[0.12em] text-stone-700">
                       Smart campaigns
                     </p>
-                    <p className="relative mt-1 text-lg font-black text-stone-950">
+                    <p className="relative mt-1 text-2xl font-black text-stone-950">
                       {contractConnectedCampaigns.length}
                     </p>
-                    <p className="relative mt-0.5 text-[11px] font-semibold text-stone-500">
+                    <p className="relative mt-0.5 text-[11px] font-bold text-stone-600">
                       contract linked
                     </p>
                   </div>
@@ -214,14 +212,14 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               </div>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <Link
-                  href="/Donor/donate"
-                  className="inline-flex items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-600"
+                  href="/Donor/discover"
+                  className="donor-premium-primary inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5"
                 >
                   Donate now
                 </Link>
                 <Link
                   href="/Donor/tracking"
-                  className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2.5 text-sm font-black text-stone-900 transition hover:-translate-y-0.5 hover:border-[var(--color-orange)] hover:bg-orange-50"
+                  className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white/90 px-5 py-3 text-sm font-black text-stone-900 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--color-orange)] hover:bg-white"
                 >
                   View donation history
                 </Link>
