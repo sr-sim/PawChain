@@ -10,6 +10,7 @@ type RateResponse = {
   rate?: number;
   source?: RateSource;
   updatedAt?: string;
+  history?: { timestamp: number; rate: number }[];
 };
 
 export function useEthMyrRate() {
@@ -17,6 +18,9 @@ export function useEthMyrRate() {
   const [source, setSource] = useState<RateSource>("fallback");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<
+    { timestamp: number; rate: number }[]
+  >([]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -38,6 +42,14 @@ export function useEthMyrRate() {
         setRate(nextRate);
         setSource(result.source === "coingecko" ? "coingecko" : "fallback");
         setUpdatedAt(result.updatedAt ?? null);
+        setHistory(
+          (result.history ?? []).filter(
+            (point) =>
+              Number.isFinite(point.timestamp) &&
+              Number.isFinite(point.rate) &&
+              point.rate > 0,
+          ),
+        );
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setRate(demoEthMyrRate);
@@ -56,6 +68,7 @@ export function useEthMyrRate() {
     source,
     updatedAt,
     loading,
+    history,
     ethToMyr: (amountEth: number) => amountEth * rate,
     weiToMyr: (amountWei: string) =>
       Number(formatEther(BigInt(amountWei || "0"))) * rate,

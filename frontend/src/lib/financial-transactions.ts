@@ -16,6 +16,8 @@ export type FinancialTransaction = {
   amountMyr: number | null;
   chainId: number;
   blockNumber: number;
+  logIndex: number;
   occurredAt: string;
   status: "pending" | "confirmed" | "failed";
+  verifiedOnChain: boolean;
 };
