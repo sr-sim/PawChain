@@ -9,6 +9,7 @@ import {
 } from "@/lib/block-explorer";
 import { getShelters } from "../campaignData";
 import { RefundClaimButton } from "../tracking/RefundClaimButton";
+import { getLatestEthMyrRate } from "@/lib/currency";
 
 type DashboardProps = {
   searchParams?: Promise<{
@@ -53,6 +54,13 @@ function formatEth(amount: number) {
   })} ETH`;
 }
 
+function formatLiveMyr(amount: number) {
+  return `Approx. live MYR ${amount.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
@@ -93,6 +101,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     activeCampaigns = [];
   }
 
+  const ethMyrRate = (await getLatestEthMyrRate()).rate;
+  const totalLiveMyr = donationData.summary.totalEth * ethMyrRate;
   const shelters = getShelters(activeCampaigns);
   const latestCampaigns = activeCampaigns.slice(0, 3);
   const contractConnectedCampaigns = activeCampaigns.filter(
@@ -123,10 +133,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
         minimumFractionDigits: 4,
         maximumFractionDigits: 6,
       })} ETH`,
-      detail: `${formatAmount(
-        donationData.summary.totalAmount,
-        donationData.summary.currency,
-      )} estimated value`,
+      detail: formatLiveMyr(totalLiveMyr),
     },
     {
       label: "Active campaigns",
@@ -155,9 +162,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
       <section className="overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="relative overflow-hidden bg-gradient-to-br from-orange-50 via-white to-amber-50/70 p-5 sm:p-6">
-            <div className="pointer-events-none absolute right-6 top-6 h-24 w-24 rounded-full border border-orange-100/70" />
-            <div className="pointer-events-none absolute right-12 top-12 h-12 w-12 rounded-full border border-orange-200/70" />
-            <div className="relative">
+            <div className="relative z-10">
               <h1 className="max-w-2xl text-2xl font-black tracking-tight text-stone-950 sm:text-4xl">
                 Welcome back, {displayName}.
               </h1>
@@ -170,15 +175,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                     {formatEth(donationData.summary.totalEth)}
                   </p>
                   <p className="mt-2 text-sm font-semibold text-stone-500">
-                    {formatAmount(
-                      donationData.summary.totalAmount,
-                      donationData.summary.currency,
-                    )}{" "}
-                    estimated value
+                    {formatLiveMyr(totalLiveMyr)}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-64">
-                  <div className="rounded-2xl border border-orange-100 bg-white/85 p-3">
+                  <div className="relative rounded-2xl border border-orange-100 bg-white/85 p-3">
                     <p className="font-black uppercase tracking-[0.12em] text-stone-400">
                       Verified actions
                     </p>
@@ -186,17 +187,26 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                       {donationData.summary.confirmedCount}
                     </p>
                     <p className="mt-0.5 text-[11px] font-semibold text-stone-500">
-                      on-chain records
+                      confirmed records
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-orange-100 bg-white/85 p-3">
-                    <p className="font-black uppercase tracking-[0.12em] text-stone-400">
+                  <div className="relative overflow-visible rounded-2xl border border-orange-100 bg-white/85 p-3">
+                    <div className="donor-smart-shiba" aria-hidden="true">
+                      <span className="donor-smart-paw donor-smart-paw-one" />
+                      <span className="donor-smart-paw donor-smart-paw-two" />
+                      <img
+                        src="/images/donor-shiba-cutout.png"
+                        alt=""
+                        className="donor-smart-shiba-img"
+                      />
+                    </div>
+                    <p className="relative font-black uppercase tracking-[0.12em] text-stone-400">
                       Smart campaigns
                     </p>
-                    <p className="mt-1 text-lg font-black text-stone-950">
+                    <p className="relative mt-1 text-lg font-black text-stone-950">
                       {contractConnectedCampaigns.length}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-semibold text-stone-500">
+                    <p className="relative mt-0.5 text-[11px] font-semibold text-stone-500">
                       contract linked
                     </p>
                   </div>
@@ -322,7 +332,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   <p className="mt-1 text-xl font-black text-stone-950">
                     +{latestRefund.refundAmountEth > 0
                       ? formatEth(latestRefund.refundAmountEth)
-                      : "Confirmed on-chain"}
+                      : "Confirmed"}
                   </p>
                   <p className="mt-1 text-sm font-semibold text-stone-600">
                     {latestRefund.campaignTitle}
@@ -493,7 +503,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                     </p>
                     {donation.amountEth > 0 ? (
                       <p className="text-xs font-semibold text-stone-500">
-                        Approx. {formatAmount(donation.amount, donation.currency)}
+                        {formatLiveMyr(donation.amountEth * ethMyrRate)}
                       </p>
                     ) : null}
                     <StatusPill status={donation.status} />

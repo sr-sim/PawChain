@@ -23,7 +23,7 @@ export const donorBadgeTiers: DonorBadgeTier[] = [
     requiredEth: 0.05,
     imageUrl:
       "https://ipfs.io/ipfs/bafybeiheq47evqyr3465xgz7mp532tyu3o4ptb3ep226nzqhrthx65lbti",
-    description: "First milestone for confirmed on-chain donations.",
+    description: "First milestone for confirmed donations.",
   },
   {
     level: "silver",

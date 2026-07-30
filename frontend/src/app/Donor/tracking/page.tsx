@@ -12,6 +12,7 @@ import {
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
 import { RefundClaimButton } from "./RefundClaimButton";
+import { getLatestEthMyrRate } from "@/lib/currency";
 
 type TrackingPageProps = {
   searchParams?: Promise<{
@@ -77,6 +78,13 @@ function formatEth(value: number) {
     minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
+}
+
+function formatLiveMyr(value: number) {
+  return `Approx. live MYR ${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function getMilestoneAmount(goalAmount: number | undefined, percentage: number) {
@@ -148,6 +156,7 @@ export default async function DonorTrackingPage({
     campaigns = [];
   }
 
+  const ethMyrRate = (await getLatestEthMyrRate()).rate;
   const milestoneCount = campaigns.reduce(
     (total, campaign) => total + campaign.milestones.length,
     0,
@@ -162,10 +171,9 @@ export default async function DonorTrackingPage({
     donationData.summary.totalEth > 0
       ? formatEth(donationData.summary.totalEth)
       : "0 ETH";
-  const totalDonatedEstimate = `${formatAmount(
-    donationData.summary.totalAmount,
-    donationData.summary.currency,
-  )} estimated value`;
+  const totalDonatedEstimate = formatLiveMyr(
+    donationData.summary.totalEth * ethMyrRate,
+  );
 
   return (
     <div className="space-y-5">
@@ -247,7 +255,7 @@ export default async function DonorTrackingPage({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
-                  On-chain proof
+                  Verification proof
                 </p>
                 <h2 className="mt-1 text-xl font-black text-stone-950">
                   Transaction verification
@@ -370,7 +378,7 @@ export default async function DonorTrackingPage({
                     </p>
                     {donation.amountEth > 0 ? (
                       <p className="mt-1 text-xs font-semibold text-stone-500">
-                        Approx. {formatAmount(donation.amount, donation.currency)}
+                        {formatLiveMyr(donation.amountEth * ethMyrRate)}
                       </p>
                     ) : null}
                     {donation.refundTxHash ? (

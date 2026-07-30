@@ -98,7 +98,7 @@ function getOnChainStatusLabel(status: number) {
   if (status === 1) return "Completed";
   if (status === 2) return "Refunding";
   if (status === 3) return "Closed";
-  return "On-chain";
+  return "Blockchain";
 }
 
 function getCampaignProgress(campaign?: CampaignRow) {
@@ -318,7 +318,7 @@ async function syncClaimedRefunds(
           donorId: donation.donor_id,
           campaignId: donation.campaign_id,
           title: "Refund recorded",
-          message: `Your refund from ${campaign?.title ?? "this campaign"} was verified on-chain and added to your donation ledger.`,
+          message: `Your refund from ${campaign?.title ?? "this campaign"} was verified and added to your donation history.`,
           status: "success",
         });
 

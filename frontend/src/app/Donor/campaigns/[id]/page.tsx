@@ -65,6 +65,74 @@ function getCumulativeMilestonePercentage(
     .reduce((total, milestone) => total + Number(milestone.percentage || 0), 0);
 }
 
+function getCurrentMilestoneIndex(
+  milestones: { percentage: number }[],
+  campaignProgress: number,
+  campaignStatus: string,
+  contractIndex?: number,
+) {
+  if (milestones.length === 0) {
+    return -1;
+  }
+
+  if (
+    typeof contractIndex === "number" &&
+    Number.isFinite(contractIndex) &&
+    contractIndex >= 0 &&
+    contractIndex < milestones.length
+  ) {
+    return contractIndex;
+  }
+
+  if (campaignStatus === "Completed" || campaignProgress >= 100) {
+    return milestones.length - 1;
+  }
+
+  const nextIndex = milestones.findIndex(
+    (_milestone, index) =>
+      campaignProgress <
+      getCumulativeMilestonePercentage(milestones, index),
+  );
+
+  return nextIndex >= 0 ? nextIndex : milestones.length - 1;
+}
+
+function getMilestoneFundingState(
+  milestones: { percentage: number }[],
+  index: number,
+  campaignProgress: number,
+) {
+  const stagePercent = Math.max(0, Number(milestones[index]?.percentage ?? 0));
+  const previousTarget =
+    index > 0 ? getCumulativeMilestonePercentage(milestones, index - 1) : 0;
+  const target = getCumulativeMilestonePercentage(milestones, index);
+
+  if (campaignProgress >= target) {
+    return {
+      label: "Funded",
+      progress: 100,
+      tone: "complete" as const,
+    };
+  }
+
+  if (campaignProgress <= previousTarget || stagePercent <= 0) {
+    return {
+      label: "Locked",
+      progress: 0,
+      tone: "locked" as const,
+    };
+  }
+
+  return {
+    label: "Funding now",
+    progress: Math.min(
+      100,
+      Math.max(0, ((campaignProgress - previousTarget) / stagePercent) * 100),
+    ),
+    tone: "active" as const,
+  };
+}
+
 export default async function DonorCampaignDetailPage({
   params,
 }: {
@@ -101,6 +169,14 @@ export default async function DonorCampaignDetailPage({
     : "";
   const canDonate = campaign.status === "Active";
   const progressWidth = Math.min(100, Math.max(0, campaign.raised));
+  const currentMilestoneIndex = getCurrentMilestoneIndex(
+    milestoneItems,
+    campaign.raised,
+    campaign.status,
+    campaign.currentMilestoneIndex,
+  );
+  const currentMilestone =
+    currentMilestoneIndex >= 0 ? milestoneItems[currentMilestoneIndex] : null;
   const raisedDisplay =
     typeof campaign.onChainTotalRaisedEth === "number"
       ? formatEth(campaign.onChainTotalRaisedEth)
@@ -236,7 +312,7 @@ export default async function DonorCampaignDetailPage({
                     Funding progress
                   </p>
                   <h2 className="mt-1 text-xl font-black text-stone-950">
-                    {campaign.raised}% funded on-chain
+                    {campaign.raised}% funded
                   </h2>
                 </div>
                 <span className="w-fit rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-stone-700">
@@ -249,6 +325,21 @@ export default async function DonorCampaignDetailPage({
                   style={{ width: `${progressWidth}%` }}
                 />
               </div>
+              {currentMilestone ? (
+                <div className="mt-4 rounded-xl bg-white/75 px-3 py-2 ring-1 ring-orange-100">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">
+                    {campaign.status === "Completed"
+                      ? "Final milestone"
+                      : "Current milestone"}
+                  </p>
+                  <p className="mt-1 text-sm font-black text-stone-950">
+                    {currentMilestone.title} ({currentMilestone.percentage}% release)
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">
+                    Stage amount: {getStageAmount(currentMilestone.percentage)}
+                  </p>
+                </div>
+              ) : null}
               <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
                   <p className="text-xs font-semibold text-stone-500">
@@ -364,7 +455,7 @@ export default async function DonorCampaignDetailPage({
                   Campaign trust
                 </p>
                 <h2 className="mt-1 text-lg font-black text-stone-950">
-                  Verified on-chain controls
+                  Verified campaign controls
                 </h2>
               </div>
               <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
@@ -377,7 +468,7 @@ export default async function DonorCampaignDetailPage({
                   Shelter RoleNFT
                 </p>
                 <p className="mt-1 text-sm font-black text-stone-950">
-                  On-chain checked
+                  Verified
                 </p>
               </div>
               <div className="rounded-xl bg-white p-3 ring-1 ring-orange-100">
@@ -444,24 +535,86 @@ export default async function DonorCampaignDetailPage({
                 </p>
               </div>
               <div className="mt-5 space-y-3 border-l border-orange-100 pl-5">
-              {milestoneItems.map((milestone, index) => (
+              {milestoneItems.map((milestone, index) => {
+                const fundingState = getMilestoneFundingState(
+                  milestoneItems,
+                  index,
+                  campaign.raised,
+                );
+                const isLocked = fundingState.tone === "locked";
+
+                return (
                 <div
                   key={milestone.title}
-                  className="donor-ledger-row donor-chain-node rounded-2xl border border-orange-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200"
+                  className={[
+                    "donor-ledger-row donor-chain-node rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5",
+                    isLocked
+                      ? "border-slate-200 bg-slate-50/70 opacity-80"
+                      : index === currentMilestoneIndex
+                        ? "border-[var(--color-orange)] bg-orange-50/45"
+                        : "border-orange-100 hover:border-orange-200",
+                  ].join(" ")}
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="grid h-8 w-8 place-items-center rounded-xl bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
+                        <span
+                          className={[
+                            "grid h-8 w-8 place-items-center rounded-xl bg-white text-xs font-black ring-1",
+                            isLocked
+                              ? "text-slate-400 ring-slate-200"
+                              : "text-[var(--color-orange)] ring-orange-100",
+                          ].join(" ")}
+                        >
                           {index + 1}
                         </span>
-                        <p className="text-sm font-black text-stone-950">
+                        <p
+                          className={[
+                            "text-sm font-black",
+                            isLocked ? "text-slate-500" : "text-stone-950",
+                          ].join(" ")}
+                        >
                           {milestone.title}
                         </p>
-                        <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-[var(--color-orange)]">
+                        <span
+                          className={[
+                            "rounded-full border bg-white px-3 py-1 text-xs font-black",
+                            isLocked
+                              ? "border-slate-200 text-slate-400"
+                              : "border-orange-200 text-[var(--color-orange)]",
+                          ].join(" ")}
+                        >
                           {milestone.percentage}% release
                         </span>
+                        <span
+                          className={[
+                            "rounded-full px-3 py-1 text-xs font-black",
+                            fundingState.tone === "complete"
+                              ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                              : fundingState.tone === "active"
+                                ? "bg-orange-50 text-[var(--color-orange)] ring-1 ring-orange-100"
+                                : "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
+                          ].join(" ")}
+                        >
+                          {fundingState.label}
+                        </span>
                       </div>
+                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                        <div
+                          className={[
+                            "h-full rounded-full transition-all",
+                            fundingState.tone === "complete"
+                              ? "bg-emerald-500"
+                              : fundingState.tone === "active"
+                                ? "bg-[var(--color-orange)]"
+                                : "bg-slate-300",
+                          ].join(" ")}
+                          style={{ width: `${fundingState.progress}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] font-semibold text-stone-400">
+                        {Math.round(fundingState.progress)}% of this stage funded
+                      </p>
                   {milestone.description ? (
                     <p className="mt-3 text-xs leading-5 text-stone-600">
                       {milestone.description}
@@ -513,7 +666,8 @@ export default async function DonorCampaignDetailPage({
                     />
                   </div>
                 </div>
-              ))}
+                );
+              })}
               </div>
             </div>
           </div>

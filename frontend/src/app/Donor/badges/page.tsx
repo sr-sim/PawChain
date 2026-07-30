@@ -16,8 +16,8 @@ type DonorBadgesPageProps = {
   }>;
 };
 
-function formatMyr(value: number, currency = "MYR") {
-  return `${currency} ${value.toLocaleString("en-MY", {
+function formatLiveMyr(value: number) {
+  return `Approx. live MYR ${value.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -42,7 +42,7 @@ function EthWithMyr({
         {formatBadgeEth(eth)}
         {suffix ? ` ${suffix}` : ""}
       </p>
-      <p className={myrClassName}>Approx. {formatMyr(eth * rate)}</p>
+      <p className={myrClassName}>{formatLiveMyr(eth * rate)}</p>
     </div>
   );
 }
@@ -142,7 +142,7 @@ export default async function DonorBadgesPage({
             <p className="mt-1 text-sm leading-6 text-stone-600">
               Badge progress is calculated from confirmed donation records.
               After the upgraded RoleNFT contract is deployed, confirmed
-              campaign donations can upgrade the badge automatically on-chain.
+              campaign donations can upgrade the badge automatically.
             </p>
           </div>
           {eligibleForUpgrade ? (
@@ -171,7 +171,7 @@ export default async function DonorBadgesPage({
             <div>
               <p>{formatBadgeEth(totalEth)} donated</p>
               <p className="mt-0.5 font-medium text-stone-400">
-                Approx. {formatMyr(totalEth * ethMyrRate)}
+                {formatLiveMyr(totalEth * ethMyrRate)}
               </p>
             </div>
             <div className="text-right">
@@ -180,7 +180,7 @@ export default async function DonorBadgesPage({
                     <>
                       <p>{formatBadgeEth(progress.nextTier.requiredEth)} target</p>
                       <p className="mt-0.5 font-medium text-stone-400">
-                        Approx. {formatMyr(progress.nextTier.requiredEth * ethMyrRate)}
+                        {formatLiveMyr(progress.nextTier.requiredEth * ethMyrRate)}
                       </p>
                     </>
                   )
@@ -201,7 +201,7 @@ export default async function DonorBadgesPage({
             </h2>
           </div>
           <p className="text-xs font-semibold text-stone-500">
-            Based on confirmed on-chain donations.
+            Based on confirmed donations.
           </p>
         </div>
 
@@ -249,7 +249,7 @@ export default async function DonorBadgesPage({
                   {formatBadgeEth(tier.requiredEth)} total donated
                 </p>
                 <p className="mt-0.5 text-xs font-semibold text-stone-400">
-                  Approx. {formatMyr(tier.requiredEth * ethMyrRate)}
+                  {formatLiveMyr(tier.requiredEth * ethMyrRate)}
                 </p>
                 <p className="mt-2 min-h-10 text-xs leading-5 text-stone-600">
                   {tier.description}
@@ -258,13 +258,13 @@ export default async function DonorBadgesPage({
                   <p className="text-xs font-semibold text-stone-500">
                     {earned
                       ? active
-                        ? "Current on-chain badge"
+                        ? "Current badge"
                         : "Threshold reached"
                       : `${formatBadgeEth(remaining)} remaining`}
                   </p>
                   {!earned ? (
                     <p className="mt-0.5 text-xs font-semibold text-stone-400">
-                      Approx. {formatMyr(remaining * ethMyrRate)}
+                      {formatLiveMyr(remaining * ethMyrRate)}
                     </p>
                   ) : null}
                 </div>
