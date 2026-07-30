@@ -339,7 +339,7 @@ export default async function DonorTrackingPage({
                       {donation.campaignTitle}
                     </Link>
                     <p className="mt-1 text-xs font-medium text-stone-500">
-                      {donation.shelterName} - {donation.location}
+                      {donation.shelterName}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <StatusPill status={donation.campaignStatus} />
@@ -539,15 +539,7 @@ export default async function DonorTrackingPage({
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
-                    <div className="rounded-xl bg-orange-50/40 p-3">
-                      <p className="font-black text-stone-950">
-                        {campaign.location}
-                      </p>
-                      <p className="text-xs font-medium text-stone-500">
-                        Location
-                      </p>
-                    </div>
+                  <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                     <div className="rounded-xl bg-orange-50/40 p-3">
                       <p className="font-black text-stone-950">
                         {campaign.milestones.length}

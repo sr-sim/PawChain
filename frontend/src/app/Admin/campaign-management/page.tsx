@@ -41,7 +41,6 @@ type Campaign = {
   shelter_wallet: string | null;
   title: string;
   description: string;
-  location: string;
   goal_amount: number | string;
   current_amount: number | string | null;
   urgency_level: string;
@@ -242,7 +241,6 @@ export default function CampaignManagementPage() {
   const [search, setSearch] = useState("");
   const [urgency, setUrgency] = useState("all");
   const [status, setStatus] = useState("all");
-  const [location, setLocation] = useState("all");
   const [sort, setSort] = useState("newest");
   const [tab, setTab] = useState<Tab>("All Campaigns");
   const [milestoneCampaign, setMilestoneCampaign] = useState<Campaign | null>(null);
@@ -322,13 +320,6 @@ export default function CampaignManagementPage() {
     return () => document.removeEventListener("visibilitychange", update);
   }, []);
 
-  const locations = useMemo(
-    () =>
-      [
-        ...new Set(campaigns.map((item) => item.location).filter(Boolean)),
-      ].sort(),
-    [campaigns],
-  );
   const summary = useMemo(
     () => ({
       total: campaigns.length,
@@ -401,14 +392,12 @@ export default function CampaignManagementPage() {
             effectiveCampaignStatus(item) === status ||
             (status === "approved" &&
               isApproved(effectiveCampaignStatus(item)))) &&
-          (location === "all" || item.location === location) &&
           (!q ||
             [
               item.title,
               item.shelter_name,
               item.shelter_id,
               item.description,
-              item.location,
               ...(item.campaign_milestones ?? []).flatMap((milestone) => [
                 milestone.title,
                 milestone.description,
@@ -432,7 +421,7 @@ export default function CampaignManagementPage() {
               : new Date(b.created_at).getTime() -
                 new Date(a.created_at).getTime(),
       );
-  }, [campaigns, tab, urgency, status, location, search, sort]);
+  }, [campaigns, tab, urgency, status, search, sort]);
 
   const review = async (campaign: Campaign, action: "approve" | "reject") => {
     if (!address) return;
@@ -866,7 +855,6 @@ export default function CampaignManagementPage() {
     setSearch("");
     setUrgency("all");
     setStatus("all");
-    setLocation("all");
     setSort("newest");
   };
 
@@ -874,7 +862,6 @@ export default function CampaignManagementPage() {
     Boolean(search.trim()) ||
     urgency !== "all" ||
     status !== "all" ||
-    location !== "all" ||
     sort !== "newest";
 
   const milestoneSummary = milestoneCampaign
@@ -980,7 +967,7 @@ export default function CampaignManagementPage() {
                         <span className="text-stone-300">Submitted {date(campaign.created_at)}</span>
                       </div>
                       <h2 className="mt-2 line-clamp-2 text-2xl font-black sm:text-3xl">{campaign.title}</h2>
-                      <p className="mt-1 text-sm font-semibold text-stone-300">{campaign.shelter_name || "Unknown shelter"} · {campaign.location || "Location not provided"}</p>
+                      <p className="mt-1 text-sm font-semibold text-stone-300">{campaign.shelter_name || "Unknown shelter"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <StatusBadge status={effectiveCampaignStatus(campaign)} />
                         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black capitalize ring-1 ring-white/15">{campaign.urgency_level} urgency</span>
@@ -1034,11 +1021,11 @@ export default function CampaignManagementPage() {
                   <div><p className="text-lg font-black">Find a campaign</p><p className="mt-1 text-xs font-medium text-stone-500">Search the review queue or narrow it by status and priority.</p></div>
                   {hasFilters ? <button type="button" onClick={clearFilters} className="rounded-xl px-3 py-2 text-xs font-black text-[var(--color-orange)] hover:bg-orange-50">Clear filters</button> : null}
                 </div>
-                <div className="mt-3 grid gap-2.5 xl:grid-cols-[1.4fr_repeat(4,0.7fr)]">
+                <div className="mt-3 grid gap-2.5 xl:grid-cols-[1.4fr_repeat(3,0.7fr)]">
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search title, shelter, description, location..."
+                    placeholder="Search title, shelter, description..."
                     className="h-9 rounded-lg border border-orange-100 bg-orange-50/30 px-3 text-xs font-medium outline-none transition focus:border-[var(--color-orange)] focus:bg-white focus:ring-2 focus:ring-orange-100"
                   />
                   <select
@@ -1063,16 +1050,6 @@ export default function CampaignManagementPage() {
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>
                     <option value="closed">Closed</option>
-                  </select>
-                  <select
-                    value={location}
-                    onChange={(event) => setLocation(event.target.value)}
-                    className="h-9 rounded-lg border border-orange-100 bg-white px-2.5 text-xs font-semibold outline-none focus:border-[var(--color-orange)]"
-                  >
-                    <option value="all">All locations</option>
-                    {locations.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
                   </select>
                   <select
                     value={sort}
@@ -1160,7 +1137,7 @@ export default function CampaignManagementPage() {
                               style={{ width: `${progress}%` }}
                             />
                           </div>
-                          <div className="mt-3 grid grid-cols-3 gap-2 text-left">
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-left">
                             <div className="rounded-xl bg-orange-50/60 p-2.5">
                               <p className="text-sm font-black">{campaign.duration_days}</p>
                               <p className="text-[10px] font-semibold text-stone-500">Days</p>
@@ -1168,10 +1145,6 @@ export default function CampaignManagementPage() {
                             <div className="rounded-xl bg-orange-50/60 p-2.5">
                               <p className="text-sm font-black">{campaign.campaign_milestones?.length ?? 0}</p>
                               <p className="text-[10px] font-semibold text-stone-500">Milestones</p>
-                            </div>
-                            <div className="rounded-xl bg-orange-50/60 p-2.5">
-                              <p className="truncate text-sm font-black">{campaign.location}</p>
-                              <p className="text-[10px] font-semibold text-stone-500">Location</p>
                             </div>
                           </div>
                           {isApproved(campaign.campaign_status) ? (
@@ -1576,7 +1549,6 @@ export default function CampaignManagementPage() {
             <div className="grid grid-cols-2 gap-2">
               {[
                 ["Shelter", details.shelter_name || details.shelter_id],
-                ["Location", details.location],
                 ["On-chain goal", weiAsEth(details.on_chain_goal_wei ?? details.goal_wei)],
                 ["Raised on-chain", weiAsEth(details.on_chain_total_raised_wei)],
                 ["Urgency", details.urgency_level],

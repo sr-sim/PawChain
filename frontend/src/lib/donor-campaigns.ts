@@ -9,7 +9,6 @@ type CampaignRow = {
   shelter_id?: string | null;
   title: string;
   description: string;
-  location: string;
   goal_amount: number | string;
   current_amount: number | string | null;
   urgency_level: "medium" | "high" | "critical";
@@ -65,7 +64,7 @@ type OnChainCampaignSnapshot = {
   progress: number;
 };
 
-export type DonorCampaign = (typeof previewCampaigns)[number] & {
+export type DonorCampaign = Omit<(typeof previewCampaigns)[number], "location"> & {
   source?: "supabase" | "preview";
   imageUrl?: string | null;
   shelterImageUrl?: string | null;
@@ -377,7 +376,6 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       title: campaign.title,
       shelterId: campaign.shelter_id ?? campaign.id,
       shelter: getShelterName(campaign.shelter_id, profileNames, applicationNames),
-      location: campaign.location,
       urgency: toTitleCase(campaign.urgency_level),
       status: onChainSnapshot?.status ?? getCampaignStatusLabel(campaign.campaign_status),
       duration: `${campaign.duration_days} days`,
@@ -443,7 +441,7 @@ export async function getActiveDonorCampaigns(): Promise<DonorCampaign[]> {
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .eq("campaign_status", "active")
     .order("created_at", { ascending: false });
@@ -463,7 +461,7 @@ export async function getBrowsableDonorCampaigns(): Promise<DonorCampaign[]> {
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .in("campaign_status", ["active", "completed", "closed"])
     .order("created_at", { ascending: false });
@@ -481,7 +479,7 @@ export async function getDonorCampaignById(id: string): Promise<DonorCampaign | 
   const { data, error } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .eq("id", id)
     .in("campaign_status", ["active", "completed", "closed"])
@@ -514,7 +512,7 @@ export async function getDonorCampaignsByIds(
   const { data, error } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .in("id", uniqueIds)
     .in("campaign_status", ["active", "completed", "closed"]);
@@ -532,7 +530,7 @@ export async function getDonorShelterById(id: string): Promise<DonorShelter | nu
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
+      "id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, deployment_tx_hash, eth_myr_rate, created_at",
     )
     .eq("shelter_id", id)
     .eq("campaign_status", "active")
@@ -579,7 +577,7 @@ export async function getDonorShelterById(id: string): Promise<DonorShelter | nu
   return {
     id,
     name: application?.shelter_name ?? profile?.full_name ?? firstCampaign?.shelter ?? "Verified Shelter",
-    location: application?.shelter_address ?? firstCampaign?.location ?? "Malaysia",
+    location: application?.shelter_address ?? "Malaysia",
     verifiedSince,
     animalsHelped: firstCampaign?.animalsHelped ?? "Active",
     imageClass: firstCampaign?.imageClass ?? "from-yellow-100 via-orange-100 to-white",

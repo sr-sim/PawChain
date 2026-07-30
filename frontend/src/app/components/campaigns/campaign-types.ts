@@ -14,7 +14,6 @@ export type Campaign = {
   shelter_id?: string;
   title: string;
   description: string;
-  location: string;
   goal_amount: number | string;
   current_amount: number | string | null;
   urgency_level: UrgencyLevel;

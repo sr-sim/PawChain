@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const supabase = await authorize(walletAddress);
     const { data: campaigns, error } = await supabase
       .from("campaigns")
-      .select("id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, cancellation_tx_hash, cancelled_at, cancelled_by, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, created_at, updated_at, rejection_reason, campaign_milestones(id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash, created_at, updated_at)")
+      .select("id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, cancellation_tx_hash, cancelled_at, cancelled_by, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, created_at, updated_at, rejection_reason, campaign_milestones(id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash, created_at, updated_at)")
       .order("created_at", { ascending: false });
     if (error) throw error;
 

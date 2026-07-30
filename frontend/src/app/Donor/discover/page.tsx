@@ -340,7 +340,6 @@ export default function DonorDiscoverPage() {
         [
           campaign.title,
           campaign.shelter,
-          campaign.location,
           campaign.story,
         ]
           .join(" ")
@@ -348,9 +347,7 @@ export default function DonorDiscoverPage() {
           .includes(normalizedSearch);
 
       const matchesUrgency = urgency === "All" || campaign.urgency === urgency;
-      const matchesLocation = location === "All" || campaign.location === location;
-
-      return matchesSearch && matchesUrgency && matchesLocation;
+      return matchesSearch && matchesUrgency;
     });
   }, [location, searchTerm, urgency]);
 
@@ -383,10 +380,9 @@ export default function DonorDiscoverPage() {
   );
   const shelters = useMemo(() => getShelters(campaigns), [campaigns]);
   const locationOptions = useMemo(() => {
-    const campaignLocations = campaigns.map((campaign) => campaign.location);
     const shelterLocations = shelters.map((shelter) => shelter.location);
 
-    return ["All", ...Array.from(new Set([...campaignLocations, ...shelterLocations]))];
+    return ["All", ...Array.from(new Set(shelterLocations))];
   }, [campaigns, shelters]);
 
   const filteredShelters = useMemo(() => {
@@ -1033,7 +1029,7 @@ export default function DonorDiscoverPage() {
                 </h2>
                 <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--color-orange)]">
                   <span>
-                    {selectedCampaign.shelter} - {selectedCampaign.location}
+                    {selectedCampaign.shelter}
                   </span>
                 </p>
               </div>
@@ -1231,7 +1227,7 @@ export default function DonorDiscoverPage() {
                   Shelter profile
                 </p>
                 <p className="mt-2 text-sm leading-6 text-stone-600">
-                  Verified shelter based in {selectedCampaign.location}.
+                  Verified shelter on PawChain.
                 </p>
               </div>
             </div>
