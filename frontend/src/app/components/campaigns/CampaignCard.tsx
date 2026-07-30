@@ -97,7 +97,6 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
         <h2 className="text-lg font-black text-stone-950">
           {campaign.title}
         </h2>
-        <p className="mt-1 text-xs font-bold text-stone-500">{campaign.location}</p>
 
         <div className="mt-4">
           <div className="flex items-end justify-between gap-3">

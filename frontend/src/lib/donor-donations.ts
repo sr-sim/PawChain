@@ -34,7 +34,6 @@ type CampaignRow = {
   id: string;
   shelter_id: string;
   title: string;
-  location: string;
   goal_amount: number | string;
   current_amount: number | string;
   campaign_status: string;
@@ -57,7 +56,6 @@ export type DonorDonation = {
   campaignTitle: string;
   shelterId: string | null;
   shelterName: string;
-  location: string;
   amount: number;
   amountEth: number;
   amountWei: string | null;
@@ -406,7 +404,7 @@ export async function getDonorDonations(walletAddress?: string) {
   const { data: campaignRows } = await supabase
     .from("campaigns")
     .select(
-      "id, shelter_id, title, location, goal_amount, current_amount, campaign_status, contract_address",
+      "id, shelter_id, title, goal_amount, current_amount, campaign_status, contract_address",
     )
     .in("id", campaignIds);
 
@@ -460,7 +458,6 @@ export async function getDonorDonations(walletAddress?: string) {
       shelterName: campaign?.shelter_id
         ? shelters.get(campaign.shelter_id) ?? "Verified shelter"
         : "Verified shelter",
-      location: campaign?.location ?? "-",
       amount,
       amountEth,
       amountWei: donation.amount_wei ?? null,

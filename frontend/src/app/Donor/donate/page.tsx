@@ -936,9 +936,6 @@ export default function DonorDonatePage() {
                       )}
 
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[0.68rem] font-medium text-sky-700">
-                          {campaign.location}
-                        </span>
                         <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[0.68rem] font-medium text-[var(--color-orange)]">
                           {campaign.daysLeft} days left
                         </span>

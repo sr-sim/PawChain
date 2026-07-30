@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     const { data: campaigns, error } = await supabase
       .from("campaigns")
       .select(
-        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
+        "id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
       )
       .eq("shelter_id", profile.id)
       .order("created_at", { ascending: false });
@@ -95,7 +95,6 @@ export async function POST(request: NextRequest) {
     const walletAddress = String(body.walletAddress ?? "").trim();
     const title = String(body.title ?? "").trim();
     const description = String(body.description ?? "").trim();
-    const location = String(body.location ?? "").trim();
     const imageUrl = String(body.imageUrl ?? "").trim();
     const goalEth = String(body.goalEth ?? "").trim();
     const ethMyrRate = Number(body.ethMyrRate);
@@ -114,9 +113,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!title || !description || !location) {
+    if (!title || !description) {
       return NextResponse.json(
-        { message: "Campaign title, description, and location are required." },
+        { message: "Campaign title and description are required." },
         { status: 400 },
       );
     }
@@ -207,7 +206,6 @@ export async function POST(request: NextRequest) {
         shelter_id: profile.id,
         title,
         description,
-        location,
         goal_amount: goalAmount,
         goal_wei: parseEther(goalEth).toString(),
         eth_myr_rate: ethMyrRate,
@@ -220,7 +218,7 @@ export async function POST(request: NextRequest) {
         rejection_reason: null,
       })
       .select(
-        "id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
+        "id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, rejection_reason, created_at, updated_at",
       )
       .single();
 

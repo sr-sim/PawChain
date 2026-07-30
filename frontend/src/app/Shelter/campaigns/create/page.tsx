@@ -11,14 +11,12 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
-import { malaysianStates } from "@/app/components/campaigns/campaign-utils";
 import type { UrgencyLevel } from "@/app/components/campaigns/campaign-types";
 import { demoEthMyrRate } from "@/lib/campaign-blockchain";
 
 type CampaignForm = {
   title: string;
   description: string;
-  location: string;
   urgencyLevel: UrgencyLevel;
   goalAmount: string;
   durationDays: "30" | "60" | "90";
@@ -40,7 +38,6 @@ type SelectOption = {
 const initialCampaignForm: CampaignForm = {
   title: "",
   description: "",
-  location: "",
   urgencyLevel: "medium",
   goalAmount: "",
   durationDays: "30",
@@ -199,11 +196,6 @@ function ThemedDropdown({
   );
 }
 
-const stateOptions = malaysianStates.map((state) => ({
-  label: state,
-  value: state,
-}));
-
 const urgencyOptions: SelectOption[] = [
   { label: "Medium", value: "medium" },
   { label: "High", value: "high" },
@@ -319,7 +311,6 @@ export default function CreateCampaignPage() {
     if (
       !form.title.trim() ||
       !form.description.trim() ||
-      !form.location ||
       !form.goalAmount ||
       Number(form.goalAmount) <= 0
     ) {
@@ -431,7 +422,6 @@ export default function CreateCampaignPage() {
           walletAddress: address,
           title: form.title,
           description: form.description,
-          location: form.location,
           urgencyLevel: form.urgencyLevel,
           goalAmount: Number(form.goalAmount) * demoEthMyrRate,
           goalEth: form.goalAmount,
@@ -555,20 +545,6 @@ export default function CreateCampaignPage() {
             </FieldLabel>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <FieldLabel label="Location *">
-                <ThemedDropdown
-                  value={form.location}
-                  placeholder="Select state"
-                  options={stateOptions}
-                  onChange={(location) =>
-                    setForm((current) => ({
-                      ...current,
-                      location,
-                    }))
-                  }
-                />
-              </FieldLabel>
-
               <FieldLabel label="Urgency Level *">
                 <ThemedDropdown
                   value={form.urgencyLevel}
@@ -688,7 +664,7 @@ export default function CreateCampaignPage() {
               <div className="flex items-center gap-3 border-b border-orange-100 pb-4"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--color-orange)] text-sm font-black text-white">1</span><div><h2 className="text-xl font-black text-stone-950">Campaign Summary</h2><p className="text-xs font-semibold text-stone-500">Final campaign details before submission</p></div></div>
               <div className="mt-5 grid gap-6 lg:grid-cols-[15rem_1fr_18rem]">
                 <div className="grid h-64 place-items-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50">{form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="max-h-64 w-full object-contain" /> : <div className="grid h-64 place-items-center text-sm font-black text-orange-400">No campaign image</div>}</div>
-                <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-100">{form.urgencyLevel}</span></div><p className="mt-3 text-sm font-semibold leading-6 text-stone-600">{form.description}</p><dl className="mt-5 grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="font-bold text-stone-500">Location</dt><dd className="font-black">{form.location}</dd><dt className="font-bold text-stone-500">Goal</dt><dd className="font-black">{formatETH(form.goalAmount)} <span className="block text-xs text-stone-400">about {formatMYR(Number(form.goalAmount || 0) * demoEthMyrRate)}</span></dd><dt className="font-bold text-stone-500">Duration</dt><dd className="font-black">{form.durationDays} days</dd></dl></div>
+                <div><div className="flex flex-wrap items-center gap-2"><h3 className="text-2xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-100">{form.urgencyLevel}</span></div><p className="mt-3 text-sm font-semibold leading-6 text-stone-600">{form.description}</p><dl className="mt-5 grid grid-cols-[6rem_1fr] gap-3 text-sm"><dt className="font-bold text-stone-500">Goal</dt><dd className="font-black">{formatETH(form.goalAmount)} <span className="block text-xs text-stone-400">about {formatMYR(Number(form.goalAmount || 0) * demoEthMyrRate)}</span></dd><dt className="font-bold text-stone-500">Duration</dt><dd className="font-black">{form.durationDays} days</dd></dl></div>
                 <aside className="space-y-4"><div className="rounded-2xl border border-[#FFCD80] bg-[#FFFCC9]/45 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Connected wallet</p><p className="mt-2 font-mono text-sm font-black">{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}</p><span className="mt-3 inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">Sepolia Network</span></div><div className="rounded-2xl border border-orange-100 bg-white p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Submission status</p><p className="mt-2 text-sm font-black text-stone-950">Pending admin approval</p><p className="mt-1 text-xs font-semibold leading-5 text-stone-500">The campaign contract is created only after approval succeeds.</p></div></aside>
               </div>
             </section>

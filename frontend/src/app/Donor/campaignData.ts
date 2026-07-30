@@ -136,7 +136,13 @@ export type Campaign = (typeof campaigns)[number] & {
   shelterImageUrl?: string | null;
 };
 
-export function getShelters(sourceCampaigns: Campaign[] = campaigns) {
+type CampaignWithoutRequiredLocation = Omit<Campaign, "location"> & {
+  location?: string;
+};
+
+export function getShelters(
+  sourceCampaigns: CampaignWithoutRequiredLocation[] = campaigns,
+) {
   const shelterMap = new Map<string, {
     id: string;
     name: string;
@@ -146,7 +152,7 @@ export function getShelters(sourceCampaigns: Campaign[] = campaigns) {
     imageClass: string;
     imageUrl?: string | null;
     story: string;
-    campaigns: Campaign[];
+    campaigns: CampaignWithoutRequiredLocation[];
   }>();
 
   sourceCampaigns.forEach((campaign) => {
@@ -160,7 +166,7 @@ export function getShelters(sourceCampaigns: Campaign[] = campaigns) {
     shelterMap.set(campaign.shelterId, {
       id: campaign.shelterId,
       name: campaign.shelter,
-      location: campaign.location,
+      location: campaign.location ?? "Malaysia",
       verifiedSince: campaign.verifiedSince,
       animalsHelped: campaign.animalsHelped,
       imageClass: campaign.imageClass,
