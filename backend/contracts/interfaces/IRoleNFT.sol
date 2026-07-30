@@ -6,4 +6,6 @@ interface IRoleNFT {
     function hasRoleNFT(address account) external view returns (bool);
     function userTokenId(address account) external view returns (uint256);
     function isShelterRole(uint256 tokenId) external view returns (bool);
+    function authorizeDonationRecorder(address recorder, bool authorized) external;
+    function recordDonation(address donor, uint256 amount) external returns (uint8);
 }

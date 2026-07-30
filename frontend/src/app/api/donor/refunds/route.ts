@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { decodeEventLog, isAddress, type Address, type Hash } from "viem";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { createDonorNotification } from "@/lib/donor-notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
-      .select("contract_address, campaign_status, eth_myr_rate")
+      .select("title, contract_address, campaign_status, eth_myr_rate")
       .eq("id", campaignId)
       .single();
     if (campaignError) throw campaignError;
@@ -115,11 +116,20 @@ export async function POST(request: NextRequest) {
       .update({
         refund_tx_hash: txHash,
         refunded_at: new Date().toISOString(),
+        status: "refunded",
         updated_at: new Date().toISOString(),
       })
       .eq("donor_id", donor.id)
       .eq("campaign_id", campaignId);
     if (updateError) throw updateError;
+
+    await createDonorNotification({
+      donorId: donor.id,
+      campaignId,
+      title: "Refund claimed",
+      message: `Your refund from ${campaign.title} was confirmed on-chain and recorded in your donation ledger.`,
+      status: "success",
+    });
 
     return NextResponse.json({ refunded: true });
   } catch (error) {

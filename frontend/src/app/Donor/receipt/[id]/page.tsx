@@ -67,6 +67,9 @@ export default async function DonorReceiptPage({
     ? `/Donor/tracking?walletAddress=${encodeURIComponent(walletAddress)}`
     : "/Donor/tracking";
   const explorerUrl = getTransactionExplorerUrl(receipt.txHash);
+  const refundExplorerUrl = receipt.refundTxHash
+    ? getTransactionExplorerUrl(receipt.refundTxHash)
+    : "";
   const contractUrl = receipt.contractAddress
     ? getAddressExplorerUrl(receipt.contractAddress)
     : "";
@@ -203,6 +206,53 @@ export default async function DonorReceiptPage({
               </p>
             </div>
           </div>
+          {receipt.refundTxHash ? (
+            <div className="mt-4 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
+                    Refund proof
+                  </p>
+                  <h3 className="mt-1 text-lg font-black text-stone-950">
+                    Contract refund received
+                  </h3>
+                  <p className="mt-1 text-sm font-semibold text-stone-600">
+                    {receipt.refundAmountEth > 0
+                      ? `+${formatEth(receipt.refundAmountEth)}`
+                      : "Refund confirmed on-chain"}
+                  </p>
+                  {receipt.refundedAt ? (
+                    <p className="mt-1 text-xs font-semibold text-stone-500">
+                      {formatDate(receipt.refundedAt)}
+                    </p>
+                  ) : null}
+                </div>
+                {refundExplorerUrl ? (
+                  <a
+                    href={refundExplorerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex w-fit rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-700 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+                  >
+                    View refund on Etherscan
+                  </a>
+                ) : null}
+              </div>
+              <div className="mt-3 rounded-xl border border-emerald-100 bg-white/75 p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-400">
+                  Refund transaction hash
+                </p>
+                <p className="mt-2 break-all text-sm font-semibold text-stone-950">
+                  {receipt.refundTxHash}
+                </p>
+                <p className="mt-2 text-xs font-semibold leading-5 text-stone-500">
+                  MetaMask may show 0 ETH for the claim call. Etherscan shows
+                  the actual refund under internal transfers from the campaign
+                  contract.
+                </p>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

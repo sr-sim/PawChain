@@ -80,10 +80,11 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const walletAddress = String(body.walletAddress ?? "").trim();
     const notificationId = String(body.notificationId ?? "").trim();
+    const markAll = Boolean(body.markAll);
 
-    if (!walletAddress || !notificationId) {
+    if (!walletAddress || (!notificationId && !markAll)) {
       return NextResponse.json(
-        { message: "Wallet address and notification ID are required." },
+        { message: "Wallet address and notification selection are required." },
         { status: 400 },
       );
     }
@@ -95,6 +96,30 @@ export async function PATCH(request: NextRequest) {
         { message: "No donor account found." },
         { status: 404 },
       );
+    }
+
+    if (markAll) {
+      const readAt = new Date().toISOString();
+      const { data, error } = await donor.supabase
+        .from("donor_notifications")
+        .update({
+          is_read: true,
+          read_at: readAt,
+        })
+        .eq("donor_id", donor.profile.id)
+        .eq("is_read", false)
+        .select(
+          "id, donor_id, campaign_id, title, message, status, is_read, read_at, created_at",
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      return NextResponse.json({
+        notifications: data ?? [],
+        message: "All notifications marked as read.",
+      });
     }
 
     const { data, error } = await donor.supabase

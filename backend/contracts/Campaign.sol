@@ -185,6 +185,11 @@ contract Campaign {
         donorContributions[msg.sender] += msg.value;
         totalRaised += msg.value;
 
+        try roleNFT.recordDonation(msg.sender, msg.value) {
+        } catch {
+            // Donation should not fail if badge recording is not configured yet.
+        }
+
         _refreshCurrentMilestone();
 
         emit DonationReceived(

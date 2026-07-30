@@ -29,12 +29,12 @@ type MilestoneRow = {
   description?: string | null;
   requirement?: string | null;
   percentage: number | string;
+  on_chain_index?: number | string | null;
   status?: string | null;
   proof_url?: string | null;
   proof_tx_hash?: string | null;
   review_tx_hash?: string | null;
   release_tx_hash?: string | null;
-  on_chain_index: number;
 };
 
 type ShelterProfileRow = {
@@ -275,9 +275,10 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
 
   const { data: milestoneRows } = await supabase
     .from("campaign_milestones")
-    .select("campaign_id, title, description, requirement, percentage, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash, on_chain_index")
+    .select("campaign_id, title, description, requirement, percentage, on_chain_index, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash, created_at")
     .in("campaign_id", campaignIds)
-    .order("on_chain_index", { ascending: true });
+    .order("on_chain_index", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true });
 
   const { data: profileRows } =
     shelterIds.length > 0
@@ -308,6 +309,31 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
     const existing = milestonesByCampaign.get(milestone.campaign_id) ?? [];
     existing.push(milestone);
     milestonesByCampaign.set(milestone.campaign_id, existing);
+  });
+  milestonesByCampaign.forEach((milestones, campaignId) => {
+    milestonesByCampaign.set(
+      campaignId,
+      [...milestones].sort((first, second) => {
+        const firstIndex = Number(first.on_chain_index);
+        const secondIndex = Number(second.on_chain_index);
+        const firstHasIndex = Number.isFinite(firstIndex);
+        const secondHasIndex = Number.isFinite(secondIndex);
+
+        if (firstHasIndex && secondHasIndex) {
+          return firstIndex - secondIndex;
+        }
+
+        if (firstHasIndex) {
+          return -1;
+        }
+
+        if (secondHasIndex) {
+          return 1;
+        }
+
+        return 0;
+      }),
+    );
   });
 
   const profileNames = new Map(
