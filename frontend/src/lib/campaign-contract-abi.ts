@@ -124,6 +124,13 @@ export const campaignContractAbi = [
   },
   {
     type: "function",
+    name: "refundPool",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "campaignStatus",
     stateMutability: "view",
     inputs: [],
