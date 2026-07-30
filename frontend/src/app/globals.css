@@ -101,10 +101,65 @@ html {
 .donor-chain-bg {
   position: relative;
   isolation: isolate;
+  overflow: hidden;
 }
 
 .donor-chain-shell {
   position: relative;
+  z-index: 1;
+}
+
+.donor-smart-paw {
+  position: absolute;
+  display: block;
+}
+
+.donor-smart-shiba {
+  position: absolute;
+  right: 0.8rem;
+  top: -4.4rem;
+  z-index: 0;
+  width: 5.7rem;
+  height: 5rem;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.donor-smart-shiba-img {
+  position: absolute;
+  left: 50%;
+  bottom: -0.15rem;
+  width: 5.4rem;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 14px rgba(148, 93, 28, 0.17));
+  transform: translateX(-50%);
+  transform-origin: center bottom;
+  animation: donor-shiba-peek 3.8s ease-in-out infinite;
+}
+
+.donor-smart-paw {
+  width: 0.42rem;
+  height: 0.36rem;
+  border-radius: 48% 52% 55% 45%;
+  background: rgba(255, 138, 0, 0.2);
+  box-shadow:
+    0 -0.2rem 0 -0.1rem rgba(255, 138, 0, 0.25),
+    0.18rem -0.08rem 0 -0.11rem rgba(255, 138, 0, 0.22),
+    -0.18rem -0.08rem 0 -0.11rem rgba(255, 138, 0, 0.22);
+  animation: donor-paw-float 4s ease-in-out infinite;
+}
+
+.donor-smart-paw-one {
+  right: 5.15rem;
+  top: 1rem;
+}
+
+.donor-smart-paw-two {
+  right: 5.35rem;
+  top: 3rem;
+  transform: scale(0.74) rotate(-18deg);
+  animation-delay: 1.1s;
 }
 
 .donor-tech-hero {
@@ -486,6 +541,30 @@ html {
   }
 }
 
+@keyframes donor-shiba-peek {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) rotate(-1.5deg);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-0.18rem) rotate(2deg);
+  }
+}
+
+@keyframes donor-paw-float {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(0) rotate(10deg);
+  }
+
+  50% {
+    opacity: 0.78;
+    transform: translateY(-0.7rem) rotate(-8deg);
+  }
+}
+
 @keyframes disconnect-progress {
   from {
     transform: scaleX(0);
@@ -582,6 +661,12 @@ html {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .donor-smart-shiba {
+    display: none;
   }
 }
 

@@ -4,8 +4,15 @@ import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from
 import Link from "next/link";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
+import { EthMyrMarketCard } from "@/app/components/EthMyrMarketCard";
 import { AdminSidebar as SharedAdminSidebar } from "@/app/Admin/components/AdminSidebar";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
+import {
+  getWalletStyle,
+  saveWalletStyle,
+  WalletStylePicker,
+  type WalletStyleId,
+} from "@/app/components/wallet/WalletStyle";
 
 type CampaignRow = {
   id: string;
@@ -192,13 +199,33 @@ function DashboardSkeleton() {
 }
 
 export default function AdminDashboard() {
-  const { weiToMyr, source: rateSource } = useEthMyrRate();
+  const {
+    rate: ethMyrRate,
+    weiToMyr,
+    source: rateSource,
+    updatedAt: rateUpdatedAt,
+    loading: rateLoading,
+    history: rateHistory,
+  } = useEthMyrRate();
   const { address, isConnected } = useAppKitAccount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [denied, setDenied] = useState(false);
+  const [walletStyle, setWalletStyle] = useState<WalletStyleId>("classic");
+  const [walletStyleMessage, setWalletStyleMessage] = useState("");
+
+  useEffect(() => {
+    setWalletStyle(getWalletStyle(address));
+  }, [address]);
+
+  function customizeWallet(style: WalletStyleId) {
+    setWalletStyle(style);
+    saveWalletStyle(address, style);
+    setWalletStyleMessage("Wallet appearance updated.");
+    window.setTimeout(() => setWalletStyleMessage(""), 2500);
+  }
 
   useEffect(() => {
     if (!address || !isConnected) {
@@ -241,8 +268,6 @@ export default function AdminDashboard() {
     return { background: `conic-gradient(${slices.join(", ")})` };
   }, [data]);
 
-  const queueCount = data ? data.summary.pendingCampaigns + data.summary.pendingMilestones + data.reviewQueue.pendingShelterCount : 0;
-
   return (
     <>
       <DashboardTopBar role="Admin" onMenuClick={() => setSidebarOpen((value) => !value)} isMenuOpen={sidebarOpen} />
@@ -259,7 +284,21 @@ export default function AdminDashboard() {
             <div className="flex flex-col gap-6">
               <header className="relative overflow-hidden rounded-[2rem] border border-orange-100 bg-[linear-gradient(120deg,var(--color-white)_0%,var(--color-cream)_58%,var(--color-peach)_100%)] px-6 py-7 text-stone-950 shadow-xl shadow-orange-200/30 sm:px-8">
                 <div className="absolute -right-10 -top-20 h-64 w-64 rounded-full bg-[rgba(var(--color-orange-rgb),0.14)] blur-3xl" />
-                <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--color-orange)]">Platform command centre</p><h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Good to see you, Admin.</h1><p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-stone-600">Monitor campaign health, review priorities, and fund transparency from one live overview.</p></div><div className="w-fit rounded-2xl border border-orange-100 bg-white/70 px-4 py-3 shadow-sm backdrop-blur"><p className="text-xs font-bold text-stone-500">Awaiting review</p><p className="mt-1 text-2xl font-black text-[var(--color-orange)]">{queueCount} items</p></div></div>
+                <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-[var(--color-orange)]">Platform command centre</p>
+                    <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Good to see you, Admin.</h1>
+                    <p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-stone-600">Monitor campaign health, review priorities, and fund transparency from one live overview.</p>
+                  </div>
+                  <EthMyrMarketCard
+                    rate={ethMyrRate}
+                    source={rateSource}
+                    updatedAt={rateUpdatedAt}
+                    loading={rateLoading}
+                    history={rateHistory}
+                    className="lg:max-w-sm"
+                  />
+                </div>
               </header>
 
               <section className="order-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -299,8 +338,36 @@ export default function AdminDashboard() {
               </section>
 
               <section className="order-5 rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Latest activity</p><h2 className="mt-1 text-2xl font-black">Recent campaigns</h2><p className="mt-1 text-xs font-bold text-stone-500">Newest submissions first</p></div><button type="button" disabled title="Campaign Management — Coming soon" className="inline-flex w-fit cursor-not-allowed items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-[var(--color-orange)] opacity-70"><span>View campaign management</span><span aria-hidden="true">→</span><span className="rounded-full bg-white px-2 py-0.5 text-[9px] uppercase tracking-wide text-stone-500">Soon</span></button></div>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Latest activity</p><h2 className="mt-1 text-2xl font-black">Recent campaigns</h2><p className="mt-1 text-xs font-bold text-stone-500">Newest submissions first</p></div><Link href="/Admin/campaign-management" className="inline-flex w-fit items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-[var(--color-orange)] transition hover:border-orange-300 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"><span>View campaign management</span><span aria-hidden="true">→</span></Link></div>
                 {data.recentCampaigns.length ? <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead><tr className="border-b border-stone-100 text-xs uppercase tracking-[0.12em] text-stone-400"><th className="pb-3 font-black">Campaign</th><th className="pb-3 font-black">Status</th><th className="pb-3 font-black">Urgency</th><th className="pb-3 font-black">Progress</th><th className="pb-3 text-right font-black">Submitted</th></tr></thead><tbody>{data.recentCampaigns.map((campaign) => { const goal = Number(campaign.goal_amount || 0); const current = Number(campaign.current_amount || 0); const progress = goal ? Math.min(100, Math.round((current / goal) * 100)) : 0; const meta = statusMeta[campaign.campaign_status]; return <tr key={campaign.id} className="border-b border-stone-100 last:border-0"><td className="py-4 pr-4"><p className="max-w-xs truncate font-black">{campaign.title}</p><p className="mt-1 text-xs font-bold text-stone-400">{formatMoney(current)} of {formatMoney(goal)}</p></td><td className="py-4 pr-4"><span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${meta?.classes ?? "bg-stone-100 text-stone-700 ring-stone-200"}`}>{meta?.label ?? campaign.campaign_status}</span></td><td className="py-4 pr-4 text-sm font-bold capitalize">{campaign.urgency_level}</td><td className="py-4 pr-4"><div className="flex items-center gap-3"><div className="h-2 w-24 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div><span className="text-xs font-black">{progress}%</span></div></td><td className="py-4 text-right text-sm font-bold text-stone-500">{formatDate(campaign.created_at)}</td></tr>; })}</tbody></table></div> : <div className="mt-5 rounded-3xl border border-dashed border-orange-200 bg-orange-50/50 p-10 text-center text-sm font-bold text-stone-500">No campaign submissions to display.</div>}
+              </section>
+
+              <section className="order-6 rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                      Wallet appearance
+                    </p>
+                    <h2 className="mt-1 text-2xl font-black text-stone-950">
+                      Customize your admin wallet
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-stone-500">
+                      Your selection updates wallet buttons across PawChain on this device.
+                    </p>
+                  </div>
+                  {walletStyleMessage ? (
+                    <p className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 ring-1 ring-emerald-200" role="status">
+                      {walletStyleMessage}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="mt-5">
+                  <WalletStylePicker
+                    address={address}
+                    value={walletStyle}
+                    onChange={customizeWallet}
+                  />
+                </div>
               </section>
             </div>
           )}

@@ -86,6 +86,13 @@ function formatMyr(value: number) {
   }).format(value);
 }
 
+function formatLiveMyr(value: number) {
+  return `Approx. live MYR ${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function parseEthInput(value: string) {
   try {
     return parseEther(value.trim());
@@ -188,7 +195,7 @@ function getMilestoneGateMessage(status: string, title: string) {
   }
 
   if (status === "Completed") {
-    return `${title} is completed. Waiting for the next milestone to activate on-chain.`;
+    return `${title} is completed. Waiting for the next milestone to activate.`;
   }
 
   if (status === "Locked") {
@@ -556,25 +563,13 @@ export default function DonorDonatePage() {
   const donationReadyCampaigns = campaigns.filter((campaign) => {
     const snapshot = campaignFundingSnapshots.get(campaign.id);
 
-    if (snapshot) {
-      return snapshot.canAccept;
-    }
-
-    if (isLoadingAllCampaignReads || isLoadingAllMilestoneReads) {
-      return campaign.status === "Active";
-    }
-
-    const goalAmount = campaign.goalAmount ?? parseGoal(campaign.goal);
-    const currentAmount =
-      campaign.currentAmount ?? (goalAmount * campaign.raised) / 100;
-    const fallbackStage = getCurrentMilestoneStage(
-      campaign.milestones,
-      goalAmount,
-      currentAmount,
-    );
-
-    return campaign.status === "Active" && Boolean(fallbackStage);
+    return Boolean(snapshot?.canAccept);
   });
+  const isCheckingDonationAvailability =
+    !isLoadingCampaigns &&
+    !campaignLoadError &&
+    campaigns.length > 0 &&
+    (isLoadingAllCampaignReads || isLoadingAllMilestoneReads);
   const selectedCampaign =
     donationReadyCampaigns.find((campaign) => campaign.id === selectedId) ??
     donationReadyCampaigns[0];
@@ -744,7 +739,7 @@ export default function DonorDonatePage() {
         ),
         status: getMilestoneStatusLabel(onChainStage?.status ?? 0),
         progress: onChainStageProgress,
-        source: "On-chain",
+        source: "Blockchain",
       }
     : fallbackStage
       ? {
@@ -903,7 +898,7 @@ export default function DonorDonatePage() {
       !isAddress(selectedCampaign.contractAddress)
     ) {
       setDonationError(
-        "This campaign is not linked to an on-chain contract yet.",
+        "This campaign is not ready for ETH donations yet.",
       );
       return;
     }
@@ -961,7 +956,7 @@ export default function DonorDonatePage() {
         status: "confirmed",
         title: "Donation confirmed",
         message:
-          "Your ETH donation is confirmed on-chain and saved into your donation history.",
+          "Your ETH donation is confirmed and saved into your donation history.",
         txHash,
       });
     } catch (error) {
@@ -991,7 +986,7 @@ export default function DonorDonatePage() {
               Donate with ETH.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Select a campaign, enter ETH, and confirm the on-chain transaction
+              Select a campaign, enter ETH, and confirm the transaction
               in your wallet.
             </p>
           </div>
@@ -1028,16 +1023,20 @@ export default function DonorDonatePage() {
             <p className="text-sm font-medium text-stone-500">
               {isLoadingCampaigns
                 ? "Loading..."
+                : isCheckingDonationAvailability
+                  ? "Checking availability..."
                 : `${donationReadyCampaigns.length} open campaigns`}
             </p>
           </div>
 
           <div className="mt-4 h-[42rem] max-h-[calc(100vh-10rem)] space-y-2 overflow-y-auto rounded-xl pr-1">
-            {isLoadingCampaigns ? (
+            {isLoadingCampaigns || isCheckingDonationAvailability ? (
               <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-5 text-center">
                 <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-orange-100 border-t-[var(--color-orange)]" />
                 <p className="mt-3 text-sm font-semibold text-stone-600">
-                  Loading active campaigns...
+                  {isLoadingCampaigns
+                    ? "Loading campaigns..."
+                    : "Checking which campaigns can receive ETH now..."}
                 </p>
               </div>
             ) : campaignLoadError ? (
@@ -1086,8 +1085,7 @@ export default function DonorDonatePage() {
                   : selectorStage
                     ? selectorStage.remainingAmount > 0
                     : false;
-                const selectorDisplayProgress =
-                  fundingSnapshot?.progress ?? selectorStageProgress;
+                const selectorDisplayProgress = clampPercentage(campaign.raised);
                 const selectorDisplayRemainingEth =
                   fundingSnapshot?.remainingEth ?? selectorRemainingEth;
                 const selectorDisplayRemainingMyr =
@@ -1168,7 +1166,7 @@ export default function DonorDonatePage() {
                             </span>
                             <span className="shrink-0 text-stone-400">
                               {selectorCanAccept
-                                ? formatMyr(selectorDisplayRemainingMyr)
+                                ? formatLiveMyr(selectorDisplayRemainingMyr)
                                 : selectorDisplayStatus === "Withdrawable"
                                   ? "Awaiting withdrawal"
                                   : selectorDisplayStatus}
@@ -1178,7 +1176,7 @@ export default function DonorDonatePage() {
                       ) : (
                         <div className="mt-1.5 rounded-lg border border-slate-100 bg-white/70 px-2 py-1.5">
                           <p className="text-xs font-semibold text-stone-500">
-                            Waiting for the next on-chain stage.
+                            Waiting for the next milestone.
                           </p>
                         </div>
                       )}
@@ -1198,8 +1196,8 @@ export default function DonorDonatePage() {
                   No campaigns open for donation
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                  Donations reopen when an active campaign has a milestone that
-                  is accepting funds.
+                  Donations reopen when a campaign has an active milestone with
+                  remaining funding needed.
                 </p>
                 <Link
                   href="/Donor/discover"
@@ -1248,7 +1246,7 @@ export default function DonorDonatePage() {
                         {formatEthText(walletBalanceEth)}
                       </p>
                       <p className="text-xs font-semibold text-stone-500">
-                        Approx. {formatMyr(walletBalanceMyr ?? 0)}
+                        {formatLiveMyr(walletBalanceMyr ?? 0)}
                       </p>
                     </>
                   ) : (
@@ -1276,7 +1274,7 @@ export default function DonorDonatePage() {
                 </label>
                 <label className="block bg-white px-4 py-4">
                   <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                    On-chain amount
+                    ETH amount
                   </span>
                   <div className="mt-2 flex items-end justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50/25 px-3 py-2.5 focus-within:border-[var(--color-orange)] focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
                     <input
@@ -1303,10 +1301,10 @@ export default function DonorDonatePage() {
                   ) : null}
                   <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2">
                     <span className="text-xs font-semibold text-stone-500">
-                      Approx. MYR value
+                      Live MYR estimate
                     </span>
                     <span className="text-sm font-black text-stone-950">
-                      {formatMyr(myrEstimate)}
+                      {formatLiveMyr(myrEstimate)}
                     </span>
                   </div>
                 </label>
@@ -1318,7 +1316,7 @@ export default function DonorDonatePage() {
                 Quick local presets
               </p>
               <p className="text-xs font-semibold text-stone-500">
-                1 ETH = {formatMyr(ethToMyrRate)}
+                Live rate: 1 ETH = {formatMyr(ethToMyrRate)}
               </p>
             </div>
             <div className="mt-2 grid grid-cols-4 gap-2">
@@ -1360,7 +1358,7 @@ export default function DonorDonatePage() {
                     {currentStageEthDisplay}
                   </p>
                   <p className="text-xs font-semibold text-stone-500">
-                    Approx. {formatMyr(currentStageRemaining)}
+                    {formatLiveMyr(currentStageRemaining)}
                   </p>
                 </div>
               </div>
@@ -1422,7 +1420,7 @@ export default function DonorDonatePage() {
                   {currentStageEthDisplay}
                 </span>
                 <span className="block text-xs font-semibold text-stone-500">
-                  Approx. {formatMyr(currentStageRemaining)}
+                  {formatLiveMyr(currentStageRemaining)}
                 </span>
               </span>
             </button>
@@ -1457,7 +1455,7 @@ export default function DonorDonatePage() {
                       {donationEthDisplay}
                     </p>
                     <p className="text-sm font-semibold text-stone-500">
-                      Approx. {formatMyr(myrEstimate)}
+                      {formatLiveMyr(myrEstimate)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -1501,9 +1499,9 @@ export default function DonorDonatePage() {
                 <div className="divide-y divide-orange-100 border-t border-orange-100 text-sm">
                   {[
                     ["ETH donation", donationEthDisplay],
-                    ["MYR estimate", formatMyr(myrEstimate)],
-                    ["Gas buffer", `${formatEthText(estimatedGasEth)} / ${formatMyr(estimatedGasMyr)}`],
-                    ["Estimated total", `${requiredTotalEthDisplay} / ${formatMyr(requiredTotalMyr)}`],
+                    ["Live MYR estimate", formatLiveMyr(myrEstimate)],
+                    ["Gas buffer", `${formatEthText(estimatedGasEth)} / ${formatLiveMyr(estimatedGasMyr)}`],
+                    ["Estimated total", `${requiredTotalEthDisplay} / ${formatLiveMyr(requiredTotalMyr)}`],
                     ["Rate", `${rateLabel}: 1 ETH = ${formatMyr(ethToMyrRate)}`],
                   ].map(([label, value]) => (
                     <div

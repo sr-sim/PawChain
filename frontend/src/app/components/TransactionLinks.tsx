@@ -16,7 +16,7 @@ export function TransactionLinks({
   reviewTxHash,
   releaseTxHash,
   transactions: customTransactions,
-  emptyMessage = "No on-chain transactions yet.",
+  emptyMessage = "No transactions yet.",
 }: TransactionLinksProps) {
   const transactions = (
     customTransactions ?? [
@@ -43,7 +43,7 @@ export function TransactionLinks({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="mr-1 text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">
-        On-chain evidence
+        Transaction proof
       </span>
 
       {transactions.map((transaction) => (
