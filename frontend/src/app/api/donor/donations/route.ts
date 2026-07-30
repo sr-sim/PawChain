@@ -65,15 +65,6 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const { data: existing } = await supabase
-      .from("donations")
-      .select("id, tx_hash")
-      .ilike("tx_hash", txHash)
-      .maybeSingle();
-    if (existing) {
-      return NextResponse.json({ donation: existing, idempotent: true });
-    }
-
     const { data: donor, error: donorError } = await supabase
       .from("profiles")
       .select("id, role")
@@ -162,7 +153,7 @@ export async function POST(request: NextRequest) {
     const raisedMyr = Number(formatEther(totalRaised)) * rate;
     const { data: donation, error: insertError } = await supabase
       .from("donations")
-      .insert({
+      .upsert({
         donor_id: donor.id,
         campaign_id: campaignId,
         amount: amountMyr,
@@ -171,7 +162,7 @@ export async function POST(request: NextRequest) {
         tx_hash: txHash,
         contract_address: campaign.contract_address,
         status: "confirmed",
-      })
+      }, { onConflict: "tx_hash" })
       .select("id, tx_hash, status")
       .single();
     if (insertError) throw insertError;

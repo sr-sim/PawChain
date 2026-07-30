@@ -12,6 +12,7 @@ type DonationRow = {
   amount_wei?: string | null;
   currency: string;
   tx_hash: string;
+  refund_tx_hash?: string | null;
   contract_address?: string | null;
   status: string;
   created_at: string;
@@ -51,6 +52,7 @@ export type DonorDonation = {
   amountWei: string | null;
   currency: string;
   txHash: string;
+  refundTxHash: string | null;
   contractAddress: string | null;
   status: string;
   createdAt: string;
@@ -191,7 +193,7 @@ export async function getDonorDonations(walletAddress?: string) {
   const { data: donationRows, error: donationError } = await supabase
     .from("donations")
     .select(
-      "id, donor_id, campaign_id, amount, amount_wei, currency, tx_hash, contract_address, status, created_at, updated_at",
+      "id, donor_id, campaign_id, amount, amount_wei, currency, tx_hash, refund_tx_hash, contract_address, status, created_at, updated_at",
     )
     .eq("donor_id", profile.id)
     .order("created_at", { ascending: false });
@@ -258,6 +260,7 @@ export async function getDonorDonations(walletAddress?: string) {
       amountWei: donation.amount_wei ?? null,
       currency: donation.currency ?? "MYR",
       txHash: donation.tx_hash,
+      refundTxHash: donation.refund_tx_hash ?? null,
       contractAddress: donation.contract_address ?? null,
       status: normalizeStatus(donation.status),
       createdAt: donation.created_at,

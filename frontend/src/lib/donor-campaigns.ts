@@ -34,6 +34,7 @@ type MilestoneRow = {
   proof_tx_hash?: string | null;
   review_tx_hash?: string | null;
   release_tx_hash?: string | null;
+  on_chain_index: number;
 };
 
 type ShelterProfileRow = {
@@ -274,9 +275,9 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
 
   const { data: milestoneRows } = await supabase
     .from("campaign_milestones")
-    .select("campaign_id, title, description, requirement, percentage, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash")
+    .select("campaign_id, title, description, requirement, percentage, status, proof_url, proof_tx_hash, review_tx_hash, release_tx_hash, on_chain_index")
     .in("campaign_id", campaignIds)
-    .order("created_at", { ascending: true });
+    .order("on_chain_index", { ascending: true });
 
   const { data: profileRows } =
     shelterIds.length > 0

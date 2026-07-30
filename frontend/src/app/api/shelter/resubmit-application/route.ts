@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  removeShelterDocument,
+  uploadShelterDocument,
+} from "@/lib/shelter-document-storage";
+import { normalizeMalaysiaPhone } from "@/lib/malaysia-phone";
 
 function readText(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -34,18 +39,31 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const existingProofDocumentPath =
+    readText(formData, "existingProofDocumentPath") || null;
   const proofDocument = formData.get("proofDocument");
-  const proofDocumentPath =
-    proofDocument instanceof File && proofDocument.name
-      ? proofDocument.name
-      : readText(formData, "existingProofDocumentPath") || null;
+  const hasNewDocument =
+    proofDocument instanceof File && proofDocument.name && proofDocument.size > 0;
+  const proofDocumentPath = hasNewDocument
+    ? await uploadShelterDocument(supabase, profile.id, proofDocument)
+    : existingProofDocumentPath;
 
+  if (!proofDocumentPath) {
+    return NextResponse.json(
+      { message: "A shelter registration document is required." },
+      { status: 400 },
+    );
+  }
+
+  const contactPhone = normalizeMalaysiaPhone(
+    readText(formData, "contactPhone"),
+  );
   const { data: application, error } = await supabase
     .from("shelter_applications")
     .update({
       shelter_name: readText(formData, "shelterName"),
       registration_id: readText(formData, "registrationId"),
-      contact_phone: readText(formData, "contactPhone"),
+      contact_phone: contactPhone,
       website_url: readText(formData, "websiteUrl") || null,
       shelter_address: readText(formData, "shelterAddress"),
       organization_description: readText(formData, "organizationDescription"),
@@ -62,7 +80,21 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
+    if (hasNewDocument) {
+      await removeShelterDocument(supabase, proofDocumentPath).catch(() => {});
+    }
     return NextResponse.json({ message: error.message }, { status: 500 });
+  }
+
+  if (
+    hasNewDocument &&
+    existingProofDocumentPath &&
+    existingProofDocumentPath !== proofDocumentPath
+  ) {
+    await removeShelterDocument(
+      supabase,
+      existingProofDocumentPath,
+    ).catch(() => {});
   }
 
   return NextResponse.json({

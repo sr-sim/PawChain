@@ -1,0 +1,459 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import Link from "next/link";
+import { formatEther } from "viem";
+import { useAppKitAccount } from "@reown/appkit/react";
+import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
+import { DashboardTopBar } from "@/app/components/DashboardTopBar";
+
+type AnalyticsData = {
+  range: { from: string; to: string; period: string };
+  campaigns: { id: string; title: string }[];
+  financial: {
+    donatedWei: string;
+    donatedMyr: number;
+    releasedWei: string;
+    releasedMyr: number;
+    lockedWei: string;
+    lockedMyr: number;
+    refundedWei: string;
+    refundedMyr: number;
+    donationChange: number;
+  };
+  donorMetrics: {
+    donationCount: number;
+    uniqueDonors: number;
+    averageDonationEth: number;
+    returningDonorRate: number;
+  };
+  trend: {
+    date: string;
+    amountEth: number;
+    amountMyr: number;
+    count: number;
+    uniqueDonors: number;
+  }[];
+  campaignSummary: {
+    active: number;
+    completed: number;
+    fullyFunded: number;
+    approachingDeadline: number;
+    underperforming: number;
+  };
+  campaignPerformance: {
+    id: string;
+    title: string;
+    status: string;
+    raisedEth: number;
+    raisedMyr: number;
+    goalEth: number;
+    progress: number;
+    donors: number;
+    refundRate: number;
+    deadline: string | null;
+  }[];
+  fundDistribution: {
+    label: string;
+    amountEth: number;
+    amountMyr: number;
+  }[];
+  milestoneMetrics: {
+    statuses: { status: string; count: number }[];
+    averageReviewHours: number;
+    delayed: number;
+    readyForRelease: number;
+  };
+  shelterMetrics: {
+    verified: number;
+    active: number;
+    shelters: {
+      id: string;
+      name: string;
+      active: boolean;
+      campaigns: number;
+      raisedEth: number;
+      completionRate: number;
+      refundRate: number;
+    }[];
+  };
+  blockchainHealth: {
+    confirmed: number;
+    pending: number;
+    failed: number;
+    actionTypes: { type: string; count: number }[];
+  };
+};
+
+const money = (value: number) =>
+  new Intl.NumberFormat("en-MY", {
+    style: "currency",
+    currency: "MYR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+
+const eth = (value: string | number) => {
+  const amount = typeof value === "string" ? Number(formatEther(BigInt(value || "0"))) : value;
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(amount)} ETH`;
+};
+
+const percent = (value: number) =>
+  `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value)}%`;
+
+function Panel({
+  title,
+  description,
+  action,
+  children,
+  className = "",
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-sm ${className}`}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-bold text-stone-950">{title}</h2>
+          <p className="mt-1 text-xs leading-5 text-stone-500">{description}</p>
+        </div>
+        {action}
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  secondary,
+  change,
+  tone = "orange",
+}: {
+  label: string;
+  value: string;
+  secondary: string;
+  change?: number;
+  tone?: "orange" | "emerald" | "blue" | "stone";
+}) {
+  const colors = {
+    orange: "bg-orange-500",
+    emerald: "bg-emerald-500",
+    blue: "bg-sky-500",
+    stone: "bg-stone-500",
+  };
+  return (
+    <article className="relative overflow-hidden rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+      <span className={`absolute inset-y-0 left-0 w-1 ${colors[tone]}`} />
+      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-stone-500">{label}</p>
+      <p className="mt-3 text-2xl font-bold tracking-tight text-stone-950">{value}</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <p className="text-xs font-medium text-stone-400">Approx. {secondary}</p>
+        {change !== undefined ? (
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${change >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+            {change >= 0 ? "↑" : "↓"} {percent(Math.abs(change))} vs previous
+          </span>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function TrendChart({ data }: { data: AnalyticsData["trend"] }) {
+  if (!data.length) {
+    return <EmptyState text="Donation activity will appear after confirmed donations in this period." />;
+  }
+  const width = 760;
+  const height = 250;
+  const padding = 34;
+  const maxEth = Math.max(...data.map((item) => item.amountEth), 0.000001);
+  const maxCount = Math.max(...data.map((item) => item.count), 1);
+  const plotWidth = width - padding * 2;
+  const plotHeight = height - padding * 2;
+  const x = (index: number) =>
+    padding + (data.length === 1 ? plotWidth / 2 : (index / (data.length - 1)) * plotWidth);
+  const linePoints = data
+    .map((item, index) => `${x(index)},${padding + plotHeight - (item.count / maxCount) * plotHeight}`)
+    .join(" ");
+  const barWidth = Math.max(5, Math.min(28, plotWidth / Math.max(data.length, 1) - 5));
+
+  return (
+    <div>
+      <div className="mb-3 flex gap-4 text-[11px] font-semibold text-stone-500">
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-orange-300" /> ETH donated</span>
+        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-stone-800" /> Donation count</span>
+      </div>
+      <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[620px]" role="img" aria-label="ETH donated and donation count over time">
+          {[0, 1, 2, 3].map((line) => (
+            <line key={line} x1={padding} x2={width - padding} y1={padding + (plotHeight / 3) * line} y2={padding + (plotHeight / 3) * line} stroke="#e7e5e4" strokeWidth="1" />
+          ))}
+          {data.map((item, index) => {
+            const barHeight = (item.amountEth / maxEth) * plotHeight;
+            return (
+              <g key={item.date}>
+                <rect x={x(index) - barWidth / 2} y={padding + plotHeight - barHeight} width={barWidth} height={barHeight} rx="4" fill="#fdba74">
+                  <title>{`${item.date}: ${eth(item.amountEth)}, ${item.count} donations, ${money(item.amountMyr)}`}</title>
+                </rect>
+                {(index === 0 || index === data.length - 1 || index % Math.ceil(data.length / 5) === 0) ? (
+                  <text x={x(index)} y={height - 8} textAnchor="middle" fontSize="10" fill="#78716c">
+                    {new Date(`${item.date}T00:00:00`).toLocaleDateString("en-MY", { day: "2-digit", month: "short" })}
+                  </text>
+                ) : null}
+              </g>
+            );
+          })}
+          <polyline points={linePoints} fill="none" stroke="#292524" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          {data.map((item, index) => (
+            <circle key={item.date} cx={x(index)} cy={padding + plotHeight - (item.count / maxCount) * plotHeight} r="3" fill="#292524">
+              <title>{`${item.count} donation${item.count === 1 ? "" : "s"}`}</title>
+            </circle>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function Donut({
+  data,
+  center,
+}: {
+  data: { label: string; value: number; color: string }[];
+  center: string;
+}) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let cursor = 0;
+  const stops = data.map((item) => {
+    const start = cursor;
+    cursor += total ? (item.value / total) * 100 : 0;
+    return `${item.color} ${start}% ${cursor}%`;
+  });
+  const style = {
+    background: total ? `conic-gradient(${stops.join(",")})` : "#e7e5e4",
+  } as CSSProperties;
+  return (
+    <div className="grid gap-5 sm:grid-cols-[180px_1fr] sm:items-center">
+      <div className="relative mx-auto h-40 w-40 rounded-full" style={style}>
+        <div className="absolute inset-7 grid place-items-center rounded-full bg-white text-center shadow-inner">
+          <div><p className="text-xl font-bold text-stone-950">{center}</p><p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Total</p></div>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {data.map((item) => (
+          <div key={item.label} className="flex items-center gap-2.5">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+            <span className="flex-1 text-xs font-semibold text-stone-600">{item.label}</span>
+            <span className="text-xs font-bold text-stone-950">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-stone-200 bg-stone-50 p-6 text-center text-sm font-medium text-stone-400">{text}</div>;
+}
+
+export default function AdminAnalyticsPage() {
+  const { address, isConnected } = useAppKitAccount();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [period, setPeriod] = useState("30");
+  const [campaignId, setCampaignId] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [campaignOptions, setCampaignOptions] = useState<{ id: string; title: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadAnalytics = useCallback(async () => {
+    if (!address || !isConnected) {
+      setLoading(false);
+      setError("Connect the approved admin wallet to view analytics.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const query = new URLSearchParams({ walletAddress: address, period, campaignId });
+      if (period === "custom" && dateFrom) query.set("dateFrom", dateFrom);
+      if (period === "custom" && dateTo) query.set("dateTo", dateTo);
+      const response = await fetch(`/api/admin/analytics?${query}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? "Unable to load analytics.");
+      setData(result);
+      if (campaignId === "all") setCampaignOptions(result.campaigns);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to load analytics.");
+    } finally {
+      setLoading(false);
+    }
+  }, [address, campaignId, dateFrom, dateTo, isConnected, period]);
+
+  useEffect(() => {
+    void loadAnalytics();
+  }, [loadAnalytics]);
+
+  const fundTotal = useMemo(
+    () => data?.fundDistribution.reduce((sum, item) => sum + item.amountEth, 0) ?? 0,
+    [data],
+  );
+
+  return (
+    <>
+      <DashboardTopBar role="Admin" isMenuOpen={sidebarOpen} onMenuClick={() => setSidebarOpen((value) => !value)} />
+      <AdminSidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
+      <main className={`min-h-screen bg-[var(--color-cream)] pt-16 transition-[padding] ${sidebarOpen ? "lg:pl-64" : ""}`}>
+        <div className="mx-auto max-w-[1500px] space-y-5 px-4 py-7 sm:px-7">
+          <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">Platform intelligence</p>
+              <h1 className="mt-1 text-3xl font-bold tracking-tight text-stone-950">Analytics &amp; Insights</h1>
+              <p className="mt-1 max-w-2xl text-sm text-stone-500">Monitor donation activity, campaign performance, fund distribution, and verified on-chain outcomes.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {["7", "30", "90", "all", "custom"].map((value) => (
+                <button key={value} type="button" onClick={() => setPeriod(value)} className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${period === value ? "border-orange-300 bg-orange-50 text-orange-700" : "border-stone-200 bg-white text-stone-600 hover:border-orange-200"}`}>
+                  {value === "all" ? "All time" : value === "custom" ? "Custom" : `${value} days`}
+                </button>
+              ))}
+            </div>
+          </header>
+
+          <section className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm md:flex-row md:items-end">
+            <label className="flex-1 text-xs font-bold uppercase tracking-wide text-stone-500">
+              Campaign
+              <select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} className="mt-2 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm font-medium normal-case tracking-normal text-stone-800 outline-none focus:border-orange-400">
+                <option value="all">All campaigns</option>
+                {campaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}
+              </select>
+            </label>
+            {period === "custom" ? (
+              <>
+                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-2 block rounded-lg border border-stone-300 px-3 py-2.5 text-sm font-medium normal-case text-stone-800" /></label>
+                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">To<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-2 block rounded-lg border border-stone-300 px-3 py-2.5 text-sm font-medium normal-case text-stone-800" /></label>
+              </>
+            ) : null}
+            <button type="button" onClick={() => void loadAnalytics()} className="rounded-lg bg-stone-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-orange-600">Refresh analytics</button>
+          </section>
+
+          {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{error}</div> : null}
+          {loading ? <div className="grid min-h-96 place-items-center rounded-2xl border border-stone-200 bg-white text-sm font-semibold text-stone-500">Calculating platform analytics…</div> : null}
+
+          {!loading && data ? (
+            <>
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Donations received" value={eth(data.financial.donatedWei)} secondary={money(data.financial.donatedMyr)} change={data.financial.donationChange} />
+                <MetricCard label="Milestone funds released" value={eth(data.financial.releasedWei)} secondary={money(data.financial.releasedMyr)} tone="emerald" />
+                <MetricCard label="Funds currently locked" value={eth(data.financial.lockedWei)} secondary={money(data.financial.lockedMyr)} tone="blue" />
+                <MetricCard label="Refunds returned to donors" value={eth(data.financial.refundedWei)} secondary={money(data.financial.refundedMyr)} tone="stone" />
+              </section>
+
+              <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
+                <Panel title="Donation activity" description="Confirmed ETH donations and transaction volume during the selected period.">
+                  <TrendChart data={data.trend} />
+                </Panel>
+                <Panel title="Donor participation" description="Wallet-based engagement for confirmed donations.">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    {[
+                      ["Confirmed donations", String(data.donorMetrics.donationCount)],
+                      ["Unique donor wallets", String(data.donorMetrics.uniqueDonors)],
+                      ["Average donation", eth(data.donorMetrics.averageDonationEth)],
+                      ["Returning-donor rate", percent(data.donorMetrics.returningDonorRate)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-4">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">{label}</p>
+                        <p className="mt-1.5 text-xl font-bold text-stone-950">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </section>
+
+              <section className="grid gap-5 xl:grid-cols-2">
+                <Panel title="Fund distribution" description="How confirmed campaign funds are currently allocated. ETH remains the primary value.">
+                  {fundTotal ? (
+                    <Donut center={eth(fundTotal)} data={data.fundDistribution.map((item, index) => ({ label: `${item.label} · ${eth(item.amountEth)}`, value: item.amountEth, color: ["#10b981", "#38bdf8", "#78716c"][index] }))} />
+                  ) : <EmptyState text="No confirmed financial distribution is available for this period." />}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    {data.fundDistribution.map((item) => <div key={item.label} className="rounded-lg bg-stone-50 p-3"><p className="text-[10px] font-bold uppercase text-stone-400">{item.label}</p><p className="mt-1 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">Approx. {money(item.amountMyr)}</p></div>)}
+                  </div>
+                </Panel>
+                <Panel title="Campaign portfolio" description="Funding health and time-sensitive campaign indicators." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">Manage campaigns ↗</Link>}>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                    {[
+                      ["Active", data.campaignSummary.active],
+                      ["Completed", data.campaignSummary.completed],
+                      ["Fully funded", data.campaignSummary.fullyFunded],
+                      ["Deadline soon", data.campaignSummary.approachingDeadline],
+                      ["Under 25%", data.campaignSummary.underperforming],
+                    ].map(([label, value]) => <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-3 text-center"><p className="text-2xl font-bold">{value}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-stone-400">{label}</p></div>)}
+                  </div>
+                  <div className="mt-5 space-y-4">
+                    {data.campaignPerformance.length ? data.campaignPerformance.slice(0, 6).map((campaign) => (
+                      <div key={campaign.id}>
+                        <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="truncate font-semibold text-stone-700">{campaign.title}</span><span className="shrink-0 font-bold">{percent(campaign.progress)}</span></div>
+                        <div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, campaign.progress)}%` }} /></div>
+                        <div className="mt-1 flex justify-between text-[10px] text-stone-400"><span>{eth(campaign.raisedEth)} raised</span><span>{campaign.donors} donor{campaign.donors === 1 ? "" : "s"} · {percent(campaign.refundRate)} refunded</span></div>
+                      </div>
+                    )) : <EmptyState text="Campaign performance will appear when campaigns receive donations." />}
+                  </div>
+                </Panel>
+              </section>
+
+              <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+                <Panel title="Milestone performance" description="Proof-review pipeline and release readiness." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">Review milestones ↗</Link>}>
+                  <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
+                    <div className="space-y-3">
+                      {data.milestoneMetrics.statuses.map((item) => {
+                        const max = Math.max(...data.milestoneMetrics.statuses.map((status) => status.count), 1);
+                        return <div key={item.status}><div className="mb-1 flex justify-between text-xs font-semibold capitalize text-stone-600"><span>{item.status === "submitted" ? "Awaiting review" : item.status}</span><span>{item.count}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-orange-300" style={{ width: `${(item.count / max) * 100}%` }} /></div></div>;
+                      })}
+                    </div>
+                    <div className="grid gap-2">
+                      <div className="rounded-xl bg-stone-50 p-4"><p className="text-[10px] font-bold uppercase text-stone-400">Average review time</p><p className="mt-1 text-xl font-bold">{data.milestoneMetrics.averageReviewHours.toFixed(1)}h</p></div>
+                      <div className="rounded-xl bg-amber-50 p-4"><p className="text-[10px] font-bold uppercase text-amber-700">Delayed over 7 days</p><p className="mt-1 text-xl font-bold text-amber-900">{data.milestoneMetrics.delayed}</p></div>
+                      <div className="rounded-xl bg-emerald-50 p-4"><p className="text-[10px] font-bold uppercase text-emerald-700">Ready for release</p><p className="mt-1 text-xl font-bold text-emerald-900">{data.milestoneMetrics.readyForRelease}</p></div>
+                    </div>
+                  </div>
+                </Panel>
+                <Panel title="Blockchain health" description="Stored transaction evidence across PawChain’s on-chain actions." action={<Link href="/Admin/transactions" className="text-xs font-bold text-orange-600 hover:underline">View transactions ↗</Link>}>
+                  <Donut center={String(data.blockchainHealth.confirmed + data.blockchainHealth.pending + data.blockchainHealth.failed)} data={[
+                    { label: "Confirmed", value: data.blockchainHealth.confirmed, color: "#10b981" },
+                    { label: "Pending", value: data.blockchainHealth.pending, color: "#f59e0b" },
+                    { label: "Failed / invalid", value: data.blockchainHealth.failed, color: "#ef4444" },
+                  ]} />
+                  <div className="mt-5 grid grid-cols-2 gap-2">
+                    {data.blockchainHealth.actionTypes.map((item) => <div key={item.type} className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2 text-xs"><span className="text-stone-500">{item.type}</span><span className="font-bold">{item.count}</span></div>)}
+                  </div>
+                </Panel>
+              </section>
+
+              <Panel title="Shelter insights" description="Fundraising and milestone delivery across verified shelters." action={<Link href="/Admin/shelter-management/verified" className="text-xs font-bold text-orange-600 hover:underline">View verified shelters ↗</Link>}>
+                <div className="mb-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-orange-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-orange-700">Verified shelters</p><p className="mt-1 text-2xl font-bold">{data.shelterMetrics.verified}</p></div>
+                  <div className="rounded-xl bg-emerald-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">Active verified shelters</p><p className="mt-1 text-2xl font-bold">{data.shelterMetrics.active}</p></div>
+                </div>
+                {data.shelterMetrics.shelters.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[700px] text-left text-xs">
+                      <thead><tr className="border-b border-stone-200 text-[10px] uppercase tracking-wide text-stone-400"><th className="pb-3">Shelter</th><th className="pb-3">ETH raised</th><th className="pb-3">Campaigns</th><th className="pb-3">Milestone completion</th><th className="pb-3">Refund rate</th><th className="pb-3">Status</th></tr></thead>
+                      <tbody>{data.shelterMetrics.shelters.map((shelter) => <tr key={shelter.id} className="border-b border-stone-100 last:border-0"><td className="py-3 font-semibold">{shelter.name}</td><td className="py-3 font-bold">{eth(shelter.raisedEth)}</td><td className="py-3 text-stone-500">{shelter.campaigns}</td><td className="py-3"><div className="flex items-center gap-2"><div className="h-1.5 w-20 overflow-hidden rounded-full bg-stone-100"><div className="h-full bg-orange-400" style={{ width: `${shelter.completionRate}%` }} /></div><span>{percent(shelter.completionRate)}</span></div></td><td className="py-3">{percent(shelter.refundRate)}</td><td className="py-3"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${shelter.active ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>{shelter.active ? "Active" : "Deactivated"}</span></td></tr>)}</tbody>
+                    </table>
+                  </div>
+                ) : <EmptyState text="Verified shelter performance will appear here." />}
+              </Panel>
+            </>
+          ) : null}
+        </div>
+      </main>
+    </>
+  );
+}

@@ -42,6 +42,14 @@ export const campaignContractAbi = [
     ],
   },
   {
+    type: "event",
+    name: "RefundClaimed",
+    inputs: [
+      { indexed: true, name: "donor", type: "address" },
+      { indexed: false, name: "amount", type: "uint256" },
+    ],
+  },
+  {
     type: "function",
     name: "donate",
     stateMutability: "payable",

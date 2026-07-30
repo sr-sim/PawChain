@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const supabase = await authorize(walletAddress);
     const { data: campaigns, error } = await supabase
       .from("campaigns")
-      .select("id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, created_at, updated_at, rejection_reason, campaign_milestones(id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash, created_at, updated_at)")
+      .select("id, shelter_id, title, description, location, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, cancellation_tx_hash, cancelled_at, cancelled_by, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, created_at, updated_at, rejection_reason, campaign_milestones(id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash, created_at, updated_at)")
       .order("created_at", { ascending: false });
     if (error) throw error;
 
@@ -39,7 +39,58 @@ export async function GET(request: NextRequest) {
       : { data: [] };
     const profileMap = new Map((profiles ?? []).map((item) => [item.id, item.full_name]));
     const walletMap = new Map((profiles ?? []).map((item) => [item.id, item.wallet_address]));
-    return NextResponse.json({ campaigns: (campaigns ?? []).map((item) => ({ ...item, shelter_name: profileMap.get(item.shelter_id) ?? null, shelter_wallet: walletMap.get(item.shelter_id) ?? null })) });
+    const publicClient = getPawChainPublicClient();
+    const onChainCampaigns = await Promise.all(
+      (campaigns ?? []).map(async (item) => {
+        if (!item.contract_address || !isAddress(item.contract_address)) {
+          return {
+            ...item,
+            on_chain_total_raised_wei: null,
+            on_chain_goal_wei: null,
+            on_chain_status: null,
+          };
+        }
+        try {
+          const [totalRaised, goal, campaignStatus] = await Promise.all([
+            publicClient.readContract({
+              address: item.contract_address as Address,
+              abi: campaignContractAbi,
+              functionName: "totalRaised",
+            }),
+            publicClient.readContract({
+              address: item.contract_address as Address,
+              abi: campaignContractAbi,
+              functionName: "goal",
+            }),
+            publicClient.readContract({
+              address: item.contract_address as Address,
+              abi: campaignContractAbi,
+              functionName: "campaignStatus",
+            }),
+          ]);
+          return {
+            ...item,
+            on_chain_total_raised_wei: totalRaised.toString(),
+            on_chain_goal_wei: goal.toString(),
+            on_chain_status: Number(campaignStatus),
+          };
+        } catch {
+          return {
+            ...item,
+            on_chain_total_raised_wei: null,
+            on_chain_goal_wei: null,
+            on_chain_status: null,
+          };
+        }
+      }),
+    );
+    return NextResponse.json({
+      campaigns: onChainCampaigns.map((item) => ({
+        ...item,
+        shelter_name: profileMap.get(item.shelter_id) ?? null,
+        shelter_wallet: walletMap.get(item.shelter_id) ?? null,
+      })),
+    });
   } catch (error) {
     return NextResponse.json(
       { message: error instanceof Error && error.message === "ADMIN_DENIED" ? "Access denied." : error instanceof Error ? error.message : "Unable to load campaigns." },
@@ -70,12 +121,18 @@ export async function POST(request: NextRequest) {
     }
     const supabase = await authorize(walletAddress);
     const { data: campaign, error: lookupError } = await supabase
-      .from("campaigns").select("id, shelter_id, campaign_status, deployment_tx_hash, contract_address").eq("id", campaignId).single();
+      .from("campaigns").select("id, shelter_id, campaign_status, deployment_tx_hash, contract_address, cancellation_tx_hash, cancelled_at, cancelled_by").eq("id", campaignId).single();
     if (lookupError) throw lookupError;
 
     if (action === "cancel" || action === "finalize_expired") {
       if (campaign.campaign_status === "closed") {
-        return NextResponse.json({ status: "closed", idempotent: true });
+        return NextResponse.json({
+          status: "closed",
+          cancellationTxHash: campaign.cancellation_tx_hash,
+          cancelledAt: campaign.cancelled_at,
+          cancelledBy: campaign.cancelled_by,
+          idempotent: true,
+        });
       }
       if (
         campaign.campaign_status !== "active" ||
@@ -131,15 +188,41 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      let adminProfileId: string | null = null;
+      if (action === "cancel") {
+        const { data: adminProfile, error: adminProfileError } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("wallet_address", walletAddress)
+          .maybeSingle();
+        if (adminProfileError) throw adminProfileError;
+        adminProfileId = adminProfile?.id ?? null;
+      }
+      const changedAt = new Date().toISOString();
       const { error: cancelError } = await supabase
         .from("campaigns")
-        .update({
-          campaign_status: "closed",
-          updated_at: new Date().toISOString(),
-        })
+        .update(
+          action === "cancel"
+            ? {
+                campaign_status: "closed",
+                cancellation_tx_hash: txHash,
+                cancelled_at: changedAt,
+                cancelled_by: adminProfileId,
+                updated_at: changedAt,
+              }
+            : {
+                campaign_status: "closed",
+                updated_at: changedAt,
+              },
+        )
         .eq("id", campaignId);
       if (cancelError) throw cancelError;
-      return NextResponse.json({ status: "closed" });
+      return NextResponse.json({
+        status: "closed",
+        cancellationTxHash: action === "cancel" ? txHash : null,
+        cancelledAt: action === "cancel" ? changedAt : null,
+        cancelledBy: adminProfileId,
+      });
     }
 
     if (
@@ -246,10 +329,15 @@ export async function POST(request: NextRequest) {
 
     const { data: milestones, error: milestoneError } = await supabase
       .from("campaign_milestones")
-      .select("id")
+      .select("id, on_chain_index")
       .eq("campaign_id", campaignId)
+      .order("on_chain_index", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true });
     if (milestoneError) throw milestoneError;
+
+    const hasLegacySequence = (milestones ?? []).some(
+      (milestone, index) => milestone.on_chain_index !== index,
+    );
 
     const { error: updateError } = await supabase.from("campaigns").update({
       campaign_status: "active",
@@ -266,14 +354,18 @@ export async function POST(request: NextRequest) {
     }).eq("id", campaignId);
     if (updateError) throw updateError;
 
-    await Promise.all(
-      (milestones ?? []).map((milestone, index) =>
-        supabase
-          .from("campaign_milestones")
-          .update({ on_chain_index: index })
-          .eq("id", milestone.id),
-      ),
-    );
+    if (hasLegacySequence) {
+      const sequenceUpdates = await Promise.all(
+        (milestones ?? []).map((milestone, index) =>
+          supabase
+            .from("campaign_milestones")
+            .update({ on_chain_index: index })
+            .eq("id", milestone.id),
+        ),
+      );
+      const sequenceError = sequenceUpdates.find((result) => result.error)?.error;
+      if (sequenceError) throw sequenceError;
+    }
 
     return NextResponse.json({
       status: "active",

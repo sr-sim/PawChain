@@ -65,7 +65,7 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
-function getRoleNFTConfig() {
+export function getRoleNFTConfig() {
   const address = getRequiredEnv("NEXT_PUBLIC_ROLE_NFT_ADDRESS");
   const rpcUrl = getRequiredEnv("NEXT_PUBLIC_RPC_URL");
   const chainId = Number(getRequiredEnv("NEXT_PUBLIC_CHAIN_ID"));

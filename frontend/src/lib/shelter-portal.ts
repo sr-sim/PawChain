@@ -61,7 +61,7 @@ export async function getShelterPortalData(userId?: string | null) {
       .from("campaign_milestones")
       .select("id, campaign_id, title, percentage, status, proof_tx_hash, release_tx_hash, on_chain_index, created_at")
       .in("campaign_id", campaignIds)
-      .order("created_at", { ascending: true }),
+      .order("on_chain_index", { ascending: true }),
     supabase
       .from("donations")
       .select("id, campaign_id, donor_id, amount, currency, tx_hash, status, created_at")

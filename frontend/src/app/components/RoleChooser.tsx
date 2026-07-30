@@ -33,6 +33,7 @@ type ShelterApplicationStatus = {
   shelterAddress?: string;
   organizationDescription?: string;
   proofDocumentPath?: string;
+  proofDocumentUrl?: string | null;
   submittedAt?: string;
   reviewedAt?: string;
   rejectionReason?: string;
@@ -644,9 +645,14 @@ function ShelterStatusPanel({
           {application?.websiteUrl && (
             <p>
               Website / social:{" "}
-              <span className="break-all text-stone-950">
-                {application.websiteUrl}
-              </span>
+              <a
+                href={application.websiteUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-[var(--color-orange)] underline decoration-orange-200 underline-offset-2 transition hover:text-stone-950"
+              >
+                {application.websiteUrl} ↗
+              </a>
             </p>
           )}
           {application?.shelterAddress && (
@@ -665,13 +671,18 @@ function ShelterStatusPanel({
               </span>
             </p>
           )}
-          {application?.proofDocumentPath && (
-            <p>
-              Document:{" "}
-              <span className="break-all text-stone-950">
-                {application.proofDocumentPath}
-              </span>
-            </p>
+          {application?.proofDocumentUrl && (
+            <div className="pt-2">
+              <a
+                href={application.proofDocumentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:ring-offset-2"
+              >
+                View document
+                <span aria-hidden="true">↗</span>
+              </a>
+            </div>
           )}
           {application?.reviewedAt && (
             <p>
@@ -744,6 +755,20 @@ function ShelterResubmitForm({
   onCancel: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const [replacementDocument, setReplacementDocument] = useState<{
+    name: string;
+    type: string;
+    url: string;
+  } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (replacementDocument?.url) {
+        URL.revokeObjectURL(replacementDocument.url);
+      }
+    };
+  }, [replacementDocument]);
+
   return (
     <div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -769,6 +794,22 @@ function ShelterResubmitForm({
       </div>
 
       <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-red-800"
+        >
+          <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-red-300 text-xs font-black">
+            !
+          </span>
+          <div>
+            <p className="text-sm font-black">Previous application rejected</p>
+            <p className="mt-0.5 text-sm font-semibold leading-6 text-red-700">
+              Update the shelter details and supporting document, then submit
+              the complete application again for admin review.
+            </p>
+          </div>
+        </div>
+
         <TextField
           label="Connected wallet"
           name="walletAddress"
@@ -801,10 +842,6 @@ function ShelterResubmitForm({
               readOnly
               value={profile?.email ?? ""}
             />
-            <div className="rounded-2xl border border-red-100 bg-red-50/80 p-3 text-sm font-bold leading-6 text-red-700">
-              Previous application was rejected. Update the shelter details and
-              submit again for admin review.
-            </div>
           </div>
 
           <div className="space-y-2.5 rounded-2xl border border-orange-100 bg-white/75 p-4">
@@ -832,13 +869,34 @@ function ShelterResubmitForm({
                 placeholder="Organization ID"
                 defaultValue={application.registrationId}
               />
-              <TextField
-                label="Contact phone"
-                name="contactPhone"
-                type="tel"
-                placeholder="+60..."
-                defaultValue={application.contactPhone}
-              />
+              <label className="block text-left">
+                <span className="text-sm font-black text-stone-700">
+                  Contact phone
+                </span>
+                <span className="mt-1.5 flex overflow-hidden rounded-xl border border-orange-100 bg-white/80 transition focus-within:border-[var(--color-orange)] focus-within:ring-4 focus-within:ring-orange-100">
+                  <span className="flex items-center border-r border-orange-100 bg-stone-50 px-3 text-sm font-black text-stone-600">
+                    +60
+                  </span>
+                  <input
+                    name="contactPhone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    required
+                    pattern="[0-9]{8,10}"
+                    defaultValue={application.contactPhone
+                      ?.replace(/\D/g, "")
+                      .replace(/^60/, "")
+                      .replace(/^0/, "")}
+                    placeholder="123456789"
+                    aria-label="Malaysian contact phone number"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm font-bold text-stone-900 outline-none"
+                  />
+                </span>
+                <span className="mt-1 block text-xs font-semibold text-stone-500">
+                  Enter the number without the leading 0.
+                </span>
+              </label>
               <TextField
                 label="Website or social page"
                 name="websiteUrl"
@@ -871,23 +929,103 @@ function ShelterResubmitForm({
 
         <div className="space-y-3 rounded-2xl border border-orange-100 bg-amber-50/70 p-3.5">
           <label className="block text-left">
-            <span className="text-sm font-black text-stone-700">Document</span>
-            <input
-              name="proofDocument"
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg"
-              className="mt-1.5 w-full rounded-xl border border-dashed border-orange-200 bg-white/80 px-3 py-2 text-sm font-bold text-stone-700 file:mr-3 file:rounded-full file:border-0 file:bg-orange-100 file:px-3 file:py-1 file:text-sm file:font-black file:text-[var(--color-orange)]"
-            />
+            <span className="text-sm font-black text-stone-700">
+              Shelter registration certificate / licence
+            </span>
+            <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">
+              Upload an official document proving that the shelter is legally
+              registered or authorized to operate.
+            </p>
+            <p className="text-xs font-semibold text-stone-500">
+              Accepted formats: PDF, JPG, PNG.
+            </p>
+            <span className="mt-3 flex flex-col gap-2 rounded-xl border border-dashed border-orange-200 bg-white/80 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="min-w-0">
+                <span className="block text-xs font-black uppercase tracking-wide text-stone-400">
+                  {replacementDocument ? "Replacement selected" : "Current file"}
+                </span>
+                <span className="mt-1 block truncate text-sm font-bold text-stone-700">
+                  {replacementDocument?.name ??
+                    application.proofDocumentPath?.split("/").pop() ??
+                    "No document available"}
+                </span>
+              </span>
+              <span className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg bg-orange-100 px-4 py-2 text-sm font-black text-[var(--color-orange)] transition hover:bg-orange-200">
+                {replacementDocument ? "Choose another file" : "Replace document"}
+              </span>
+              <input
+                name="proofDocument"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  setReplacementDocument(
+                    file
+                      ? {
+                          name: file.name,
+                          type: file.type,
+                          url: URL.createObjectURL(file),
+                        }
+                      : null,
+                  );
+                }}
+                className="sr-only"
+              />
+            </span>
           </label>
           <input
             type="hidden"
             name="existingProofDocumentPath"
             value={application.proofDocumentPath ?? ""}
           />
-          {application.proofDocumentPath ? (
-            <p className="text-xs font-bold text-stone-500">
-              Current document: {application.proofDocumentPath}
-            </p>
+          {replacementDocument || application.proofDocumentUrl ? (
+            <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+              <div className="flex items-center justify-between gap-3 border-b border-stone-200 bg-stone-50 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-stone-400">
+                    {replacementDocument
+                      ? "Replacement document preview"
+                      : "Current document preview"}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs font-bold text-stone-700">
+                    {replacementDocument?.name ?? "Registration document"}
+                  </p>
+                </div>
+                <a
+                  href={
+                    replacementDocument?.url ?? application.proofDocumentUrl!
+                  }
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-700 transition hover:bg-stone-100"
+                >
+                  Open full view ↗
+                </a>
+              </div>
+              {(replacementDocument?.type === "application/pdf" ||
+                (!replacementDocument &&
+                  application.proofDocumentPath
+                    ?.toLowerCase()
+                    .endsWith(".pdf"))) ? (
+                <iframe
+                  src={
+                    replacementDocument?.url ?? application.proofDocumentUrl!
+                  }
+                  title="Shelter registration document preview"
+                  className="h-80 w-full bg-stone-100"
+                />
+              ) : (
+                <div className="grid min-h-52 place-items-center bg-stone-100 p-3">
+                  <img
+                    src={
+                      replacementDocument?.url ?? application.proofDocumentUrl!
+                    }
+                    alt="Shelter registration document preview"
+                    className="max-h-80 max-w-full rounded object-contain shadow-sm"
+                  />
+                </div>
+              )}
+            </div>
           ) : null}
         </div>
 

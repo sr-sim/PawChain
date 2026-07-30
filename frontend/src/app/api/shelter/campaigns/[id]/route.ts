@@ -131,7 +131,7 @@ export async function GET(
         "id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash",
       )
       .eq("campaign_id", campaign.id)
-      .order("created_at", { ascending: true });
+      .order("on_chain_index", { ascending: true });
 
     if (milestoneError) {
       throw milestoneError;
@@ -289,13 +289,14 @@ export async function PATCH(
     const { error: insertError } = await supabase
       .from("campaign_milestones")
       .insert(
-        milestoneValidation.milestones.map((milestone) => ({
+        milestoneValidation.milestones.map((milestone, index) => ({
           campaign_id: campaign.id,
           title: milestone.title,
           description: milestone.description,
           requirement: milestone.requirement,
           percentage: milestone.percentage,
           status: "pending",
+          on_chain_index: index,
         })),
       );
 

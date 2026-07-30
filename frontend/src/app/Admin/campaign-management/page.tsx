@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useChainId, usePublicClient, useWriteContract } from "wagmi";
-import { isAddress } from "viem";
+import { formatEther, isAddress } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
 import { campaignFactoryAbi } from "@/lib/campaign-factory-abi";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import {
   campaignKeyFromId,
   demoEthMyrRate,
@@ -26,6 +28,9 @@ type Milestone = {
   proof_url: string | null;
   rejection_reason: string | null;
   on_chain_index: number | null;
+  proof_tx_hash?: string | null;
+  review_tx_hash?: string | null;
+  release_tx_hash?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -44,19 +49,52 @@ type Campaign = {
   duration_days: number;
   image_url: string | null;
   contract_address: string | null;
+  deployment_tx_hash?: string | null;
+  goal_wei?: string | null;
+  on_chain_total_raised_wei?: string | null;
+  on_chain_goal_wei?: string | null;
+  on_chain_status?: number | null;
+  cancellation_tx_hash?: string | null;
+  cancelled_at?: string | null;
+  cancelled_by?: string | null;
   blockchain_deadline: string | null;
   created_at: string;
   updated_at: string;
   rejection_reason: string | null;
   campaign_milestones: Milestone[];
 };
-type Tab = "All Campaigns" | "Pending Approval" | "Approved" | "Rejected";
+type Tab =
+  | "All Campaigns"
+  | "Pending Approval"
+  | "Approved"
+  | "Rejected"
+  | "Completed"
+  | "Closed";
+type ProofPreview = { name: string; url: string };
+
+function displayProofName(name: string) {
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(name);
+    } catch {
+      return name;
+    }
+  })();
+  const filename = decoded.split(/[\\/]/).pop() || "Milestone proof";
+  return filename
+    .replace(/^[a-f0-9]{16,}[_-]/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+(\.[a-z0-9]+)$/i, "$1")
+    .trim();
+}
 
 const tabs: Tab[] = [
   "All Campaigns",
   "Pending Approval",
   "Approved",
   "Rejected",
+  "Completed",
+  "Closed",
 ];
 const urgencyRank: Record<string, number> = { critical: 0, high: 1, medium: 2 };
 const money = (value: number | string | null) =>
@@ -71,6 +109,22 @@ const date = (value: string) =>
   );
 const isApproved = (status: string) =>
   status === "active" || status === "approved";
+const effectiveCampaignStatus = (campaign: Campaign) =>
+  campaign.on_chain_status === 1
+    ? "completed"
+    : campaign.on_chain_status === 2 || campaign.on_chain_status === 3
+      ? "closed"
+      : campaign.campaign_status;
+const campaignProgress = (campaign: Campaign) => {
+  if (campaign.on_chain_status === 1) return 100;
+  const raised = Number(campaign.on_chain_total_raised_wei ?? 0);
+  const goal = Number(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? 0);
+  return goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+};
+const weiAsEth = (value?: string | null) =>
+  `${Number(formatEther(BigInt(value || "0"))).toLocaleString("en-MY", {
+    maximumFractionDigits: 6,
+  })} ETH`;
 const reviewableMilestone = (item: Milestone) =>
   Boolean(item.proof_url) && item.status === "submitted";
 
@@ -179,13 +233,13 @@ export default function CampaignManagementPage() {
   const [status, setStatus] = useState("all");
   const [location, setLocation] = useState("all");
   const [sort, setSort] = useState("newest");
-  const [tab, setTab] = useState<Tab>("Approved");
+  const [tab, setTab] = useState<Tab>("All Campaigns");
   const [milestoneCampaign, setMilestoneCampaign] = useState<Campaign | null>(null);
   const [details, setDetails] = useState<Campaign | null>(null);
-  const [approveTarget, setApproveTarget] = useState<Campaign | null>(null);
   const [rejectTarget, setRejectTarget] = useState<Campaign | null>(null);
   const [reason, setReason] = useState("");
   const [milestoneDetails, setMilestoneDetails] = useState<Milestone | null>(null);
+  const [proofPreview, setProofPreview] = useState<ProofPreview | null>(null);
   const [milestoneApproveTarget, setMilestoneApproveTarget] =
     useState<Milestone | null>(null);
   const [milestoneRejectTarget, setMilestoneRejectTarget] =
@@ -193,6 +247,12 @@ export default function CampaignManagementPage() {
   const [milestoneReason, setMilestoneReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
+  const [blockchainSuccess, setBlockchainSuccess] = useState<{
+    status: "pending" | "confirmed" | "failed";
+    title: string;
+    message: string;
+    txHash: string;
+  } | null>(null);
   const [heroSlide, setHeroSlide] = useState(0);
   const [heroPaused, setHeroPaused] = useState(false);
   const [documentHidden, setDocumentHidden] = useState(false);
@@ -209,7 +269,16 @@ export default function CampaignManagementPage() {
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.message || "Unable to load campaigns.");
-      setCampaigns(result.campaigns ?? []);
+      setCampaigns(
+        (result.campaigns ?? []).map((campaign: Campaign) => ({
+          ...campaign,
+          campaign_milestones: [...(campaign.campaign_milestones ?? [])].sort(
+            (left, right) =>
+              (left.on_chain_index ?? Number.MAX_SAFE_INTEGER) -
+              (right.on_chain_index ?? Number.MAX_SAFE_INTEGER),
+          ),
+        })),
+      );
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -253,15 +322,23 @@ export default function CampaignManagementPage() {
     () => ({
       total: campaigns.length,
       pending: campaigns.filter(
-        (item) => item.campaign_status === "pending_approval",
+        (item) => effectiveCampaignStatus(item) === "pending_approval",
       ).length,
-      approved: campaigns.filter((item) => isApproved(item.campaign_status))
+      approved: campaigns.filter((item) =>
+        isApproved(effectiveCampaignStatus(item)),
+      )
         .length,
-      rejected: campaigns.filter((item) => item.campaign_status === "rejected")
+      rejected: campaigns.filter(
+        (item) => effectiveCampaignStatus(item) === "rejected",
+      )
         .length,
-      closed: campaigns.filter((item) =>
-        ["completed", "closed"].includes(item.campaign_status),
+      completed: campaigns.filter(
+        (item) => effectiveCampaignStatus(item) === "completed",
       ).length,
+      closed: campaigns.filter(
+        (item) => effectiveCampaignStatus(item) === "closed",
+      )
+        .length,
       proofs: campaigns.reduce(
         (total, item) =>
           total +
@@ -298,17 +375,21 @@ export default function CampaignManagementPage() {
     const tabMatch = (item: Campaign) =>
       tab === "All Campaigns" ||
       (tab === "Pending Approval" &&
-        item.campaign_status === "pending_approval") ||
-      (tab === "Approved" && isApproved(item.campaign_status)) ||
-      (tab === "Rejected" && item.campaign_status === "rejected");
+        effectiveCampaignStatus(item) === "pending_approval") ||
+      (tab === "Approved" && isApproved(effectiveCampaignStatus(item))) ||
+      (tab === "Rejected" && effectiveCampaignStatus(item) === "rejected") ||
+      (tab === "Completed" &&
+        effectiveCampaignStatus(item) === "completed") ||
+      (tab === "Closed" && effectiveCampaignStatus(item) === "closed");
     return campaigns
       .filter(
         (item) =>
           tabMatch(item) &&
           (urgency === "all" || item.urgency_level === urgency) &&
           (status === "all" ||
-            item.campaign_status === status ||
-            (status === "approved" && isApproved(item.campaign_status))) &&
+            effectiveCampaignStatus(item) === status ||
+            (status === "approved" &&
+              isApproved(effectiveCampaignStatus(item)))) &&
           (location === "all" || item.location === location) &&
           (!q ||
             [
@@ -329,9 +410,11 @@ export default function CampaignManagementPage() {
       )
       .sort((a, b) =>
         sort === "goal"
-          ? Number(b.goal_amount) - Number(a.goal_amount)
+          ? Number(b.on_chain_goal_wei ?? b.goal_wei ?? 0) -
+            Number(a.on_chain_goal_wei ?? a.goal_wei ?? 0)
           : sort === "funded"
-            ? Number(b.current_amount) - Number(a.current_amount)
+            ? Number(b.on_chain_total_raised_wei ?? 0) -
+              Number(a.on_chain_total_raised_wei ?? 0)
             : sort === "urgency"
               ? (urgencyRank[a.urgency_level] ?? 9) -
                 (urgencyRank[b.urgency_level] ?? 9)
@@ -359,7 +442,21 @@ export default function CampaignManagementPage() {
           throw new Error("The shelter wallet address is missing.");
         }
 
-        const percentages = campaign.campaign_milestones.map(
+        const orderedMilestones = [...campaign.campaign_milestones].sort(
+          (left, right) => {
+            if (
+              left.on_chain_index !== null &&
+              right.on_chain_index !== null
+            ) {
+              return left.on_chain_index - right.on_chain_index;
+            }
+            return (
+              new Date(left.created_at).getTime() -
+              new Date(right.created_at).getTime()
+            );
+          },
+        );
+        const percentages = orderedMilestones.map(
           (milestone) => Number(milestone.percentage) * 100,
         );
         if (
@@ -392,6 +489,13 @@ export default function CampaignManagementPage() {
             percentages,
           ],
         });
+        setBlockchainSuccess({
+          status: "pending",
+          title: "Deploying campaign contract",
+          message:
+            "The campaign approval transaction was submitted and is waiting for Sepolia confirmation.",
+          txHash,
+        });
         const receipt = await publicClient.waitForTransactionReceipt({
           hash: txHash,
         });
@@ -416,19 +520,36 @@ export default function CampaignManagementPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Review failed.");
-      setToast(
-        action === "approve"
-          ? "Campaign approved successfully."
-          : "Campaign rejected successfully.",
-      );
-      setApproveTarget(null);
+      if (action === "approve" && txHash) {
+        setBlockchainSuccess({
+          status: "confirmed",
+          title: "Campaign approved successfully",
+          message:
+            "The campaign contract was deployed and the campaign is now active on-chain.",
+          txHash,
+        });
+      } else {
+        setToast("Campaign rejected successfully.");
+      }
       setRejectTarget(null);
       setReason("");
       await load();
     } catch (reviewError) {
-      setToast(
-        reviewError instanceof Error ? reviewError.message : "Review failed.",
-      );
+      const message =
+        reviewError instanceof Error ? reviewError.message : "Review failed.";
+      if (action === "approve") {
+        const cancelled = /reject|denied|cancel/i.test(message);
+        setBlockchainSuccess({
+          status: "failed",
+          title: cancelled
+            ? "Transaction cancelled"
+            : "Campaign approval failed",
+          message: cancelled
+            ? "You cancelled the request in MetaMask. No blockchain changes were made."
+            : message,
+          txHash: "",
+        });
+      } else setToast(message);
     } finally {
       setBusy(false);
     }
@@ -466,6 +587,16 @@ export default function CampaignManagementPage() {
           action === "approve" ? "approveMilestone" : "rejectMilestone",
         args: [BigInt(milestone.on_chain_index)],
       });
+      setBlockchainSuccess({
+        status: "pending",
+        title:
+          action === "approve"
+            ? "Approving milestone on-chain"
+            : "Rejecting milestone on-chain",
+        message:
+          "The milestone review transaction was submitted and is waiting for Sepolia confirmation.",
+        txHash,
+      });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
@@ -486,11 +617,18 @@ export default function CampaignManagementPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Review failed.");
-      setToast(
-        action === "approve"
-          ? "Milestone approved successfully."
-          : "Milestone rejected successfully.",
-      );
+      setBlockchainSuccess({
+        status: "confirmed",
+        title:
+          action === "approve"
+            ? "Milestone approved successfully"
+            : "Milestone rejected successfully",
+        message:
+          action === "approve"
+            ? "The milestone review was confirmed by the smart contract."
+            : "The milestone rejection was confirmed by the smart contract.",
+        txHash,
+      });
       setMilestoneCampaign((current) =>
         current
           ? {
@@ -513,9 +651,17 @@ export default function CampaignManagementPage() {
       setMilestoneReason("");
       await load();
     } catch (reviewError) {
-      setToast(
-        reviewError instanceof Error ? reviewError.message : "Review failed.",
-      );
+      const message =
+        reviewError instanceof Error ? reviewError.message : "Review failed.";
+      const cancelled = /reject|denied|cancel/i.test(message);
+      setBlockchainSuccess({
+        status: "failed",
+        title: cancelled ? "Transaction cancelled" : "Milestone review failed",
+        message: cancelled
+          ? "You cancelled the request in MetaMask. The milestone was not changed."
+          : message,
+        txHash: "",
+      });
     } finally {
       setBusy(false);
     }
@@ -535,6 +681,7 @@ export default function CampaignManagementPage() {
     }
 
     setBusy(true);
+    let confirmedTxHash = "";
     try {
       if (!publicClient) {
         throw new Error("Blockchain connection is unavailable.");
@@ -547,12 +694,20 @@ export default function CampaignManagementPage() {
         abi: campaignContractAbi,
         functionName: "cancelCampaign",
       });
+      setBlockchainSuccess({
+        status: "pending",
+        title: "Cancelling campaign",
+        message:
+          "The transaction was submitted and is waiting for Sepolia confirmation. Keep this window open while the smart contract is processing.",
+        txHash,
+      });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
       if (receipt.status !== "success") {
         throw new Error("Campaign cancellation failed.");
       }
+      confirmedTxHash = txHash;
 
       const response = await fetch("/api/admin/campaigns", {
         method: "POST",
@@ -569,14 +724,40 @@ export default function CampaignManagementPage() {
         throw new Error(result.message ?? "Unable to record cancellation.");
       }
 
-      setToast("Campaign cancelled. Locked funds are available for refunds.");
+      setBlockchainSuccess({
+        status: "confirmed",
+        title: "Campaign cancelled successfully",
+        message:
+          "The smart contract is cancelled and its remaining locked funds are now available for donor refunds.",
+        txHash,
+      });
       await load();
     } catch (cancelError) {
-      setToast(
+      const message =
         cancelError instanceof Error
           ? cancelError.message
-          : "Unable to cancel campaign.",
-      );
+          : "Unable to cancel campaign.";
+      if (confirmedTxHash) {
+        setBlockchainSuccess({
+          status: "confirmed",
+          title: "Campaign cancelled on-chain",
+          message:
+            "Sepolia confirmed the cancellation, but PawChain could not save the database record. Your transaction remains successful; retry synchronization without sending another transaction.",
+          txHash: confirmedTxHash,
+        });
+        return;
+      }
+      const cancelled = /reject|denied|cancelled the request/i.test(message);
+      setBlockchainSuccess({
+        status: "failed",
+        title: cancelled
+          ? "Transaction cancelled"
+          : "Campaign cancellation failed",
+        message: cancelled
+          ? "You cancelled the request in MetaMask. The campaign remains active and no blockchain changes were made."
+          : message,
+        txHash: "",
+      });
     } finally {
       setBusy(false);
     }
@@ -612,6 +793,13 @@ export default function CampaignManagementPage() {
         abi: campaignContractAbi,
         functionName: "finalizeExpired",
       });
+      setBlockchainSuccess({
+        status: "pending",
+        title: "Finalizing expired campaign",
+        message:
+          "The expiry transaction was submitted and is waiting for Sepolia confirmation.",
+        txHash,
+      });
       const receipt = await publicClient.waitForTransactionReceipt({
         hash: txHash,
       });
@@ -634,14 +822,30 @@ export default function CampaignManagementPage() {
         throw new Error(result.message ?? "Unable to record campaign expiry.");
       }
 
-      setToast("Expired campaign finalized. Locked funds can now be refunded.");
+      setBlockchainSuccess({
+        status: "confirmed",
+        title: "Expired campaign finalized",
+        message:
+          "The smart contract enabled refunds for the campaign's remaining locked funds.",
+        txHash,
+      });
       await load();
     } catch (finalizeError) {
-      setToast(
+      const message =
         finalizeError instanceof Error
           ? finalizeError.message
-          : "Unable to finalize expired campaign.",
-      );
+          : "Unable to finalize expired campaign.";
+      const cancelled = /reject|denied|cancel/i.test(message);
+      setBlockchainSuccess({
+        status: "failed",
+        title: cancelled
+          ? "Transaction cancelled"
+          : "Campaign finalization failed",
+        message: cancelled
+          ? "You cancelled the request in MetaMask. No blockchain changes were made."
+          : message,
+        txHash: "",
+      });
     } finally {
       setBusy(false);
     }
@@ -749,9 +953,7 @@ export default function CampaignManagementPage() {
                 </div>
               </div>
               {latestCampaigns.map((campaign, index) => {
-                const progress = Number(campaign.goal_amount)
-                  ? Math.min(100, Math.round((Number(campaign.current_amount) / Number(campaign.goal_amount)) * 100))
-                  : 0;
+                const progress = campaignProgress(campaign);
                 return (
                   <article key={campaign.id} className="relative h-full w-full shrink-0" aria-hidden={heroSlide !== index + 1}>
                     {campaign.image_url ? (
@@ -769,11 +971,11 @@ export default function CampaignManagementPage() {
                       <h2 className="mt-2 line-clamp-2 text-2xl font-black sm:text-3xl">{campaign.title}</h2>
                       <p className="mt-1 text-sm font-semibold text-stone-300">{campaign.shelter_name || "Unknown shelter"} · {campaign.location || "Location not provided"}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <StatusBadge status={campaign.campaign_status} />
+                        <StatusBadge status={effectiveCampaignStatus(campaign)} />
                         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black capitalize ring-1 ring-white/15">{campaign.urgency_level} urgency</span>
                       </div>
                       <div className="mt-4 max-w-lg">
-                        <div className="flex justify-between text-xs font-bold text-stone-300"><span>{money(campaign.current_amount)} raised</span><span>{progress}% of {money(campaign.goal_amount)}</span></div>
+                        <div className="flex justify-between text-xs font-bold text-stone-300"><span>{weiAsEth(campaign.on_chain_total_raised_wei)} raised</span><span>{progress}% of {weiAsEth(campaign.on_chain_goal_wei ?? campaign.goal_wei)}</span></div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div>
                       </div>
                       <button type="button" onClick={() => setDetails(campaign)} className="mt-4 w-fit rounded-xl bg-white px-4 py-2 text-xs font-black text-stone-950 transition hover:bg-orange-100">View details →</button>
@@ -879,7 +1081,20 @@ export default function CampaignManagementPage() {
                     onClick={() => setTab(item)}
                     className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-black transition ${tab === item ? "bg-white text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100" : "text-stone-500 hover:bg-white/60 hover:text-stone-900"}`}
                   >
-                    {item} <span className="ml-1 text-xs opacity-60">{item === "All Campaigns" ? summary.total : item === "Pending Approval" ? summary.pending : item === "Approved" ? summary.approved : summary.rejected}</span>
+                    {item}{" "}
+                    <span className="ml-1 text-xs opacity-60">
+                      {item === "All Campaigns"
+                        ? summary.total
+                        : item === "Pending Approval"
+                          ? summary.pending
+                          : item === "Approved"
+                            ? summary.approved
+                            : item === "Rejected"
+                              ? summary.rejected
+                              : item === "Completed"
+                                ? summary.completed
+                                : summary.closed}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -890,16 +1105,7 @@ export default function CampaignManagementPage() {
               {filtered.length ? (
                 <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((campaign) => {
-                    const progress = Number(campaign.goal_amount)
-                      ? Math.min(
-                          100,
-                          Math.round(
-                            (Number(campaign.current_amount ?? 0) /
-                              Number(campaign.goal_amount)) *
-                              100,
-                          ),
-                        )
-                      : 0;
+                    const progress = campaignProgress(campaign);
                     return (
                       <article
                         key={campaign.id}
@@ -913,7 +1119,7 @@ export default function CampaignManagementPage() {
                               className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                             />
                           ) : <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.9),transparent_35%),radial-gradient(circle_at_85%_75%,rgba(255,138,0,.22),transparent_38%)]" />}
-                          <div className="absolute left-3 top-3"><StatusBadge status={campaign.campaign_status} /></div>
+                          <div className="absolute left-3 top-3"><StatusBadge status={effectiveCampaignStatus(campaign)} /></div>
                           <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-black capitalize text-stone-800 shadow-sm backdrop-blur">{campaign.urgency_level}</span>
                         </div>
                         <div className="px-1.5 pb-1 pt-3">
@@ -932,9 +1138,9 @@ export default function CampaignManagementPage() {
                             {campaign.description}
                           </p>
                           <div className="mt-3 flex justify-between text-xs font-semibold text-stone-500">
-                            <span>{money(campaign.current_amount)} raised</span>
+                            <span>{weiAsEth(campaign.on_chain_total_raised_wei)} raised</span>
                             <span>
-                              {progress}% of {money(campaign.goal_amount)}
+                              {progress}% of {weiAsEth(campaign.on_chain_goal_wei ?? campaign.goal_wei)}
                             </span>
                           </div>
                           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100">
@@ -993,8 +1199,9 @@ export default function CampaignManagementPage() {
                             {campaign.campaign_status === "pending_approval" ? (
                               <>
                                 <button
-                                  onClick={() => setApproveTarget(campaign)}
-                                  className="rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600"
+                                  disabled={busy}
+                                  onClick={() => void review(campaign, "approve")}
+                                  className="rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-50"
                                 >
                                   Approve
                                 </button>
@@ -1235,6 +1442,16 @@ export default function CampaignManagementPage() {
               <span>{milestoneCampaign.campaign_milestones.length} milestone stages</span>
               <span>100%</span>
             </div>
+            <div className="mt-3">
+              <TransactionLinks
+                transactions={[
+                  {
+                    label: "Deployment tx",
+                    hash: milestoneCampaign.deployment_tx_hash,
+                  },
+                ]}
+              />
+            </div>
           </div>
 
           <div className="mt-4 space-y-3">
@@ -1261,21 +1478,27 @@ export default function CampaignManagementPage() {
 
                     <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl bg-orange-50/50 p-3">
                       {links.length ? links.map((link, linkIndex) => (
-                        <a
+                        <button
+                          type="button"
                           key={`${link.url}-${linkIndex}`}
-                          href={link.url}
-                          target="_blank"
-                          rel="noreferrer"
                           title={link.name}
+                          onClick={() => setProofPreview(link)}
                           className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-100"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
                           View proof{links.length > 1 ? ` ${linkIndex + 1}` : ""}
-                        </a>
+                        </button>
                       )) : <span className="text-xs font-bold text-stone-500">No proof submitted yet</span>}
                     </div>
 
                     {milestone.rejection_reason ? <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">Previous rejection: {milestone.rejection_reason}</p> : null}
+                    <div className="mt-3">
+                      <TransactionLinks
+                        proofTxHash={milestone.proof_tx_hash}
+                        reviewTxHash={milestone.review_tx_hash}
+                        releaseTxHash={milestone.release_tx_hash}
+                      />
+                    </div>
 
                     <div className="mt-4 flex flex-col gap-3 border-t border-orange-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-stone-400">Updated {date(milestone.updated_at)}</p>
@@ -1318,12 +1541,15 @@ export default function CampaignManagementPage() {
               {[
                 ["Shelter", details.shelter_name || details.shelter_id],
                 ["Location", details.location],
-                ["Goal", money(details.goal_amount)],
-                ["Raised", money(details.current_amount)],
+                ["On-chain goal", weiAsEth(details.on_chain_goal_wei ?? details.goal_wei)],
+                ["Raised on-chain", weiAsEth(details.on_chain_total_raised_wei)],
                 ["Urgency", details.urgency_level],
-                ["Status", details.campaign_status],
+                ["Status", effectiveCampaignStatus(details)],
                 ["Duration", `${details.duration_days} days`],
                 ["Contract", details.contract_address || "Not deployed"],
+                ...(details.cancelled_at
+                  ? [["Cancelled", date(details.cancelled_at)]]
+                  : []),
                 ["Created", date(details.created_at)],
                 ["Updated", date(details.updated_at)],
               ].map(([label, value]) => (
@@ -1335,6 +1561,20 @@ export default function CampaignManagementPage() {
                 </div>
               ))}
             </div>
+          </div>
+          <div className="mt-4">
+            <TransactionLinks
+              transactions={[
+                {
+                  label: "Deployment tx",
+                  hash: details.deployment_tx_hash,
+                },
+                {
+                  label: "Cancellation tx",
+                  hash: details.cancellation_tx_hash,
+                },
+              ]}
+            />
           </div>
           {details.rejection_reason ? (
             <div className="mt-4 rounded-xl bg-orange-50 p-4 font-bold">
@@ -1376,34 +1616,6 @@ export default function CampaignManagementPage() {
                 </p>
               </div>
             ))}
-          </div>
-        </Modal>
-      ) : null}
-      {approveTarget ? (
-        <Modal
-          title="Approve campaign"
-          close={() => !busy && setApproveTarget(null)}
-        >
-          <div className="mt-4 rounded-xl bg-orange-50 p-4">
-            <p className="font-black">{approveTarget.title}</p>
-            <p className="mt-1 text-sm text-stone-600">
-              This campaign and its milestone plan will become active.
-            </p>
-          </div>
-          <div className="mt-5 flex justify-end gap-3">
-            <button
-              onClick={() => setApproveTarget(null)}
-              className="px-4 py-2 font-black"
-            >
-              Cancel
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => void review(approveTarget, "approve")}
-              className="rounded-full bg-[var(--color-orange)] px-5 py-2.5 font-black text-white disabled:opacity-50"
-            >
-              {busy ? "Approving..." : "Approve campaign"}
-            </button>
           </div>
         </Modal>
       ) : null}
@@ -1476,22 +1688,60 @@ export default function CampaignManagementPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {proofLinks(milestoneDetails.proof_url).map((link, index) => (
-                <a
+                <button
+                  type="button"
                   key={index}
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => setProofPreview(link)}
                   className="rounded-xl bg-orange-50 px-3 py-2 text-sm font-black text-[var(--color-orange)]"
                 >
-                  {link.name} ↗
-                </a>
+                  View {link.name}
+                </button>
               ))}
             </div>
+            <TransactionLinks
+              proofTxHash={milestoneDetails.proof_tx_hash}
+              reviewTxHash={milestoneDetails.review_tx_hash}
+              releaseTxHash={milestoneDetails.release_tx_hash}
+            />
             {milestoneDetails.rejection_reason ? (
               <div className="rounded-xl bg-orange-50 p-3 font-bold">
                 Rejected: {milestoneDetails.rejection_reason}
               </div>
             ) : null}
+          </div>
+        </Modal>
+      ) : null}
+      {proofPreview ? (
+        <Modal
+          title={displayProofName(proofPreview.name)}
+          close={() => setProofPreview(null)}
+        >
+          <div className="mt-4 overflow-hidden rounded-xl border border-stone-200 bg-stone-100">
+            {proofPreview.url.startsWith("data:application/pdf") ||
+            proofPreview.name.toLowerCase().endsWith(".pdf") ? (
+              <iframe
+                src={proofPreview.url}
+                title={`Proof preview: ${displayProofName(proofPreview.name)}`}
+                className="h-[70vh] w-full bg-white"
+              />
+            ) : (
+              <div className="grid min-h-80 place-items-center p-4">
+                <img
+                  src={proofPreview.url}
+                  alt={`Milestone proof: ${displayProofName(proofPreview.name)}`}
+                  className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-sm"
+                />
+              </div>
+            )}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <a
+              href={proofPreview.url}
+              download={displayProofName(proofPreview.name)}
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-bold text-stone-700 transition hover:bg-stone-50"
+            >
+              Download proof ↓
+            </a>
           </div>
         </Modal>
       ) : null}
@@ -1558,10 +1808,19 @@ export default function CampaignManagementPage() {
         </Modal>
       ) : null}
       {toast ? (
-        <div className="fixed bottom-6 right-6 z-[110] rounded-2xl bg-stone-950 px-5 py-4 text-sm font-black text-white shadow-2xl">
-          {toast}
+        <div className="fixed bottom-6 right-6 z-[110] max-w-md rounded-2xl bg-stone-950 px-5 py-4 text-sm font-black text-white shadow-2xl">
+          <p>{toast}</p>
         </div>
       ) : null}
+      <BlockchainSuccessPopup
+        open={Boolean(blockchainSuccess)}
+        status={blockchainSuccess?.status ?? "confirmed"}
+        title={blockchainSuccess?.title ?? ""}
+        message={blockchainSuccess?.message ?? ""}
+        txHash={blockchainSuccess?.txHash ?? ""}
+        actionLabel="View transaction"
+        onClose={() => setBlockchainSuccess(null)}
+      />
     </>
   );
 }
