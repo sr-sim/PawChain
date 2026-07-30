@@ -145,23 +145,24 @@ html {
 
 .donor-dashboard-pets {
   position: absolute;
-  inset: 0;
-  z-index: 0;
+  right: -0.45rem;
+  top: -6.65rem;
+  z-index: 1;
+  width: 9.75rem;
+  height: 6.9rem;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .donor-dashboard-pet-icon {
   position: absolute;
-  right: clamp(-2.25rem, -1vw, -0.75rem);
-  top: -0.35rem;
-  width: clamp(8.6rem, 18vw, 14rem);
-  max-width: 42%;
+  right: 0;
+  bottom: 0;
+  width: 9.65rem;
   height: auto;
-  opacity: 0.28;
-  mix-blend-mode: multiply;
-  filter: saturate(1.12) sepia(0.2) contrast(1.16);
-  transform: rotate(-4deg);
+  opacity: 0.45;
+  filter: drop-shadow(0 14px 18px rgba(87, 83, 78, 0.1));
+  transform: rotate(-1.5deg);
   animation: donor-premium-float 8s ease-in-out infinite;
 }
 

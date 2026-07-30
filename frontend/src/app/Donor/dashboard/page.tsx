@@ -162,13 +162,6 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
       <section className="overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="donor-dashboard-premium relative overflow-hidden p-5 sm:p-6">
-            <div className="donor-dashboard-pets" aria-hidden="true">
-              <img
-                src="https://thumbs.dreamstime.com/b/dog-cat-icon-white-background-181041952.jpg"
-                alt=""
-                className="donor-dashboard-pet-icon"
-              />
-            </div>
             <div className="relative z-10">
               <h1 className="max-w-2xl text-2xl font-black tracking-tight text-stone-950 sm:text-4xl">
                 Welcome back, {displayName}.
@@ -187,24 +180,31 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs sm:min-w-64">
                   <div className="donor-premium-metric relative rounded-2xl border border-orange-100 bg-white/85 p-3">
-                    <p className="font-black uppercase tracking-[0.12em] text-stone-400">
+                    <p className="font-black uppercase tracking-[0.12em] text-stone-700">
                       Verified actions
                     </p>
                     <p className="mt-1 text-2xl font-black text-stone-950">
                       {donationData.summary.confirmedCount}
                     </p>
-                    <p className="mt-0.5 text-[11px] font-semibold text-stone-500">
+                    <p className="mt-0.5 text-[11px] font-bold text-stone-600">
                       confirmed records
                     </p>
                   </div>
-                  <div className="donor-premium-metric relative overflow-hidden rounded-2xl border border-orange-100 bg-white/85 p-3">
-                    <p className="relative font-black uppercase tracking-[0.12em] text-stone-400">
+                  <div className="donor-premium-metric relative overflow-visible rounded-2xl border border-orange-100 bg-white/85 p-3">
+                    <div className="donor-dashboard-pets" aria-hidden="true">
+                      <img
+                        src="/images/donor-dashboard-pets-transparent.png"
+                        alt=""
+                        className="donor-dashboard-pet-icon"
+                      />
+                    </div>
+                    <p className="relative font-black uppercase tracking-[0.12em] text-stone-700">
                       Smart campaigns
                     </p>
                     <p className="relative mt-1 text-2xl font-black text-stone-950">
                       {contractConnectedCampaigns.length}
                     </p>
-                    <p className="relative mt-0.5 text-[11px] font-semibold text-stone-500">
+                    <p className="relative mt-0.5 text-[11px] font-bold text-stone-600">
                       contract linked
                     </p>
                   </div>
