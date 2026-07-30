@@ -16,9 +16,7 @@ import {
   getProgress,
   readableStatus,
 } from "@/app/components/campaigns/campaign-utils";
-import {
-  demoEthMyrRate,
-} from "@/lib/campaign-blockchain";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { formatEther, isAddress } from "viem";
 
@@ -72,6 +70,7 @@ function orderMilestones(items: CampaignMilestone[]) {
 }
 
 export default function CampaignDetailPage() {
+  const { rate: ethMyrRate } = useEthMyrRate();
   const params = useParams<{ id: string }>();
   const { address, isConnected } = useAppKitAccount();
   const { open } = useAppKit();
@@ -140,7 +139,6 @@ export default function CampaignDetailPage() {
     loadCampaign();
   }, [address, params.id]);
 
-  const ethMyrRate = Number(campaign?.eth_myr_rate ?? demoEthMyrRate) || demoEthMyrRate;
   const goalEth = onChainGoal !== undefined
     ? Number(formatEther(onChainGoal))
     : campaign?.goal_wei

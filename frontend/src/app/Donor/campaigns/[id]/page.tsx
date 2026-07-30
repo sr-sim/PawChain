@@ -191,8 +191,7 @@ export default async function DonorCampaignDetailPage({
                 {campaign.title}
               </h1>
               <p className="mt-3 text-sm font-black text-[var(--color-orange)]">
-                {campaign.shelter} <span className="text-stone-400">-</span>{" "}
-                {campaign.location}
+                {campaign.shelter}
               </p>
               <p className="mt-5 line-clamp-4 text-sm leading-7 text-stone-600">
                 {campaign.story}

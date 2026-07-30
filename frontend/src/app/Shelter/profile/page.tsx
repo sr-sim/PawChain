@@ -10,6 +10,12 @@ import {
 } from "react";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import { RoleNFTBadge } from "@/app/components/RoleNFTBadge";
+import {
+  getWalletStyle,
+  saveWalletStyle,
+  WalletStylePicker,
+  type WalletStyleId,
+} from "@/app/components/wallet/WalletStyle";
 import type { ContractRole, RoleNFTDisplay } from "@/lib/role-nft";
 
 type ShelterProfile = {
@@ -157,6 +163,25 @@ export default function ShelterProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [walletStyle, setWalletStyle] = useState<WalletStyleId>("classic");
+
+  useEffect(() => {
+    setWalletStyle(getWalletStyle(address));
+  }, [address]);
+
+  function customizeWallet(style: WalletStyleId) {
+    setWalletStyle(style);
+    const profileWallet = profileData?.profile.walletAddress;
+    saveWalletStyle(profileWallet ?? address, style);
+    if (
+      address &&
+      profileWallet &&
+      address.toLowerCase() !== profileWallet.toLowerCase()
+    ) {
+      saveWalletStyle(address, style);
+    }
+    setMessage("Wallet appearance updated.");
+  }
 
   useEffect(() => {
     async function loadProfile() {
@@ -403,6 +428,17 @@ export default function ShelterProfilePage() {
 
       {profile ? (
         <form onSubmit={handleSubmit} className="space-y-6">
+          <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(155,86,20,0.08)] sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Wallet appearance</p>
+            <h2 className="mt-1 text-xl font-black text-stone-950">Choose your wallet style</h2>
+            <p className="mt-2 text-sm font-bold leading-6 text-stone-600">
+              The Classic Paw is the default. Your selection updates wallet buttons across PawChain on this device.
+            </p>
+            <div className="mt-5">
+              <WalletStylePicker address={profile.walletAddress} value={walletStyle} onChange={customizeWallet} />
+            </div>
+          </section>
+
           <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
             <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(155,86,20,0.08)] sm:p-6">
               <h2 className="text-xl font-black text-stone-950">
@@ -582,4 +618,3 @@ export default function ShelterProfilePage() {
     </div>
   );
 }
-

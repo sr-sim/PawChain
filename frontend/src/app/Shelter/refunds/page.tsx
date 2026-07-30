@@ -1,17 +1,27 @@
 import Link from "next/link";
 import { getDashboardProfile } from "@/lib/dashboard-access";
-import { formatMYR, getShelterPortalData, sepoliaTxUrl, shortAddress } from "@/lib/shelter-portal";
+import { getShelterPortalData, sepoliaTxUrl, shortAddress } from "@/lib/shelter-portal";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
-import { demoEthMyrRate, getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
+import { getLatestEthMyrRate } from "@/lib/currency";
 import { decodeEventLog, formatEther, type Hash } from "viem";
 
 type PageProps = { searchParams?: Promise<{ walletAddress?: string }> };
+
+function formatMYR(value: number) {
+  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
+}
 
 export default async function ShelterRefundsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { userId } = await getDashboardProfile("shelter", params?.walletAddress);
   const { campaigns, donations } = await getShelterPortalData(userId);
-  const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+  const { rate: liveEthMyrRate } = await getLatestEthMyrRate();
+  const demoEthMyrRate = liveEthMyrRate;
+  const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, { ...campaign, eth_myr_rate: liveEthMyrRate }]));
   const refundDonations = donations.filter((donation) => donation.refund_tx_hash || donation.status.toLowerCase().includes("refund"));
   const publicClient = getPawChainPublicClient();
   const refundRows = await Promise.all(refundDonations.map(async (donation) => {
