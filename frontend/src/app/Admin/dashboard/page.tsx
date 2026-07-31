@@ -4,7 +4,6 @@ import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from
 import Link from "next/link";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
-import { EthMyrMarketCard } from "@/app/components/EthMyrMarketCard";
 import { AdminSidebar as SharedAdminSidebar } from "@/app/Admin/components/AdminSidebar";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 import {
@@ -200,12 +199,8 @@ function DashboardSkeleton() {
 
 export default function AdminDashboard() {
   const {
-    rate: ethMyrRate,
     weiToMyr,
     source: rateSource,
-    updatedAt: rateUpdatedAt,
-    loading: rateLoading,
-    history: rateHistory,
   } = useEthMyrRate();
   const { address, isConnected } = useAppKitAccount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -290,14 +285,6 @@ export default function AdminDashboard() {
                     <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Good to see you, Admin.</h1>
                     <p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-stone-600">Monitor campaign health, review priorities, and fund transparency from one live overview.</p>
                   </div>
-                  <EthMyrMarketCard
-                    rate={ethMyrRate}
-                    source={rateSource}
-                    updatedAt={rateUpdatedAt}
-                    loading={rateLoading}
-                    history={rateHistory}
-                    className="lg:max-w-sm"
-                  />
                 </div>
               </header>
 
@@ -337,9 +324,9 @@ export default function AdminDashboard() {
                 </article>
               </section>
 
-              <section className="order-5 rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Latest activity</p><h2 className="mt-1 text-2xl font-black">Recent campaigns</h2><p className="mt-1 text-xs font-bold text-stone-500">Newest submissions first</p></div><Link href="/Admin/campaign-management" className="inline-flex w-fit items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-[var(--color-orange)] transition hover:border-orange-300 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"><span>View campaign management</span><span aria-hidden="true">→</span></Link></div>
-                {data.recentCampaigns.length ? <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead><tr className="border-b border-stone-100 text-xs uppercase tracking-[0.12em] text-stone-400"><th className="pb-3 font-black">Campaign</th><th className="pb-3 font-black">Status</th><th className="pb-3 font-black">Urgency</th><th className="pb-3 font-black">Progress</th><th className="pb-3 text-right font-black">Submitted</th></tr></thead><tbody>{data.recentCampaigns.map((campaign) => { const goal = Number(campaign.goal_amount || 0); const current = Number(campaign.current_amount || 0); const progress = goal ? Math.min(100, Math.round((current / goal) * 100)) : 0; const meta = statusMeta[campaign.campaign_status]; return <tr key={campaign.id} className="border-b border-stone-100 last:border-0"><td className="py-4 pr-4"><p className="max-w-xs truncate font-black">{campaign.title}</p><p className="mt-1 text-xs font-bold text-stone-400">{formatMoney(current)} of {formatMoney(goal)}</p></td><td className="py-4 pr-4"><span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${meta?.classes ?? "bg-stone-100 text-stone-700 ring-stone-200"}`}>{meta?.label ?? campaign.campaign_status}</span></td><td className="py-4 pr-4 text-sm font-bold capitalize">{campaign.urgency_level}</td><td className="py-4 pr-4"><div className="flex items-center gap-3"><div className="h-2 w-24 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div><span className="text-xs font-black">{progress}%</span></div></td><td className="py-4 text-right text-sm font-bold text-stone-500">{formatDate(campaign.created_at)}</td></tr>; })}</tbody></table></div> : <div className="mt-5 rounded-3xl border border-dashed border-orange-200 bg-orange-50/50 p-10 text-center text-sm font-bold text-stone-500">No campaign submissions to display.</div>}
+              <section className="order-5 overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
+                <div className="flex flex-col gap-4 border-b border-orange-100 bg-orange-50/35 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5"><div><p className="text-[11px] font-black uppercase tracking-wider text-[var(--color-orange)]">Latest activity</p><h2 className="mt-1 text-base font-black text-stone-950">Recent campaigns</h2><p className="mt-0.5 text-xs font-medium text-stone-500">Newest submissions first</p></div><Link href="/Admin/campaign-management" className="inline-flex w-fit items-center gap-2 rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-[var(--color-orange)] transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2"><span>View campaign management</span><span aria-hidden="true">→</span></Link></div>
+                {data.recentCampaigns.length ? <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead className="border-b border-orange-100 bg-[rgba(var(--color-cream-rgb),0.55)]"><tr className="text-[11px] uppercase tracking-wider text-stone-500"><th className="px-5 py-3 font-black">Campaign</th><th className="px-5 py-3 font-black">Status</th><th className="px-5 py-3 font-black">Urgency</th><th className="px-5 py-3 font-black">Progress</th><th className="px-5 py-3 text-right font-black">Submitted</th></tr></thead><tbody className="divide-y divide-orange-100">{data.recentCampaigns.map((campaign) => { const goal = Number(campaign.goal_amount || 0); const current = Number(campaign.current_amount || 0); const progress = goal ? Math.min(100, Math.round((current / goal) * 100)) : 0; const meta = statusMeta[campaign.campaign_status]; return <tr key={campaign.id} className="transition hover:bg-orange-50/35"><td className="px-5 py-4"><p className="max-w-xs truncate font-semibold">{campaign.title}</p><p className="mt-1 text-xs font-medium text-stone-400">{formatMoney(current)} of {formatMoney(goal)}</p></td><td className="px-5 py-4"><span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${meta?.classes ?? "bg-stone-100 text-stone-700 ring-stone-200"}`}>{meta?.label ?? campaign.campaign_status}</span></td><td className="px-5 py-4 text-sm font-medium capitalize">{campaign.urgency_level}</td><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="h-2 w-24 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div><span className="text-xs font-bold">{progress}%</span></div></td><td className="px-5 py-4 text-right text-sm font-medium text-stone-500">{formatDate(campaign.created_at)}</td></tr>; })}</tbody></table></div> : <div className="p-12 text-center text-sm font-semibold text-stone-500">No campaign submissions to display.</div>}
               </section>
 
               <section className="order-6 rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-[0_14px_38px_rgba(97,55,17,0.07)]">

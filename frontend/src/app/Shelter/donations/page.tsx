@@ -1,21 +1,73 @@
 import Link from "next/link";
+import { formatEther } from "viem";
+import { getLatestEthMyrRate } from "@/lib/currency";
 import { getDashboardProfile } from "@/lib/dashboard-access";
-import { formatMYR, getShelterPortalData, sepoliaTxUrl, shortAddress } from "@/lib/shelter-portal";
+import { getShelterPortalData, sepoliaTxUrl, shortAddress } from "@/lib/shelter-portal";
 
 type PageProps = { searchParams?: Promise<{ walletAddress?: string; campaign?: string; status?: string }> };
+
+function donationAmountEth(
+  amountWei: string | null,
+  amount: number | string,
+  currency: string,
+  liveEthMyrRate: number,
+) {
+  if (amountWei) {
+    try {
+      return Number(formatEther(BigInt(amountWei)));
+    } catch {
+      // Fall through for legacy donation records without a valid wei value.
+    }
+  }
+
+  const storedAmount = Number(amount || 0);
+  if (!Number.isFinite(storedAmount)) return 0;
+  return currency.toUpperCase() === "ETH"
+    ? storedAmount
+    : storedAmount / liveEthMyrRate;
+}
+
+function formatEth(value: number) {
+  return `${new Intl.NumberFormat("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  }).format(value)} ETH`;
+}
+
+function formatLiveMyr(value: number) {
+  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
+}
 
 export default async function ShelterDonationsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { userId } = await getDashboardProfile("shelter", params?.walletAddress);
   const { campaigns, donations } = await getShelterPortalData(userId);
+  const { rate: liveEthMyrRate } = await getLatestEthMyrRate();
   const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
   const visible = donations.filter((donation) =>
     (!params?.campaign || donation.campaign_id === params.campaign) &&
     (!params?.status || donation.status === params.status),
   );
-  const total = visible
-    .filter((item) => !["failed", "refunded"].includes(item.status.toLowerCase()))
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const totalEth = visible
+    .filter(
+      (item) =>
+        !item.refund_tx_hash &&
+        !["failed", "refunded"].includes(item.status.toLowerCase()),
+    )
+    .reduce(
+      (sum, item) =>
+        sum +
+        donationAmountEth(
+          item.amount_wei,
+          item.amount,
+          item.currency,
+          liveEthMyrRate,
+        ),
+      0,
+    );
 
   return (
     <div className="space-y-5 py-6">
@@ -26,8 +78,24 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
       </header>
 
       <section className="grid gap-4 sm:grid-cols-3">
-        {[["Total received", formatMYR(total)], ["Transactions", String(visible.length)], ["Campaigns supported", String(new Set(visible.map((item) => item.campaign_id)).size)]].map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_8px_24px_rgba(111,69,20,0.05)]"><p className="text-xs font-black uppercase text-stone-500">{label}</p><p className="mt-2 text-2xl font-black">{value}</p></div>
+        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_8px_24px_rgba(111,69,20,0.05)]">
+          <p className="text-xs font-black uppercase text-stone-500">Total received</p>
+          <p className="mt-2 text-2xl font-black">{formatEth(totalEth)}</p>
+          <p className="mt-1 text-xs font-bold text-stone-500">
+            {formatLiveMyr(totalEth * liveEthMyrRate)}
+          </p>
+        </div>
+        {[
+          ["Transactions", String(visible.length)],
+          [
+            "Campaigns supported",
+            String(new Set(visible.map((item) => item.campaign_id)).size),
+          ],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_8px_24px_rgba(111,69,20,0.05)]">
+            <p className="text-xs font-black uppercase text-stone-500">{label}</p>
+            <p className="mt-2 text-2xl font-black">{value}</p>
+          </div>
         ))}
       </section>
 
@@ -38,14 +106,47 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
             <tbody className="divide-y divide-orange-100">
               {visible.map((donation) => {
                 const txUrl = sepoliaTxUrl(donation.tx_hash);
+                const amountEth = donationAmountEth(
+                  donation.amount_wei,
+                  donation.amount,
+                  donation.currency,
+                  liveEthMyrRate,
+                );
+                const refunded =
+                  Boolean(donation.refund_tx_hash) ||
+                  donation.status.toLowerCase().includes("refund");
+                const confirmed = donation.status.toLowerCase() === "confirmed";
+                const statusLabel = refunded
+                  ? "Refunded"
+                  : confirmed
+                    ? "Confirmed"
+                    : donation.status;
                 return (
                   <tr key={donation.id} className="transition hover:bg-orange-50/35">
                     <td className="px-5 py-4"><p className="font-black text-stone-950">{donation.donor_name?.trim() || "Anonymous donor"}</p><p className="mt-1 font-mono text-[10px] font-semibold text-stone-400">{shortAddress(donation.donor_id)}</p></td>
                     <td><Link href={`/Shelter/campaigns/${donation.campaign_id}`} className="font-black hover:text-[var(--color-orange)]">{campaignMap.get(donation.campaign_id)?.title ?? "Campaign"}</Link></td>
-                    <td className="font-black">{formatMYR(donation.amount)}</td>
+                    <td>
+                      <p className="font-black text-stone-950">{formatEth(amountEth)}</p>
+                      <p className="mt-1 text-xs font-bold text-stone-500">
+                        {formatLiveMyr(amountEth * liveEthMyrRate)}
+                      </p>
+                    </td>
                     <td className="font-semibold text-stone-500">{new Intl.DateTimeFormat("en-MY", { dateStyle: "medium" }).format(new Date(donation.created_at))}</td>
-                    <td>{txUrl ? <a href={txUrl} target="_blank" rel="noreferrer" className="font-mono text-xs font-black text-[var(--color-orange)] hover:underline">{shortAddress(donation.tx_hash)} Open</a> : "-"}</td>
-                    <td className="pr-5"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black capitalize text-emerald-700 ring-1 ring-emerald-200">{donation.status}</span></td>
+                    <td>{txUrl ? <a href={txUrl} target="_blank" rel="noreferrer" aria-label={`View transaction ${donation.tx_hash} on Sepolia Etherscan`} className="font-mono text-xs font-black text-[var(--color-orange)] hover:underline">{shortAddress(donation.tx_hash)} ↗</a> : "-"}</td>
+                    <td className="pr-5">
+                      <span
+                        className={[
+                          "rounded-full px-2.5 py-1 text-xs font-black capitalize ring-1",
+                          refunded
+                            ? "bg-red-50 text-red-700 ring-red-200"
+                            : confirmed
+                              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                              : "bg-stone-100 text-stone-700 ring-stone-200",
+                        ].join(" ")}
+                      >
+                        {statusLabel}
+                      </span>
+                    </td>
                   </tr>
                 );
               })}
@@ -53,7 +154,6 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
           </table>
         </div>
         {!visible.length ? <div className="p-10 text-center text-sm font-bold text-stone-500">No donation transactions are available for this wallet yet.</div> : null}
-        <div className="border-t border-orange-100 bg-[#FFFCC9]/30 px-5 py-3 text-xs font-bold text-stone-600">Donor names come from their PawChain profile. Wallet-only donations without an available name appear as Anonymous donor.</div>
       </section>
     </div>
   );

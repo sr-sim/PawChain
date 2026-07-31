@@ -1095,20 +1095,29 @@ export default function CampaignManagementPage() {
                     return (
                       <article
                         key={campaign.id}
-                        className="group overflow-hidden rounded-[1.5rem] border border-orange-100 bg-[linear-gradient(180deg,#fff_0%,#fffdfa_100%)] p-3 shadow-[0_8px_28px_rgba(120,70,20,0.07)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-[0_18px_45px_rgba(120,70,20,0.12)]"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setDetails(campaign)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setDetails(campaign);
+                          }
+                        }}
+                        className="group/card relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-orange-100 bg-transparent shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-200"
                       >
-                        <div className="relative h-36 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,var(--color-cream),var(--color-peach))]">
+                        <div className="relative h-40 shrink-0 overflow-hidden bg-[linear-gradient(135deg,var(--color-cream),var(--color-peach))] transition-[height] duration-500 ease-in-out group-hover/card:h-[6.75rem] group-focus-within/card:h-[6.75rem]">
                           {campaign.image_url ? (
                             <img
                               src={campaign.image_url}
                               alt={campaign.title}
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                              className="h-full w-full object-cover transition duration-500 group-hover/card:scale-[1.03]"
                             />
                           ) : <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.9),transparent_35%),radial-gradient(circle_at_85%_75%,rgba(255,138,0,.22),transparent_38%)]" />}
                           <div className="absolute left-3 top-3"><StatusBadge status={effectiveCampaignStatus(campaign)} /></div>
                           <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-black capitalize text-stone-800 shadow-sm backdrop-blur">{campaign.urgency_level}</span>
                         </div>
-                        <div className="px-1.5 pb-1 pt-3">
+                        <div className="relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-100 bg-white px-4 pb-3 pt-5 transition-colors group-hover/card:border-orange-200">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <h2 className="truncate text-lg font-black tracking-tight">
@@ -1196,24 +1205,22 @@ export default function CampaignManagementPage() {
                               </div>
                             </div>
                           ) : null}
-                          <div className="mt-4 flex flex-wrap gap-2 border-t border-orange-100 pt-3">
-                            <button
-                              onClick={() => setDetails(campaign)}
-                              className="min-w-28 flex-1 rounded-xl border border-orange-200 px-3 py-2.5 text-sm font-black transition hover:bg-orange-50"
-                            >
-                              View details
-                            </button>
+                          <div className="mt-auto flex max-h-0 translate-y-2 flex-wrap gap-2 overflow-hidden border-t border-transparent pt-0 opacity-0 transition-[max-height,opacity,transform,padding,border-color] duration-500 ease-in-out group-hover/card:max-h-28 group-hover/card:translate-y-0 group-hover/card:border-orange-100 group-hover/card:pt-3 group-hover/card:opacity-100 group-focus-within/card:max-h-28 group-focus-within/card:translate-y-0 group-focus-within/card:border-orange-100 group-focus-within/card:pt-3 group-focus-within/card:opacity-100">
                             {campaign.campaign_status === "pending_approval" ? (
                               <>
                                 <button
                                   disabled={busy}
-                                  onClick={() => void review(campaign, "approve")}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void review(campaign, "approve");
+                                  }}
                                   className="rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-50"
                                 >
                                   Approve
                                 </button>
                                 <button
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    event.stopPropagation();
                                     setRejectTarget(campaign);
                                     setReason("");
                                   }}
@@ -1226,26 +1233,33 @@ export default function CampaignManagementPage() {
                             {isApproved(campaign.campaign_status) ? (
                               <>
                                 <button
-                                  onClick={() => setMilestoneCampaign(campaign)}
-                                  className="rounded-xl bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setMilestoneCampaign(campaign);
+                                  }}
+                                  className="min-w-0 flex-1 rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-semibold text-white"
                                 >
                                   Milestone management
                                 </button>
                                 <button
                                   disabled={busy}
-                                  onClick={() => setCancelTarget(campaign)}
-                                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-black text-red-700 disabled:opacity-50"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setCancelTarget(campaign);
+                                  }}
+                                  className="min-w-0 flex-1 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 disabled:opacity-50"
                                 >
-                                  Cancel & refund
+                                  Cancel campaign
                                 </button>
                                 {campaign.blockchain_deadline &&
                                 new Date(campaign.blockchain_deadline).getTime() <=
                                   Date.now() ? (
                                   <button
                                     disabled={busy}
-                                    onClick={() =>
-                                      void finalizeExpiredCampaign(campaign)
-                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void finalizeExpiredCampaign(campaign);
+                                    }}
                                     className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-black text-sky-700 disabled:opacity-50"
                                   >
                                     Finalize expiry
@@ -1528,8 +1542,29 @@ export default function CampaignManagementPage() {
         </Modal>
       ) : null}
       {details ? (
-        <Modal title={details.title} close={() => setDetails(null)} wide>
-          <div className="mt-4 grid gap-5 lg:grid-cols-2">
+        <div
+          className="fixed inset-0 z-[80] flex justify-end bg-stone-950/45 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDetails(null);
+          }}
+        >
+          <aside
+            className="flex h-full w-full max-w-5xl flex-col bg-[var(--color-cream)] shadow-[-24px_0_80px_rgba(0,0,0,0.2)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={details.title}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-orange-100 bg-white px-5 py-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Campaign details</p>
+                <h2 className="mt-1 text-2xl font-black text-stone-950">{details.title}</h2>
+                <p className="mt-1 text-sm font-semibold text-stone-500">{details.shelter_name || details.shelter_id}</p>
+              </div>
+              <button type="button" onClick={() => setDetails(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl text-stone-500 transition hover:bg-orange-50 hover:text-[var(--color-orange)]" aria-label="Close campaign details">×</button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="grid gap-5 lg:grid-cols-2">
             <div>
               {details.image_url ? (
                 <img
@@ -1667,7 +1702,34 @@ export default function CampaignManagementPage() {
               </div>
             ))}
           </div>
-        </Modal>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-orange-100 bg-white p-4 sm:flex-row sm:justify-end sm:p-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMilestoneCampaign(details);
+                  setDetails(null);
+                }}
+                className="inline-flex items-center justify-center rounded-xl bg-stone-950 px-5 py-3 text-sm font-black text-white transition hover:bg-stone-800"
+              >
+                Milestone management
+              </button>
+              {isApproved(details.campaign_status) ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setCancelTarget(details);
+                    setDetails(null);
+                  }}
+                  className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-black text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                >
+                  Cancel campaign
+                </button>
+              ) : null}
+            </div>
+          </aside>
+        </div>
       ) : null}
       {cancelTarget ? (
         <Modal

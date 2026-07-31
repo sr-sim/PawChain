@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { formatEther, isAddress, type Address } from "viem";
-import { RoleNFTBadge } from "@/app/components/RoleNFTBadge";
+import { ShelterRoleNFTCard } from "@/app/Shelter/components/ShelterRoleNFTCard";
+import { ShelterRecentCampaignCarousel } from "@/app/Shelter/components/ShelterRecentCampaignCarousel";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getDashboardProfile } from "@/lib/dashboard-access";
-import { formatMYR, getShelterPortalData, shortAddress } from "@/lib/shelter-portal";
+import { getShelterPortalData } from "@/lib/shelter-portal";
+import { ShelterEthMyrMarketCard } from "@/app/Shelter/components/ShelterEthMyrMarketCard";
+import { getLatestEthMyrRate } from "@/lib/currency";
+import styles from "./dashboard.module.css";
 
 type DashboardProps = { searchParams?: Promise<{ walletAddress?: string }> };
 
@@ -21,6 +25,27 @@ function formatETH(value: string | number) {
   })} ETH`;
 }
 
+function formatLiveMYR(value: number) {
+  return `Approx. live MYR: MYR ${value.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function QuickActionIcon({ type }: { type: "create" | "manage" | "donations" | "withdraw" }) {
+  const paths = {
+    create: "M12 5v14M5 12h14",
+    manage: "M7 4h10v16H7zM10 8h4M10 12h4M10 16h3M5 7H3v10h2",
+    donations: "M12 20s-7-4.3-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.7-7 10-7 10Z",
+    withdraw: "M3.5 7h17v11h-17zM3.5 10h17M16 13h5v3h-5a1.5 1.5 0 0 1 0-3Z",
+  };
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" aria-hidden="true">
+      <path d={paths[type]} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function ProgressRing({ value }: { value: number }) {
   const safeValue = Math.min(100, Math.max(0, value));
   return (
@@ -35,7 +60,8 @@ function ProgressRing({ value }: { value: number }) {
 export default async function ShelterDashboard({ searchParams }: DashboardProps) {
   const params = await searchParams;
   const { userId, profile, roleNFT } = await getDashboardProfile("shelter", params?.walletAddress);
-  const { campaigns, milestones, donations } = await getShelterPortalData(userId);
+  const { campaigns, milestones } = await getShelterPortalData(userId);
+  const { rate: liveEthMyrRate } = await getLatestEthMyrRate();
   const shelterName = profile?.full_name ?? "Shelter";
   const walletAddress = profile?.wallet_address ?? params?.walletAddress ?? null;
 
@@ -104,14 +130,6 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
 
   const activeCampaigns = displayedCampaigns.filter((campaign) => campaign.campaign_status === "active");
   const pendingReviews = milestones.filter((milestone) => milestone.status === "submitted");
-  const releasedMilestones = milestones.filter((milestone) => milestone.release_tx_hash);
-  const totalDonations = donations
-    .filter((donation) => !["failed", "refunded"].includes(donation.status.toLowerCase()))
-    .reduce((sum, donation) => sum + Number(donation.amount || 0), 0);
-  const totalReleased = releasedMilestones.reduce((sum, milestone) => {
-    const campaign = displayedCampaigns.find((item) => item.id === milestone.campaign_id);
-    return sum + Number(campaign?.goal_amount || 0) * Number(milestone.percentage || 0) / 100;
-  }, 0);
   const allActiveCampaignsHaveChainState = activeCampaigns.every(
     (campaign) => Boolean(campaign.chainState),
   );
@@ -134,82 +152,153 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
     0,
   );
   const progress = totalGoal > 0 ? Math.round((totalRaised / totalGoal) * 100) : 0;
+  const contractConnectedCampaigns = displayedCampaigns.filter(
+    (campaign) => Boolean(campaign.contract_address),
+  );
 
-  const stats = [
-    ["Total funds released", formatMYR(totalReleased), "Available milestone funds"],
-    ["Active campaigns", String(activeCampaigns.length), "Currently fundraising"],
-    ["Pending reviews", String(pendingReviews.length), "Awaiting admin review"],
-    ["Total donations", formatMYR(totalDonations), `${donations.length} transactions received`],
+  const quickActions = [
+    { label: "Create campaign", detail: "Start a new fundraising campaign", href: "/Shelter/campaigns/create", icon: "create" as const, tone: "text-orange-600 bg-orange-50" },
+    { label: "Manage campaigns", detail: "View and update your campaigns", href: "/Shelter/campaigns", icon: "manage" as const, tone: "text-emerald-600 bg-emerald-50" },
+    { label: "View donations", detail: "Inspect confirmed donor support", href: "/Shelter/donations", icon: "donations" as const, tone: "text-violet-600 bg-violet-50" },
+    { label: "Withdraw funds", detail: "Request milestone fund release", href: "/Shelter/withdrawals", icon: "withdraw" as const, tone: "text-blue-600 bg-blue-50" },
   ];
+  const recentCampaigns = displayedCampaigns.map((campaign) => {
+    const itemProgress = campaign.chainState?.progress ?? (
+      Number(campaign.goal_amount) > 0
+        ? Math.round(Number(campaign.current_amount || 0) / Number(campaign.goal_amount) * 100)
+        : 0
+    );
+    const raisedEth = Number(campaign.chainState?.raisedEth ?? campaign.current_amount ?? 0);
+
+    return {
+      id: campaign.id,
+      title: campaign.title,
+      imageUrl: campaign.image_url,
+      status: campaign.campaign_status,
+      progress: itemProgress,
+      raisedEth,
+      raisedMyr: raisedEth * liveEthMyrRate,
+    };
+  });
 
   return (
-    <div className="space-y-6 py-6">
-      <section className="grid gap-5 rounded-3xl border border-[#FFCD80] bg-[linear-gradient(135deg,#FFFFFF,#FFFCC9_140%)] p-5 shadow-[0_18px_45px_rgba(111,69,20,0.08)] lg:grid-cols-[1fr_19rem] lg:items-center sm:p-7">
-        <div>
-          <p className="text-sm font-black text-stone-600">Welcome back,</p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-stone-950">{shelterName}! <span aria-hidden="true">🐾</span></h1>
-          <p className="mt-2 text-sm font-semibold text-stone-600">Here is what is happening with your shelter today.</p>
-        </div>
-        <div className="rounded-2xl border border-orange-200 bg-white/90 p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Shelter wallet</p><span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Sepolia</span></div>
-          <p className="mt-2 font-mono text-sm font-black text-stone-950" title={walletAddress ?? undefined}>{shortAddress(walletAddress)}</p>
-          {walletAddress ? <a href={`https://sepolia.etherscan.io/address/${walletAddress}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-black text-[var(--color-orange)] hover:underline">View on Sepolia Etherscan ↗</a> : null}
+    <div className="w-full space-y-6 py-6">
+      <section className="w-full overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white shadow-sm">
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.8fr)]">
+          <div className={`${styles.premiumPanel} relative overflow-hidden p-5 sm:p-6`}>
+            <div className="relative z-10">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--color-orange)]">
+                Shelter command center
+              </p>
+              <h1 className="mt-2 max-w-2xl text-2xl font-black tracking-tight text-stone-950 sm:text-4xl">
+                Welcome back, {shelterName}.
+              </h1>
+              <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-stone-500">
+                    Raised across active campaigns
+                  </p>
+                  <p className={`${styles.ethGradient} mt-1 text-4xl font-black tracking-tight sm:text-6xl`}>
+                    {formatETH(totalRaised)}
+                  </p>
+                  <p className="mt-2 text-sm font-black text-stone-500">
+                    {formatLiveMYR(totalRaised * liveEthMyrRate)}
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-stone-600">
+                    Supporting {activeCampaigns.length} active {activeCampaigns.length === 1 ? "campaign" : "campaigns"}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs sm:min-w-80 xl:min-w-[22rem]">
+                  <div className={`${styles.metric} relative min-h-32 rounded-2xl border border-orange-100 bg-white/85 p-4`}>
+                    <p className="text-sm font-black uppercase tracking-[0.12em] text-stone-700">Pending reviews</p>
+                    <p className="mt-2 text-3xl font-black text-stone-950">{pendingReviews.length}</p>
+                    <p className="mt-1 text-xs font-bold text-stone-600">milestone submissions</p>
+                  </div>
+                  <div className={`${styles.metric} relative min-h-32 overflow-visible rounded-2xl border border-orange-100 bg-white/85 p-4`}>
+                    <div className={styles.animalArt} aria-hidden="true">
+                      <img src="/images/donor-dashboard-pets-transparent.png" alt="" />
+                    </div>
+                    <p className="relative text-sm font-black uppercase tracking-[0.12em] text-stone-700">Smart campaigns</p>
+                    <p className="relative mt-2 text-3xl font-black text-stone-950">{contractConnectedCampaigns.length}</p>
+                    <p className="relative mt-1 text-xs font-bold text-stone-600">contract linked</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-orange-100 bg-white p-5 sm:p-6 xl:border-l xl:border-t-0">
+            <ShelterRoleNFTCard
+              roleNFT={roleNFT}
+              walletAddress={walletAddress}
+            />
+          </div>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Shelter summary">
-        {stats.map(([label, value, hint]) => (
-          <article key={label} className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_10px_30px_rgba(111,69,20,0.06)]">
-            <p className="text-xs font-black uppercase tracking-wide text-stone-500">{label}</p>
-            <p className="mt-3 text-2xl font-black text-stone-950">{value}</p>
-            <p className="mt-1 text-xs font-semibold text-stone-500">{hint}</p>
-          </article>
-        ))}
+      <section className="grid w-full items-stretch gap-6 min-[1200px]:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]" aria-label="Market and quick actions">
+        <ShelterEthMyrMarketCard />
+
+        <section className="flex h-full w-full flex-col rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6" aria-label="Quick actions">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-50 text-lg text-[var(--color-orange)]" aria-hidden="true">⚡</span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Shelter tools</p>
+              <h2 className="text-sm font-black uppercase tracking-[0.14em] text-stone-700">Quick actions</h2>
+            </div>
+          </div>
+          <div className="mt-4 grid flex-1 grid-cols-2 gap-3">
+            {quickActions.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="group flex min-h-36 flex-col items-center justify-center rounded-2xl border border-orange-100 bg-orange-50/20 p-3 text-center shadow-sm transition hover:-translate-y-1 hover:border-[var(--color-orange)] hover:bg-white hover:shadow-lg hover:shadow-orange-100"
+              >
+                <span className={`mx-auto grid h-11 w-11 shrink-0 place-items-center rounded-full ${action.tone}`}>
+                  <QuickActionIcon type={action.icon} />
+                </span>
+                <span className="mt-3 block text-sm font-black text-stone-950 group-hover:text-[var(--color-orange)]">{action.label}</span>
+                <span className="mx-auto mt-1 block max-w-36 text-[11px] font-semibold leading-4 text-stone-500">{action.detail}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+      <section className="grid w-full gap-6 xl:grid-cols-2">
         <article className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6">
-          <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">Funding overview</p><h2 className="mt-1 text-xl font-black text-stone-950">Active campaign progress</h2></div><Link href="/Shelter/campaigns" className="text-xs font-black text-[var(--color-orange)] hover:underline">View all campaigns →</Link></div>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">Funding overview</p>
+              <h2 className="mt-1 text-xl font-black text-stone-950">Active campaign progress</h2>
+            </div>
+            <Link href="/Shelter/campaigns" className="shrink-0 text-xs font-black text-[var(--color-orange)] hover:underline">View all campaigns →</Link>
+          </div>
           <div className="mt-6 grid gap-7 sm:grid-cols-[9rem_1fr] sm:items-center">
             <ProgressRing value={progress} />
             <div className="space-y-4">
-              <div><div className="flex justify-between text-xs font-black"><span>Raised</span><span>{allActiveCampaignsHaveChainState ? formatETH(totalRaised) : formatMYR(totalRaised)}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${Math.min(100, progress)}%` }} /></div></div>
-              <div className="flex justify-between border-t border-orange-100 pt-4 text-sm"><span className="font-bold text-stone-500">Combined goal</span><span className="font-black">{allActiveCampaignsHaveChainState ? formatETH(totalGoal) : formatMYR(totalGoal)}</span></div>
+              <div>
+                <div className="flex items-start justify-between gap-3 text-xs font-black">
+                  <span>Raised</span>
+                  <span className="text-right">{formatETH(totalRaised)}<span className="mt-1 block text-[10px] text-stone-400">{formatLiveMYR(totalRaised * liveEthMyrRate)}</span></span>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${Math.min(100, progress)}%` }} /></div>
+              </div>
+              <div className="flex items-start justify-between gap-3 border-t border-orange-100 pt-4 text-sm">
+                <span className="font-bold text-stone-500">Combined goal</span>
+                <span className="text-right font-black">{formatETH(totalGoal)}<span className="mt-1 block text-[10px] text-stone-400">{formatLiveMYR(totalGoal * liveEthMyrRate)}</span></span>
+              </div>
               <div className="flex justify-between text-sm"><span className="font-bold text-stone-500">Campaigns running</span><span className="font-black">{activeCampaigns.length}</span></div>
             </div>
           </div>
         </article>
 
         <article className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6">
-          <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">Recent campaigns</p><h2 className="mt-1 text-xl font-black text-stone-950">Latest activity</h2></div><Link href="/Shelter/campaigns/create" className="rounded-xl bg-[var(--color-orange)] px-3 py-2 text-xs font-black text-white">+ Create</Link></div>
-          <div className="mt-5 space-y-3">
-            {displayedCampaigns.slice(0, 4).map((campaign) => {
-              const itemProgress = campaign.chainState?.progress ?? (
-                Number(campaign.goal_amount) > 0
-                  ? Math.round(Number(campaign.current_amount || 0) / Number(campaign.goal_amount) * 100)
-                  : 0
-              );
-              const raisedAmount = campaign.chainState
-                ? formatETH(campaign.chainState.raisedEth)
-                : formatMYR(campaign.current_amount);
-              return <Link key={campaign.id} href={`/Shelter/campaigns/${campaign.id}`} className="block rounded-2xl border border-orange-100 p-4 transition hover:bg-orange-50/50"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-black text-stone-950">{campaign.title}</p><span className="text-xs font-black text-[var(--color-orange)]">{itemProgress}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100"><div className="h-full bg-[var(--color-orange)]" style={{ width: `${Math.min(100, itemProgress)}%` }} /></div><p className="mt-2 text-xs font-semibold capitalize text-stone-500">{campaign.campaign_status.replaceAll("_", " ")} · {raisedAmount} raised</p></Link>;
-            })}
-            {!displayedCampaigns.length ? <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/40 p-6 text-center text-sm font-bold text-stone-500">No campaigns yet. Create your first campaign to begin.</div> : null}
-          </div>
+          <div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">Recent campaign</p><h2 className="mt-1 text-xl font-black text-stone-950">Latest activity</h2></div><Link href="/Shelter/campaigns/create" className="rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-orange-200/60 transition hover:-translate-y-0.5">+ Create</Link></div>
+          <ShelterRecentCampaignCarousel campaigns={recentCampaigns} />
         </article>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_22rem]">
-        <article className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_12px_36px_rgba(111,69,20,0.07)] sm:p-6">
-          <h2 className="text-xl font-black text-stone-950">Current actions</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Link href="/Shelter/campaigns" className="rounded-2xl border border-orange-100 bg-[#FFFCC9]/35 p-4 text-sm font-black hover:border-[var(--color-orange)]">Manage campaigns <span className="block mt-2 text-xs font-semibold text-stone-500">Review progress and proofs</span></Link>
-            <Link href="/Shelter/withdrawals" className="rounded-2xl border border-orange-100 bg-[#FFFCC9]/35 p-4 text-sm font-black hover:border-[var(--color-orange)]">Withdraw funds <span className="block mt-2 text-xs font-semibold text-stone-500">Claim withdrawable milestones</span></Link>
-            <Link href="/Shelter/donations" className="rounded-2xl border border-orange-100 bg-[#FFFCC9]/35 p-4 text-sm font-black hover:border-[var(--color-orange)]">View donations <span className="block mt-2 text-xs font-semibold text-stone-500">Inspect confirmed transactions</span></Link>
-          </div>
-        </article>
-        <RoleNFTBadge role="Shelter" roleNFT={roleNFT} />
-      </section>
     </div>
   );
 }

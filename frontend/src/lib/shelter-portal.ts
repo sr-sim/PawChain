@@ -10,6 +10,7 @@ export type ShelterCampaignRecord = {
   current_amount: number | string | null;
   campaign_status: string;
   contract_address: string | null;
+  image_url: string | null;
   eth_myr_rate: number | string | null;
   created_at: string;
 };
@@ -53,7 +54,7 @@ export async function getShelterPortalData(userId?: string | null) {
   const supabase = createAdminClient();
   const { data: campaignRows, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id, title, goal_amount, current_amount, campaign_status, contract_address, eth_myr_rate, created_at")
+    .select("id, title, goal_amount, current_amount, campaign_status, contract_address, image_url, eth_myr_rate, created_at")
     .eq("shelter_id", userId)
     .order("created_at", { ascending: false });
 

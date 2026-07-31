@@ -654,13 +654,13 @@ export default function ShelterVerificationPage() {
           ) : (
             <>
               <ApplicationStatusChart counts={counts} />
-              <section className="rounded-[1.6rem] border border-orange-100 bg-white p-5 shadow-[0_12px_30px_rgba(97,55,17,0.06)]">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <section className="overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
+                <div className="flex flex-col gap-4 border-b border-orange-100 bg-orange-50/35 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--color-orange)]">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-[var(--color-orange)]">
                       Applications
                     </p>
-                    <h2 className="mt-1 text-2xl font-black">
+                    <h2 className="mt-1 text-base font-black text-stone-950">
                       Shelter application list
                     </h2>
                   </div>
@@ -669,14 +669,14 @@ export default function ShelterVerificationPage() {
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Search shelter or registration ID"
-                      className="min-w-72 rounded-full border border-orange-100 px-4 py-2.5 text-sm font-bold outline-none focus:border-[var(--color-orange)]"
+                      className="min-w-72 rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                     />
                     <select
                       value={filter}
                       onChange={(event) =>
                         setFilter(event.target.value as typeof filter)
                       }
-                      className="rounded-full border border-orange-100 bg-white px-4 py-2.5 text-sm font-black outline-none"
+                      className="rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-orange-400"
                     >
                       <option value="all">All statuses</option>
                       <option value="pending">Pending</option>
@@ -686,10 +686,10 @@ export default function ShelterVerificationPage() {
                   </div>
                 </div>
                 {filtered.length ? (
-                  <div className="mt-5 overflow-x-auto">
+                  <div className="overflow-x-auto">
                     <table className="w-full min-w-[1050px] text-left">
-                      <thead>
-                        <tr className="border-b border-stone-100 text-xs uppercase tracking-wide text-stone-400">
+                      <thead className="border-b border-orange-100 bg-[rgba(var(--color-cream-rgb),0.55)]">
+                        <tr className="text-[11px] uppercase tracking-wider text-stone-500">
                           {[
                             "Shelter",
                             "Registration ID",
@@ -700,28 +700,28 @@ export default function ShelterVerificationPage() {
                             "Reviewed",
                             "Actions",
                           ].map((heading) => (
-                            <th key={heading} className="pb-3 pr-4 font-black">
+                            <th key={heading} className="px-5 py-3 font-black">
                               {heading}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-orange-100">
                         {filtered.map((application) => (
                           <tr
                             key={application.id}
-                            className="border-b border-stone-100 last:border-0"
+                            className="transition hover:bg-orange-50/35"
                           >
-                            <td className="py-4 pr-4 font-black">
+                            <td className="px-5 py-4 font-semibold">
                               {application.shelter_name}
                             </td>
-                            <td className="py-4 pr-4 text-sm font-bold">
+                            <td className="px-5 py-4 text-sm font-medium">
                               {application.registration_id}
                             </td>
-                            <td className="py-4 pr-4 text-sm font-bold">
+                            <td className="px-5 py-4 text-sm font-medium">
                               {application.contact_phone}
                             </td>
-                            <td className="max-w-40 py-4 pr-4 text-sm font-bold">
+                            <td className="max-w-40 px-5 py-4 text-sm font-medium">
                               {application.website_url ? (
                                 <a
                                   href={application.website_url}
@@ -736,16 +736,16 @@ export default function ShelterVerificationPage() {
                                 "—"
                               )}
                             </td>
-                            <td className="py-4 pr-4">
+                            <td className="px-5 py-4">
                               <StatusBadge status={application.status} />
                             </td>
-                            <td className="py-4 pr-4 text-xs font-bold text-stone-500">
+                            <td className="px-5 py-4 text-xs font-medium text-stone-500">
                               {formatDate(application.created_at)}
                             </td>
-                            <td className="py-4 pr-4 text-xs font-bold text-stone-500">
+                            <td className="px-5 py-4 text-xs font-medium text-stone-500">
                               {formatDate(application.reviewed_at)}
                             </td>
-                            <td className="py-4">
+                            <td className="px-5 py-4">
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"

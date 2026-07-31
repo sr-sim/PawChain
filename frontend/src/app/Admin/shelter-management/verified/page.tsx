@@ -25,6 +25,8 @@ type Shelter = {
   deactivation_reason: string | null;
   deactivated_at: string | null;
   deactivated_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
   reviewed_at: string | null;
   role_nft_active: boolean;
   active_campaigns: DeactivationCampaign[];
@@ -64,7 +66,7 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-stone-950/45 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-2xl">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-[1.6rem] border border-orange-100 bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-black">{title}</h2>
           <button
@@ -543,13 +545,13 @@ export default function VerifiedSheltersPage() {
             </div>
           ) : (
             <>
-              <section className="rounded-[1.6rem] border border-orange-100 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <section className="overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white shadow-[0_14px_38px_rgba(97,55,17,0.07)]">
+                <div className="flex flex-col gap-4 border-b border-orange-100 bg-orange-50/35 p-4 sm:p-5 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">
+                    <p className="text-[11px] font-black uppercase tracking-wider text-[var(--color-orange)]">
                       Directory
                     </p>
-                    <h2 className="mt-1 text-2xl font-black">
+                    <h2 className="mt-1 text-base font-black text-stone-950">
                       Shelter accounts
                     </h2>
                   </div>
@@ -558,14 +560,14 @@ export default function VerifiedSheltersPage() {
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="Search shelter, ID, or wallet"
-                      className="min-w-72 rounded-full border border-orange-100 px-4 py-2.5 text-sm font-bold outline-none"
+                      className="min-w-72 rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                     />
                     <select
                       value={filter}
                       onChange={(event) =>
                         setFilter(event.target.value as typeof filter)
                       }
-                      className="rounded-full border border-orange-100 bg-white px-4 py-2.5 text-sm font-black"
+                      className="rounded-xl border border-orange-100 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-orange-400"
                     >
                       <option value="all">All accounts</option>
                       <option value="active">Active</option>
@@ -574,42 +576,63 @@ export default function VerifiedSheltersPage() {
                   </div>
                 </div>
                 {filtered.length ? (
-                  <div className="mt-5 overflow-x-auto">
-                    <table className="w-full min-w-[1000px] text-left">
-                      <thead>
-                        <tr className="border-b border-stone-100 text-xs uppercase text-stone-400">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1120px] text-left">
+                      <colgroup>
+                        <col className="w-[18%]" />
+                        <col className="w-[18%]" />
+                        <col className="w-[19%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[14%]" />
+                      </colgroup>
+                      <thead className="border-b border-orange-100 bg-[rgba(var(--color-cream-rgb),0.55)]">
+                        <tr className="text-[11px] uppercase tracking-wider text-stone-500">
                           {[
                             "Shelter",
+                            "Contact",
                             "Wallet",
                             "Account",
                             "RoleNFT",
-                            "Verified",
+                            "Active campaigns",
                             "Actions",
                           ].map((item) => (
-                            <th key={item} className="pb-3 pr-4 font-black">
+                            <th
+                              key={item}
+                              className={`py-3 font-black ${item === "Active campaigns" || item === "Actions" ? "px-3" : "px-5"}`}
+                            >
                               {item}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-orange-100">
                         {filtered.map((shelter) => (
                           <tr
                             key={shelter.profile_id}
-                            className="border-b border-stone-100 last:border-0"
+                            className="transition hover:bg-orange-50/35"
                           >
-                            <td className="py-4 pr-4">
-                              <p className="font-black">
+                            <td className="px-5 py-4">
+                              <p className="font-semibold">
                                 {shelter.shelter_name}
                               </p>
-                              <p className="text-xs font-bold text-stone-400">
+                              <p className="text-xs font-medium text-stone-400">
                                 {shelter.registration_id}
                               </p>
                             </td>
-                            <td className="max-w-56 truncate py-4 pr-4 font-mono text-xs">
+                            <td className="px-5 py-4">
+                              <p className="max-w-56 truncate text-sm font-medium text-stone-700">
+                                {shelter.email || "—"}
+                              </p>
+                              <p className="mt-1 text-xs font-medium text-stone-500">
+                                {shelter.contact_phone || "—"}
+                              </p>
+                            </td>
+                            <td className="max-w-56 truncate px-5 py-4 font-mono text-xs text-stone-600">
                               {shelter.wallet_address || "Missing wallet"}
                             </td>
-                            <td className="py-4 pr-4">
+                            <td className="px-5 py-4">
                               <span
                                 className={`rounded-full px-3 py-1 text-xs font-black capitalize ${shelter.account_status === "active" ? "bg-orange-50 text-[var(--color-orange)]" : isDeactivationPending(shelter) ? "bg-amber-100 text-amber-800" : "bg-stone-100 text-stone-600"}`}
                               >
@@ -618,19 +641,34 @@ export default function VerifiedSheltersPage() {
                                   : shelter.account_status}
                               </span>
                             </td>
-                            <td className="py-4 pr-4 text-sm font-black">
+                            <td className="px-5 py-4 text-sm font-semibold">
                               {shelter.role_nft_active ? "Active" : "Not found"}
                             </td>
-                            <td className="py-4 pr-4 text-xs font-bold text-stone-500">
-                              {date(shelter.reviewed_at)}
+                            <td className="px-3 py-4">
+                              <span className="rounded-md border border-orange-100 bg-orange-50 px-2 py-1 text-xs font-bold text-orange-700">
+                                {shelter.active_campaigns.length}
+                              </span>
                             </td>
-                            <td className="py-4">
-                              <div className="flex gap-2">
+                            <td className="px-3 py-4">
+                              <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => setDetails(shelter)}
-                                  className="rounded-full border border-orange-100 px-3 py-2 text-xs font-black text-[var(--color-orange)]"
+                                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3.5 py-2 text-xs font-bold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:ring-offset-2"
                                 >
-                                  Details
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 text-stone-500"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden="true"
+                                  >
+                                    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                                    <circle cx="12" cy="12" r="2.5" />
+                                  </svg>
+                                  View details
                                 </button>
                                 <button
                                   disabled={!shelter.wallet_address}
@@ -654,7 +692,7 @@ export default function VerifiedSheltersPage() {
                     </table>
                   </div>
                 ) : (
-                  <div className="mt-5 rounded-2xl border border-dashed border-orange-200 p-10 text-center font-bold text-stone-500">
+                  <div className="p-12 text-center text-sm font-semibold text-stone-500">
                     No verified shelters match this view.
                   </div>
                 )}
@@ -671,8 +709,13 @@ export default function VerifiedSheltersPage() {
               ["Email", details.email],
               ["Phone", details.contact_phone],
               ["Wallet", details.wallet_address || "Missing"],
+              ["Website", details.website_url || "—"],
+              ["Shelter address", details.shelter_address || "—"],
               ["Account status", details.account_status],
               ["RoleNFT", details.role_nft_active ? "Active" : "Not found"],
+              ["Verified at", date(details.reviewed_at)],
+              ["Profile created", date(details.created_at)],
+              ["Profile updated", date(details.updated_at)],
               ["Deactivated at", date(details.deactivated_at)],
               ["Deactivated by", details.deactivated_by || "—"],
             ].map(([label, value]) => (
@@ -683,6 +726,44 @@ export default function VerifiedSheltersPage() {
                 <p className="mt-1 break-words text-sm font-bold">{value}</p>
               </div>
             ))}
+          </div>
+          <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/35 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-[var(--color-orange)]">
+              Organization description
+            </p>
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-stone-700">
+              {details.organization_description ||
+                "No organization description provided."}
+            </p>
+          </div>
+          <div className="mt-4 rounded-xl border border-orange-100 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+                Active campaigns
+              </p>
+              <span className="rounded-md bg-orange-50 px-2 py-1 text-xs font-black text-[var(--color-orange)]">
+                {details.active_campaigns.length}
+              </span>
+            </div>
+            {details.active_campaigns.length ? (
+              <div className="mt-3 divide-y divide-orange-100">
+                {details.active_campaigns.map((campaign) => (
+                  <div key={campaign.id} className="py-3 first:pt-0 last:pb-0">
+                    <p className="font-bold text-stone-900">
+                      {campaign.title}
+                    </p>
+                    <p className="mt-1 break-all font-mono text-xs text-stone-500">
+                      {campaign.contract_address ||
+                        "Contract address not available"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-sm font-medium text-stone-500">
+                No active campaigns.
+              </p>
+            )}
           </div>
           {details.deactivation_reason ? (
             <div className="mt-4 rounded-xl bg-orange-50 p-4">

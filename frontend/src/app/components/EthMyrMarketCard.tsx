@@ -1,5 +1,7 @@
 "use client";
 
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
+
 export type EthMyrHistoryPoint = {
   timestamp: number;
   rate: number;
@@ -122,5 +124,20 @@ export function EthMyrMarketCard({
         <RateChart history={history} />
       </div>
     </section>
+  );
+}
+
+export function LiveEthMyrMarketCard({ className = "" }: { className?: string }) {
+  const { rate, source, updatedAt, loading, history } = useEthMyrRate();
+
+  return (
+    <EthMyrMarketCard
+      rate={rate}
+      source={source}
+      updatedAt={updatedAt}
+      loading={loading}
+      history={history}
+      className={className}
+    />
   );
 }

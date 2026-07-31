@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
-import { CampaignCard } from "@/app/components/campaigns/CampaignCard";
+import { ShelterCampaignCard } from "@/app/Shelter/components/ShelterCampaignCard";
 import type { Campaign, CampaignStatus } from "@/app/components/campaigns/campaign-types";
 
 type FilterKey = "all" | CampaignStatus;
@@ -90,9 +90,9 @@ export default function CampaignsPage() {
         {isLoading ? <div className="mt-6 rounded-2xl border border-orange-100 p-10 text-center text-sm font-black text-stone-500">Loading campaigns...</div> : null}
         {!isLoading && !filtered.length ? <div className="mt-6 rounded-2xl border border-dashed border-orange-200 p-10 text-center"><p className="font-black text-stone-950">No campaigns found</p><p className="mt-2 text-sm font-semibold text-stone-500">Choose another status or create a new campaign.</p></div> : null}
 
-        <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 grid auto-rows-fr items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((campaign) => (
-            <CampaignCard
+            <ShelterCampaignCard
               key={campaign.id}
               campaign={campaign}
               milestoneCount={campaign.milestoneCount}
