@@ -651,7 +651,7 @@ function CheckingWalletCard({ address }: { address?: string }) {
         </p>
       ) : null}
       <div className="mx-auto mt-6 h-2 max-w-sm overflow-hidden rounded-full bg-orange-100">
-        <div className="animate-shimmer h-full w-2/3 rounded-full bg-gradient-to-r from-[var(--color-orange)] via-[var(--color-gold)] to-[var(--color-orange)]" />
+        <div className="h-full w-full origin-left animate-[disconnect-progress_3.5s_ease-out_forwards] rounded-full bg-gradient-to-r from-[var(--color-orange)] via-[var(--color-gold)] to-[var(--color-orange)]" />
       </div>
     </div>
   );

@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export const walletDisconnectEvent = "pawchain:wallet-disconnect-start";
 
 export function DisconnectOverlayHost() {
-  const router = useRouter();
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   useEffect(() => {
@@ -25,11 +23,10 @@ export function DisconnectOverlayHost() {
       }
 
       redirectTimer = window.setTimeout(() => {
-        router.replace("/");
+        window.location.replace("/");
       }, 3500);
 
       hideTimer = window.setTimeout(() => {
-        router.refresh();
         setIsDisconnecting(false);
       }, 4300);
     }
@@ -47,7 +44,7 @@ export function DisconnectOverlayHost() {
         window.clearTimeout(hideTimer);
       }
     };
-  }, [router]);
+  }, []);
 
   if (!isDisconnecting) {
     return null;

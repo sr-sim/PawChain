@@ -12,6 +12,7 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type DonorCampaign = Campaign & {
   imageUrl?: string | null;
@@ -42,6 +43,13 @@ type MilestoneDisplay = {
 const urgencies = ["All", "Critical", "High", "Medium"];
 const sortOptions = ["Most urgent", "Deadline soon", "Most progress", "Most donors"];
 const tabs = ["Campaigns", "Completed", "Closed", "Shelters", "Saved"] as const;
+const tabDesign: Record<(typeof tabs)[number], { icon: string; active: string; inactive: string }> = {
+  Campaigns: { icon: "M4 19V9l8-5 8 5v10H4Zm5 0v-6h6v6", active: "border-orange-400 bg-orange-100 text-orange-800 shadow-orange-100", inactive: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" },
+  Completed: { icon: "M5 12.5 10 17l9-10", active: "border-emerald-400 bg-emerald-100 text-emerald-800 shadow-emerald-100", inactive: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" },
+  Closed: { icon: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z", active: "border-stone-500 bg-stone-200 text-stone-800 shadow-stone-100", inactive: "border-stone-300 bg-stone-100 text-stone-700 hover:bg-stone-200" },
+  Shelters: { icon: "M3 11 12 4l9 7M5 10v10h14V10M9 20v-6h6v6", active: "border-violet-400 bg-violet-100 text-violet-800 shadow-violet-100", inactive: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" },
+  Saved: { icon: "M20.8 5.8a5.5 5.5 0 0 0-7.8 0L12 6.8l-1-1a5.5 5.5 0 0 0-7.8 7.8L12 22l8.8-8.4a5.5 5.5 0 0 0 0-7.8Z", active: "border-rose-400 bg-rose-100 text-rose-800 shadow-rose-100", inactive: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" },
+};
 const urgencyRank: Record<string, number> = { Critical: 0, High: 1, Medium: 2 };
 
 function getUrgencyStyle(urgency: string) {
@@ -82,6 +90,10 @@ function formatEth(value: number) {
     minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
+}
+
+function formatApproxMyr(value: number, isLive: boolean) {
+  return `${isLive ? "Approx. live" : "Approx."} ${formatMyr(value)}`;
 }
 
 function getMilestoneAmount(goalAmount: number | undefined, percentage: number) {
@@ -279,6 +291,7 @@ function SelectField({
 }
 
 export default function DonorDiscoverPage() {
+  const { rate: ethMyrRate, source: ethMyrRateSource } = useEthMyrRate();
   const searchParams = useSearchParams();
   const walletAddress = searchParams.get("walletAddress") ?? "";
   const [campaigns, setCampaigns] = useState<DonorCampaign[]>([]);
@@ -533,17 +546,16 @@ export default function DonorDiscoverPage() {
       return;
     }
 
-    const scrollY = window.scrollY;
     const originalOverflow = document.body.style.overflow;
-    const originalPosition = document.body.style.position;
-    const originalTop = document.body.style.top;
-    const originalWidth = document.body.style.width;
+    const originalPaddingRight = document.body.style.paddingRight;
     const originalHtmlOverflow = document.documentElement.style.overflow;
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
 
     document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
     document.documentElement.style.overflow = "hidden";
 
     window.requestAnimationFrame(() => {
@@ -560,11 +572,8 @@ export default function DonorDiscoverPage() {
     return () => {
       window.clearTimeout(resetTimer);
       document.body.style.overflow = originalOverflow;
-      document.body.style.position = originalPosition;
-      document.body.style.top = originalTop;
-      document.body.style.width = originalWidth;
+      document.body.style.paddingRight = originalPaddingRight;
       document.documentElement.style.overflow = originalHtmlOverflow;
-      window.scrollTo(0, scrollY);
     };
   }, [selectedCampaign]);
   const activeCampaigns = useMemo(
@@ -702,7 +711,12 @@ export default function DonorDiscoverPage() {
         </div>
 
         <div className="mt-5 border-t border-orange-100 pt-5">
-        <div className="mb-4 flex justify-end">
+        <div className="rounded-2xl border border-orange-100 bg-[linear-gradient(120deg,rgba(255,247,237,0.8),rgba(255,255,255,0.98))] p-4">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Refine results</p>
+            <p className="mt-1 text-xs font-semibold text-stone-500">Search, prioritize urgency, or change the result order.</p>
+          </div>
           {hasActiveFilters ? (
             <button
               type="button"
@@ -730,7 +744,7 @@ export default function DonorDiscoverPage() {
             </button>
           ) : null}
         </div>
-        <div className="grid gap-4 xl:grid-cols-[1.4fr_0.75fr_0.75fr_0.75fr]">
+        <div className="grid gap-4 md:grid-cols-[1.5fr_0.75fr_0.75fr] md:items-end">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
               Search shelters or campaigns
@@ -772,6 +786,31 @@ export default function DonorDiscoverPage() {
             onChange={setSortBy}
           />
         </div>
+        <div className="mt-4 border-t border-orange-100 pt-4">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((tab) => {
+              const selected = activeTab === tab;
+              const design = tabDesign[tab];
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  suppressHydrationWarning
+                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-black shadow-sm transition hover:-translate-y-0.5 ${selected ? `${design.active} ring-2 ring-current/10` : design.inactive}`}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden="true">
+                    <path d={design.icon} />
+                  </svg>
+                  <span>{tab}</span>
+                  <span className="rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] text-current">
+                    {tabCounts[tab]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {isLoadingCampaigns || campaignLoadError || savedLoadError ? (
           <div className="mt-4 rounded-xl border border-orange-100 bg-orange-50/35 px-3 py-2 text-xs font-semibold text-stone-500">
             {isLoadingCampaigns
@@ -781,26 +820,6 @@ export default function DonorDiscoverPage() {
         ) : null}
         </div>
         </div>
-      </section>
-
-      <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              suppressHydrationWarning
-              className={[
-                "rounded-full border px-4 py-2 text-sm font-black transition",
-                activeTab === tab
-                  ? "border-[var(--color-orange)] bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200/70"
-                  : "border-orange-100 bg-orange-50/60 text-stone-700 hover:bg-orange-100",
-              ].join(" ")}
-            >
-              {tab} ({tabCounts[tab]})
-            </button>
-          ))}
         </div>
       </section>
 
@@ -918,19 +937,20 @@ export default function DonorDiscoverPage() {
                 <div className="group/info relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-100 bg-white px-3 pb-2 pt-4 transition-colors group-hover/card:border-orange-200">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="line-clamp-2 text-base font-black leading-5 text-stone-950">
+                      <h3 className="line-clamp-2 min-h-10 text-base font-black leading-5 text-stone-950">
                         {campaign.title}
                       </h3>
-                      <p className="mt-1 flex min-w-0 items-center gap-1.5 text-xs font-semibold text-[var(--color-orange)]">
+                      <Link
+                        href={`/Donor/shelters/${campaign.shelterId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        className="mt-1 inline-flex max-w-full items-center gap-1.5 text-xs font-black text-[var(--color-orange)] transition hover:text-orange-700 hover:underline"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+                          <path d="M3 11 12 4l9 7M5 10v10h14V10M9 20v-6h6v6" />
+                        </svg>
                         <span className="truncate">{campaign.shelter}</span>
-                        <span
-                          className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-orange-100 text-[0.6rem] text-[var(--color-orange)] ring-1 ring-orange-200"
-                          title="Verified shelter"
-                          aria-label="Verified shelter"
-                        >
-                          ✓
-                        </span>
-                      </p>
+                      </Link>
                     </div>
                     <span
                       className={[
@@ -942,29 +962,67 @@ export default function DonorDiscoverPage() {
                     </span>
                   </div>
 
-                  <p className="mt-2 line-clamp-2 text-sm leading-5 text-stone-600">
+                  <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">
                     {campaign.story}
                   </p>
 
                   <div className="mt-3">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="text-lg font-black text-stone-950">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2.5">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-700">Raised</p>
+                        <p className="mt-1 text-base font-black text-stone-950">
                           {formatEth(campaign.onChainTotalRaisedEth ?? 0)}
                         </p>
-                        <p className="text-xs font-semibold text-stone-500">
-                          raised of {campaign.goal}
+                        <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
+                          {formatApproxMyr(
+                            (campaign.onChainTotalRaisedEth ?? 0) * ethMyrRate,
+                            ethMyrRateSource === "coingecko",
+                          )}
                         </p>
                       </div>
+                      <div className="rounded-xl border border-violet-100 bg-violet-50/40 px-3 py-2.5 text-right">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">Goal</p>
+                        <p className="mt-1 text-base font-black text-stone-950">
+                          {typeof campaign.onChainGoalEth === "number"
+                            ? formatEth(campaign.onChainGoalEth)
+                            : campaign.goal}
+                        </p>
+                        {typeof campaign.onChainGoalEth === "number" ? (
+                          <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
+                            {formatApproxMyr(
+                              campaign.onChainGoalEth * ethMyrRate,
+                              ethMyrRateSource === "coingecko",
+                            )}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">Campaign funding</p>
                       <p className="text-sm font-black text-[var(--color-orange)]">
                         {campaign.raised}%
                       </p>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100">
+                    <div className="relative mt-3 h-2 rounded-full bg-orange-100">
                       <div
                         className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
-                        style={{ width: `${campaign.raised}%` }}
+                        style={{ width: `${Math.min(100, Math.max(0, campaign.raised))}%` }}
                       />
+                      {campaign.raised > 0 ? (
+                        <span
+                          className="absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[var(--color-orange)] text-white shadow-[0_3px_10px_rgba(249,115,22,0.35)] transition-[left] duration-700"
+                          style={{ left: `${Math.min(98, Math.max(2, campaign.raised))}%` }}
+                          title={`${campaign.raised}% of the campaign goal reached`}
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
+                            <circle cx="7.5" cy="7" r="2.2" />
+                            <circle cx="16.5" cy="7" r="2.2" />
+                            <circle cx="4.8" cy="12" r="1.8" />
+                            <circle cx="19.2" cy="12" r="1.8" />
+                            <path d="M12 10.2c-3.4 0-6 2.8-6 5.5 0 2.1 1.7 3.5 3.7 3.5.9 0 1.6-.4 2.3-.4s1.4.4 2.3.4c2 0 3.7-1.4 3.7-3.5 0-2.7-2.6-5.5-6-5.5Z" />
+                          </svg>
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -985,20 +1043,50 @@ export default function DonorDiscoverPage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                  <div className="mt-3 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/35 p-2.5">
                     {campaign.contractAddress ? (
-                      <>
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                          Blockchain Verified
-                        </span>
-                        <span className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 font-mono text-[var(--color-orange)]">
-                          {shortAddress(campaign.contractAddress)}
-                        </span>
-                      </>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a
+                          href={getAddressExplorerUrl(campaign.contractAddress)}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          title="View campaign funds and contract activity"
+                          className="min-w-0 rounded-lg border border-violet-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-violet-400 hover:bg-violet-50"
+                        >
+                          <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-violet-700">Contract address</span>
+                          <span className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] font-black text-stone-800">
+                            <span className="truncate">{shortAddress(campaign.contractAddress)}</span>
+                            <span className="text-violet-600" aria-hidden="true">↗</span>
+                          </span>
+                        </a>
+                        {campaign.deploymentTxHash && getTransactionExplorerUrl(campaign.deploymentTxHash) ? (
+                          <a
+                            href={getTransactionExplorerUrl(campaign.deploymentTxHash)}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            title={`View when this contract was created: ${shortHash(campaign.deploymentTxHash)}`}
+                            className="min-w-0 rounded-lg border border-orange-200 bg-white px-2.5 py-2 shadow-sm transition hover:border-orange-400 hover:bg-orange-50"
+                          >
+                            <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-orange-700">Deployment TX</span>
+                            <span className="mt-1 flex items-center justify-between gap-1 font-mono text-[10px] font-black text-stone-800">
+                              <span className="truncate">{shortAddress(campaign.deploymentTxHash)}</span>
+                              <span className="text-orange-600" aria-hidden="true">↗</span>
+                            </span>
+                          </a>
+                        ) : (
+                          <div className="rounded-lg border border-stone-200 bg-white px-2.5 py-2">
+                            <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-stone-500">Deployment TX</span>
+                            <span className="mt-1 block text-[10px] font-semibold text-stone-400">Unavailable</span>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-stone-500">
-                        Contract pending
-                      </span>
+                      <div className="flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-stone-500">
+                        <span className="h-1.5 w-1.5 rounded-full bg-stone-400" />
+                        Contract deployment pending
+                      </div>
                     )}
                   </div>
 

@@ -155,11 +155,6 @@ function MetricCard({
       <p className="mt-1.5 text-xl font-black tracking-tight text-stone-950">{value}</p>
       <div className="mt-0.5 flex flex-wrap items-center gap-2">
         <p className="text-[11px] font-medium text-stone-400">{secondary}</p>
-        {change !== undefined ? (
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${change >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-            {change >= 0 ? "↑" : "↓"} {percent(Math.abs(change))} vs previous
-          </span>
-        ) : null}
       </div>
     </article>
   );
@@ -426,7 +421,7 @@ export default function AdminAnalyticsPage() {
                     </div>
                   </div>
                 </Panel>
-                <Panel title="Blockchain health" description="Stored transaction evidence across PawChain’s on-chain actions." action={<Link href="/Admin/transactions" className="text-xs font-bold text-orange-600 hover:underline">View transactions ↗</Link>}>
+                <Panel title="Verified transaction activity" description="Confirmed donations, fund releases, and refunds from the same on-chain records as Financial Transaction Records." action={<Link href="/Admin/transactions" className="text-xs font-bold text-orange-600 hover:underline">View transactions ↗</Link>}>
                   <Donut center={String(data.blockchainHealth.confirmed + data.blockchainHealth.pending + data.blockchainHealth.failed)} data={[
                     { label: "Confirmed", value: data.blockchainHealth.confirmed, color: "#10b981" },
                     { label: "Pending", value: data.blockchainHealth.pending, color: "#f59e0b" },

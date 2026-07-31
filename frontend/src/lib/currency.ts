@@ -51,7 +51,7 @@ export async function getLatestEthMyrRate(): Promise<EthMyrRateResult> {
         accept: "application/json",
       },
       next: {
-        revalidate: 60,
+        revalidate: 30,
       },
     });
 

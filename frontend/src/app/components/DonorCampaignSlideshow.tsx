@@ -93,12 +93,12 @@ export function DonorCampaignSlideshow({
                   <img
                     src={campaign.imageUrl}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover opacity-45 transition duration-700 group-hover:scale-[1.02]"
+                    className="absolute inset-0 h-full w-full object-cover opacity-80 transition duration-700 group-hover:scale-[1.02]"
                   />
                 ) : (
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_75%_30%,rgba(255,138,0,0.34),transparent_38%),linear-gradient(120deg,#1c1917,#292524)]" />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-r from-stone-950/95 via-stone-950/74 to-stone-950/20" />
+                <div className="absolute inset-0 bg-gradient-to-r from-stone-950/88 via-stone-950/52 to-stone-950/5" />
                 <div className="relative flex min-h-[21rem] max-w-4xl flex-col justify-center px-5 pb-14 pt-5 sm:px-8">
                   <div className="flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em]">
                     <span className="text-orange-300">

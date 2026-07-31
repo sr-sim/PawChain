@@ -23,6 +23,7 @@ import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
 import { demoEthMyrRate, getPawChainId } from "@/lib/campaign-blockchain";
+import { isWalletRejection } from "@/lib/wallet-errors";
 
 type DonorCampaign = Campaign & {
   imageUrl?: string | null;
@@ -90,8 +91,8 @@ function formatMyr(value: number) {
   }).format(value);
 }
 
-function formatLiveMyr(value: number) {
-  return `Approx. live MYR ${value.toLocaleString("en-MY", {
+function formatApproxMyr(value: number) {
+  return `Approx. MYR ${value.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -294,6 +295,7 @@ export default function DonorDonatePage() {
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [selectedId, setSelectedId] = useState(initialCampaign ?? "");
   const [amount, setAmount] = useState("100");
+  const [exactDonationWei, setExactDonationWei] = useState<bigint | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [donationError, setDonationError] = useState("");
@@ -419,9 +421,11 @@ export default function DonorDonatePage() {
     }
 
     loadEthMyrRate();
+    const refreshTimer = window.setInterval(loadEthMyrRate, 30_000);
 
     return () => {
       isMounted = false;
+      window.clearInterval(refreshTimer);
     };
   }, []);
 
@@ -584,6 +588,9 @@ export default function DonorDonatePage() {
   const selectedCampaign =
     donationReadyCampaigns.find((campaign) => campaign.id === selectedId) ??
     donationReadyCampaigns[0];
+  useEffect(() => {
+    setExactDonationWei(null);
+  }, [selectedCampaign?.id]);
   const selectedContractAddress =
     selectedCampaign?.contractAddress &&
     isAddress(selectedCampaign.contractAddress)
@@ -659,7 +666,9 @@ export default function DonorDonatePage() {
       ? "Live rate"
       : rateSource === "fallback"
         ? "Estimated rate"
-        : "Campaign rate";
+        : selectedCampaign?.ethMyrRate
+          ? "Campaign rate"
+          : "Estimated rate";
   const rateTimestamp = rateUpdatedAt
     ? new Intl.DateTimeFormat("en-MY", {
         dateStyle: "medium",
@@ -673,15 +682,29 @@ export default function DonorDonatePage() {
     !Number.isFinite(parsedAmount) ||
     parsedAmount <= 0;
   const numericAmount = hasInvalidAmount ? 0 : parsedAmount;
-  const myrEstimate = numericAmount;
-  const donationEthAmount =
+  const convertedDonationEthAmount =
     ethToMyrRate > 0 && Number.isFinite(ethToMyrRate)
       ? numericAmount / ethToMyrRate
       : 0;
-  const donationEthInput =
-    donationEthAmount > 0
-      ? donationEthAmount.toFixed(18).replace(/\.?0+$/, "")
+  const convertedDonationEthInput =
+    convertedDonationEthAmount > 0
+      ? convertedDonationEthAmount.toFixed(18).replace(/\.?0+$/, "")
       : "0";
+  const donationEthInput =
+    exactDonationWei !== null
+      ? formatEther(exactDonationWei)
+      : convertedDonationEthInput;
+  const parsedDonationWei = hasInvalidAmount
+    ? null
+    : exactDonationWei ?? parseEthInput(donationEthInput);
+  const donationEthAmount =
+    parsedDonationWei !== null
+      ? Number(formatEther(parsedDonationWei))
+      : convertedDonationEthAmount;
+  const myrEstimate =
+    exactDonationWei !== null
+      ? donationEthAmount * ethToMyrRate
+      : numericAmount;
   const walletBalanceEth = walletBalance
     ? Number(formatEther(walletBalance.value))
     : null;
@@ -787,11 +810,10 @@ export default function DonorDonatePage() {
   const currentStageEthDisplay = formatEthText(currentStageEth);
   const donationEthDisplay = formatEthText(donationEthAmount);
   const isOpenForFunding =
+    hasOnChainMilestoneData &&
     Boolean(currentStage) &&
     currentStageRemaining > 0 &&
-    (!hasOnChainMilestoneData ||
-      currentStage?.status === "Active" ||
-      currentStage?.status === "Approved");
+    currentStage?.status === "Active";
   const milestoneStatusSimple = currentStage
     ? isOpenForFunding
       ? "Open for funding"
@@ -804,7 +826,9 @@ export default function DonorDonatePage() {
             : currentStage.status
     : "No active stage";
   const milestoneGateMessage = currentStage
-    ? currentStageRemaining <= 0
+    ? !hasOnChainMilestoneData
+      ? "Confirming the current milestone limit on-chain. Please wait a moment."
+      : currentStageRemaining <= 0
       ? getMilestoneGateMessage(
           currentStage.status,
           nextMilestone?.title ?? "This milestone",
@@ -816,9 +840,6 @@ export default function DonorDonatePage() {
           )
         : ""
     : "This campaign has reached all milestone targets.";
-  const parsedDonationWei = hasInvalidAmount
-    ? null
-    : parseEthInput(donationEthInput);
   const exceedsCurrentStage =
     !hasInvalidAmount &&
     Boolean(currentStage) &&
@@ -918,15 +939,20 @@ export default function DonorDonatePage() {
       return;
     }
 
-    let donationValue: bigint;
-    try {
-      donationValue = parseEther(donationEthInput);
-    } catch {
+    const donationValue = parsedDonationWei;
+    if (donationValue === null) {
       setDonationError("Please enter a valid MYR amount.");
       return;
     }
 
     setIsProcessing(true);
+    setBlockchainPopup({
+      status: "pending",
+      title: "Confirm donation in MetaMask",
+      message:
+        "Review the donation in MetaMask. PawChain will continue after you approve the transaction.",
+      txHash: "",
+    });
     try {
       const txHash = await writeContractAsync({
         address: selectedCampaign.contractAddress as `0x${string}`,
@@ -975,8 +1001,11 @@ export default function DonorDonatePage() {
         txHash,
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to confirm donation.";
+      const message = isWalletRejection(error)
+        ? "The donation transaction was cancelled in MetaMask. No funds were transferred."
+        : error instanceof Error
+          ? error.message
+          : "Unable to confirm donation.";
       setDonationError(message);
       setBlockchainPopup({
         status: "failed",
@@ -1102,7 +1131,9 @@ export default function DonorDonatePage() {
                   : selectorStage
                     ? selectorStage.remainingAmount > 0
                     : false;
-                const selectorDisplayProgress = clampPercentage(campaign.raised);
+                const selectorDisplayProgress = clampPercentage(
+                  fundingSnapshot?.progress ?? selectorStageProgress,
+                );
                 const selectorDisplayRemainingEth =
                   fundingSnapshot?.remainingEth ?? selectorRemainingEth;
                 const selectorDisplayRemainingMyr =
@@ -1117,7 +1148,10 @@ export default function DonorDonatePage() {
                   <button
                     key={campaign.id}
                     type="button"
-                    onClick={() => setSelectedId(campaign.id)}
+                    onClick={() => {
+                      setSelectedId(campaign.id);
+                      setExactDonationWei(null);
+                    }}
                     suppressHydrationWarning
                     className={[
                       "grid w-full gap-2.5 rounded-xl border p-2.5 text-left transition sm:grid-cols-[5.25rem_1fr]",
@@ -1183,7 +1217,7 @@ export default function DonorDonatePage() {
                             </span>
                             <span className="shrink-0 text-stone-400">
                               {selectorCanAccept
-                                ? formatLiveMyr(selectorDisplayRemainingMyr)
+                                ? formatApproxMyr(selectorDisplayRemainingMyr)
                                 : selectorDisplayStatus === "Withdrawable"
                                   ? "Awaiting withdrawal"
                                   : selectorDisplayStatus}
@@ -1257,7 +1291,7 @@ export default function DonorDonatePage() {
                     {currentStageEthDisplay}
                   </p>
                   <p className="text-xs font-semibold text-stone-500">
-                    {formatLiveMyr(currentStageRemaining)}
+                    {formatApproxMyr(currentStageRemaining)}
                   </p>
                 </div>
               </div>
@@ -1271,12 +1305,7 @@ export default function DonorDonatePage() {
                         0,
                         Math.min(
                           100,
-                          currentStage.cumulativeTarget > 0
-                            ? ((currentStage.cumulativeTarget -
-                                currentStage.remainingAmount) /
-                                currentStage.cumulativeTarget) *
-                                100
-                            : 0,
+                          currentStage.progress,
                         ),
                       )}%`,
                     }}
@@ -1311,7 +1340,7 @@ export default function DonorDonatePage() {
                         {formatEthText(walletBalanceEth)}
                       </p>
                       <p className="text-xs font-semibold text-stone-500">
-                        {formatLiveMyr(walletBalanceMyr ?? 0)}
+                        {formatApproxMyr(walletBalanceMyr ?? 0)}
                       </p>
                     </>
                   ) : (
@@ -1344,7 +1373,10 @@ export default function DonorDonatePage() {
                   <div className="mt-2 flex items-end justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50/25 px-3 py-2.5 focus-within:border-[var(--color-orange)] focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
                     <input
                       value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
+                      onChange={(event) => {
+                        setAmount(event.target.value);
+                        setExactDonationWei(null);
+                      }}
                       inputMode="decimal"
                       suppressHydrationWarning
                       className="min-w-0 flex-1 border-0 bg-transparent text-3xl font-black text-stone-950 outline-none placeholder:text-stone-300"
@@ -1381,7 +1413,7 @@ export default function DonorDonatePage() {
                 Quick local presets
               </p>
               <p className="text-xs font-semibold text-stone-500">
-                Live rate: 1 ETH = {formatMyr(ethToMyrRate)}
+                {rateLabel}: 1 ETH = {formatMyr(ethToMyrRate)}
               </p>
             </div>
             <div className="mt-2 grid grid-cols-4 gap-2">
@@ -1390,7 +1422,10 @@ export default function DonorDonatePage() {
                   <button
                     key={quickAmount}
                     type="button"
-                    onClick={() => setAmount(String(quickAmount))}
+                    onClick={() => {
+                      setAmount(String(quickAmount));
+                      setExactDonationWei(null);
+                    }}
                     suppressHydrationWarning
                     className={[
                       "rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5",
@@ -1412,7 +1447,15 @@ export default function DonorDonatePage() {
                 isLoadingOnChainBase ||
                 isLoadingOnChainMilestone
               }
-              onClick={() => setAmount(currentStageMyrInput)}
+              onClick={() => {
+                setAmount(currentStageMyrInput);
+                setExactDonationWei(
+                  currentStage?.remainingWei !== null &&
+                    currentStage?.remainingWei !== undefined
+                    ? currentStage.remainingWei
+                    : null,
+                );
+              }}
               suppressHydrationWarning
               className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--color-orange)] bg-white px-3 py-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-orange-100 disabled:bg-orange-50/40 disabled:opacity-60"
             >
@@ -1433,7 +1476,7 @@ export default function DonorDonatePage() {
                   {currentStageEthDisplay}
                 </span>
                 <span className="block text-xs font-semibold text-stone-500">
-                  {formatLiveMyr(currentStageRemaining)}
+                  {formatApproxMyr(currentStageRemaining)}
                 </span>
               </span>
             </button>
@@ -1465,7 +1508,9 @@ export default function DonorDonatePage() {
                       {donationEthDisplay}
                     </p>
                     <p className="text-sm font-semibold text-stone-500">
-                      {formatLiveMyr(myrEstimate)}
+                      {exactDonationWei !== null
+                        ? formatApproxMyr(myrEstimate)
+                        : formatMyr(myrEstimate)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -1508,10 +1553,17 @@ export default function DonorDonatePage() {
                 </summary>
                 <div className="divide-y divide-orange-100 border-t border-orange-100 text-sm">
                   {[
-                    ["MYR donation", formatLiveMyr(myrEstimate)],
+                    [
+                      exactDonationWei !== null
+                        ? "MYR value at current rate"
+                        : "Entered MYR amount",
+                      exactDonationWei !== null
+                        ? formatApproxMyr(myrEstimate)
+                        : formatMyr(myrEstimate),
+                    ],
                     ["ETH donation", donationEthDisplay],
-                    ["Gas buffer", `${formatEthText(estimatedGasEth)} / ${formatLiveMyr(estimatedGasMyr)}`],
-                    ["Estimated total", `${requiredTotalEthDisplay} / ${formatLiveMyr(requiredTotalMyr)}`],
+                    ["Estimated gas buffer", `${formatEthText(estimatedGasEth)} / ${formatApproxMyr(estimatedGasMyr)}`],
+                    ["Estimated wallet total", `${requiredTotalEthDisplay} / ${formatApproxMyr(requiredTotalMyr)}`],
                     ["Rate", `${rateLabel}: 1 ETH = ${formatMyr(ethToMyrRate)}`],
                   ].map(([label, value]) => (
                     <div
@@ -1529,7 +1581,7 @@ export default function DonorDonatePage() {
                       {rateTimestamp ? <p>Updated {rateTimestamp}</p> : null}
                       {rateLoadError ? (
                         <p className="mt-1 text-amber-700">
-                          Live rate unavailable, using latest estimate.
+                          Live rate unavailable; using the displayed fallback rate.
                         </p>
                       ) : null}
                     </div>

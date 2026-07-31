@@ -10,6 +10,7 @@ import { demoEthMyrRate, getPawChainId } from "@/lib/campaign-blockchain";
 import {
   getTransactionExplorerUrl,
 } from "@/lib/block-explorer";
+import { isWalletRejection } from "@/lib/wallet-errors";
 
 function formatLiveMyr(value: number) {
   return `Approx. live MYR ${value.toLocaleString("en-MY", {
@@ -97,6 +98,13 @@ export function RefundClaimButton({
     setBusy(true);
     setMessage("");
     setMessageType("info");
+    setBlockchainPopup({
+      status: "pending",
+      title: "Confirm refund claim in MetaMask",
+      message:
+        "Review the refund claim in MetaMask. PawChain will continue after you approve the transaction.",
+      txHash: "",
+    });
     try {
       if (chainId !== getPawChainId()) {
         throw new Error(`Switch your wallet to PawChain ${getPawChainId()}.`);
@@ -196,9 +204,8 @@ export function RefundClaimButton({
       const rawMessage =
         error instanceof Error ? error.message : "Refund failed.";
       const friendlyMessage =
-        rawMessage.toLowerCase().includes("user rejected") ||
-        rawMessage.toLowerCase().includes("user denied")
-          ? "Refund was cancelled in MetaMask. No ETH was moved."
+        isWalletRejection(error)
+          ? "The refund transaction was cancelled in MetaMask. No funds were transferred."
           : rawMessage.includes(`PawChain ${getPawChainId()}`)
             ? rawMessage
             : "Refund could not be completed. Please check your wallet and try again.";
