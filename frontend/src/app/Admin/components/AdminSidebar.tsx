@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 const items = [
   ["Dashboard", "/Admin/dashboard"],
   ["Campaign Management", "/Admin/campaign-management"],
-  ["User Management", "/Admin/user-management"],
+  ["Donor Management", "/Admin/user-management"],
   ["Transactions", "/Admin/transactions"],
   ["Analytics & Insights", "/Admin/analytics"],
 ] as const;
@@ -81,7 +81,7 @@ export function AdminSidebar({
             onClick={onNavigate}
             className={`${row} ${pathname === "/Admin/user-management" ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]" : "border-transparent text-slate-700 hover:bg-orange-50"}`}
           >
-            ○ <span>User Management</span>
+            ○ <span>Donor Management</span>
           </Link>
           <Link
             href="/Admin/campaign-management"

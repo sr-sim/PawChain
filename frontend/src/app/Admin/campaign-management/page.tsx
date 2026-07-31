@@ -130,6 +130,33 @@ const campaignProgress = (campaign: Campaign) => {
   const goal = Number(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? 0);
   return goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
 };
+const milestoneFundingState = (
+  milestones: Milestone[],
+  index: number,
+  progress: number,
+) => {
+  const percentages = milestones.map((item) => Number(item.percentage) || 0);
+  const previousTarget = percentages
+    .slice(0, index)
+    .reduce((sum, value) => sum + value, 0);
+  const target = previousTarget + percentages[index];
+  const stagePercentage = percentages[index];
+
+  if (progress >= target) {
+    return { label: "Funded", progress: 100, tone: "complete" as const };
+  }
+  if (progress <= previousTarget || stagePercentage <= 0) {
+    return { label: "Locked", progress: 0, tone: "locked" as const };
+  }
+  return {
+    label: "Funding now",
+    progress: Math.min(
+      100,
+      Math.max(0, ((progress - previousTarget) / stagePercentage) * 100),
+    ),
+    tone: "active" as const,
+  };
+};
 const weiAsEth = (value?: string | null) =>
   `${Number(formatEther(BigInt(value || "0"))).toLocaleString("en-MY", {
     maximumFractionDigits: 6,
@@ -168,7 +195,7 @@ function MilestoneBadge({ item }: { item: Milestone }) {
         : "bg-stone-100 text-stone-600 ring-stone-200";
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-[10px] font-black capitalize ring-1 ${style}`}
+      className={`inline-flex shrink-0 self-start items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black capitalize leading-none ring-1 ${style}`}
     >
       {label}
     </span>
@@ -1092,6 +1119,9 @@ export default function CampaignManagementPage() {
                 <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((campaign) => {
                     const progress = campaignProgress(campaign);
+                    const hasHoverActions =
+                      campaign.campaign_status === "pending_approval" ||
+                      isApproved(campaign.campaign_status);
                     return (
                       <article
                         key={campaign.id}
@@ -1104,9 +1134,9 @@ export default function CampaignManagementPage() {
                             setDetails(campaign);
                           }
                         }}
-                        className="group/card relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-orange-100 bg-transparent shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        className={`group/card relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-orange-100 bg-transparent shadow-sm transition hover:border-orange-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-orange-200 ${hasHoverActions ? "hover:-translate-y-0.5" : ""}`}
                       >
-                        <div className="relative h-40 shrink-0 overflow-hidden bg-[linear-gradient(135deg,var(--color-cream),var(--color-peach))] transition-[height] duration-500 ease-in-out group-hover/card:h-[6.75rem] group-focus-within/card:h-[6.75rem]">
+                        <div className={`relative h-40 shrink-0 overflow-hidden bg-[linear-gradient(135deg,var(--color-cream),var(--color-peach))] ${hasHoverActions ? "transition-[height] duration-500 ease-in-out group-hover/card:h-[6.75rem] group-focus-within/card:h-[6.75rem]" : ""}`}>
                           {campaign.image_url ? (
                             <img
                               src={campaign.image_url}
@@ -1190,22 +1220,13 @@ export default function CampaignManagementPage() {
                                     : "s"}{" "}
                                   claimed
                                 </span>
-                                {campaign.refund_summary.latestRefundTxHash ? (
-                                  <a
-                                    href={`https://sepolia.etherscan.io/tx/${campaign.refund_summary.latestRefundTxHash}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="font-black text-sky-700 underline-offset-4 hover:underline"
-                                  >
-                                    {shortHash(
-                                      campaign.refund_summary.latestRefundTxHash,
-                                    )}
-                                  </a>
-                                ) : null}
+                                <span className="font-semibold text-sky-600">
+                                  View transaction evidence in details
+                                </span>
                               </div>
                             </div>
                           ) : null}
-                          <div className="mt-auto flex max-h-0 translate-y-2 flex-wrap gap-2 overflow-hidden border-t border-transparent pt-0 opacity-0 transition-[max-height,opacity,transform,padding,border-color] duration-500 ease-in-out group-hover/card:max-h-28 group-hover/card:translate-y-0 group-hover/card:border-orange-100 group-hover/card:pt-3 group-hover/card:opacity-100 group-focus-within/card:max-h-28 group-focus-within/card:translate-y-0 group-focus-within/card:border-orange-100 group-focus-within/card:pt-3 group-focus-within/card:opacity-100">
+                          <div className={hasHoverActions ? "mt-auto flex max-h-0 translate-y-2 flex-wrap gap-2 overflow-hidden border-t border-transparent pt-0 opacity-0 transition-[max-height,opacity,transform,padding,border-color] duration-500 ease-in-out group-hover/card:max-h-28 group-hover/card:translate-y-0 group-hover/card:border-orange-100 group-hover/card:pt-3 group-hover/card:opacity-100 group-focus-within/card:max-h-28 group-focus-within/card:translate-y-0 group-focus-within/card:border-orange-100 group-focus-within/card:pt-3 group-focus-within/card:opacity-100" : "hidden"}>
                             {campaign.campaign_status === "pending_approval" ? (
                               <>
                                 <button
@@ -1543,79 +1564,109 @@ export default function CampaignManagementPage() {
       ) : null}
       {details ? (
         <div
-          className="fixed inset-0 z-[80] flex justify-end bg-stone-950/45 backdrop-blur-sm"
+          className="fixed inset-x-0 bottom-0 top-16 z-[900] flex items-stretch justify-center overflow-hidden bg-stone-950/50 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-5"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setDetails(null);
           }}
         >
           <aside
-            className="flex h-full w-full max-w-5xl flex-col bg-[var(--color-cream)] shadow-[-24px_0_80px_rgba(0,0,0,0.2)]"
+            className="animate-fade-up flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-[0_28px_90px_rgba(0,0,0,0.26)]"
             role="dialog"
             aria-modal="true"
             aria-label={details.title}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-orange-100 bg-white px-5 py-4">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-orange-100 bg-white/95 p-4 backdrop-blur-xl sm:p-5">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Campaign details</p>
-                <h2 className="mt-1 text-2xl font-black text-stone-950">{details.title}</h2>
-                <p className="mt-1 text-sm font-semibold text-stone-500">{details.shelter_name || details.shelter_id}</p>
+                <h2 className="mt-1 line-clamp-1 text-xl font-black text-stone-950 sm:text-2xl">{details.title}</h2>
+                <p className="mt-1 text-sm font-semibold text-[var(--color-orange)]">{details.shelter_name || details.shelter_id}</p>
               </div>
               <button type="button" onClick={() => setDetails(null)} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl text-stone-500 transition hover:bg-orange-50 hover:text-[var(--color-orange)]" aria-label="Close campaign details">×</button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-smooth pb-6">
+          <div className="grid items-start gap-5 p-4 sm:p-5 lg:grid-cols-[1fr_1.1fr]">
+            <div className="self-start overflow-hidden rounded-3xl bg-white">
               {details.image_url ? (
-                <img
-                  src={details.image_url}
-                  alt=""
-                  className="h-52 w-full rounded-xl object-cover"
-                />
+                <div className="flex h-72 items-center justify-center bg-orange-50/45 p-3 sm:h-80 lg:h-[29rem]"><img src={details.image_url} alt="" className="max-h-full w-full rounded-xl object-contain" /></div>
               ) : (
-                <div className="h-52 rounded-xl bg-[linear-gradient(135deg,var(--color-cream),var(--color-peach))]" />
+                <div className="h-72 rounded-3xl bg-[linear-gradient(135deg,var(--color-cream),var(--color-peach))] sm:h-80 lg:h-[29rem]" />
               )}
-              <p className="mt-4 text-sm leading-7 text-stone-600">
-                {details.description}
-              </p>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                ["Shelter", details.shelter_name || details.shelter_id],
-                ["On-chain goal", weiAsEth(details.on_chain_goal_wei ?? details.goal_wei)],
-                ["Raised on-chain", weiAsEth(details.on_chain_total_raised_wei)],
-                ["Urgency", details.urgency_level],
-                ["Status", effectiveCampaignStatus(details)],
-                ["Duration", `${details.duration_days} days`],
-                ["Contract", details.contract_address || "Not deployed"],
-                ...(details.cancelled_at
-                  ? [["Cancelled", date(details.cancelled_at)]]
-                  : []),
-                ["Created", date(details.created_at)],
-                ["Updated", date(details.updated_at)],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-orange-50/50 p-3">
-                  <p className="text-xs font-semibold text-stone-400">
-                    {label}
-                  </p>
-                  <p className="mt-1 break-all text-sm font-bold">{value}</p>
+            <div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold capitalize text-amber-700 ring-1 ring-amber-200">{details.urgency_level}</span>
+                <StatusBadge status={effectiveCampaignStatus(details)} />
+              </div>
+              <p className="mt-4 text-sm leading-7 text-stone-600">{details.description}</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                {[
+                  [date(details.created_at), "Created"],
+                  [details.campaign_milestones.length, "Milestones"],
+                  [details.campaign_milestones.filter(reviewableMilestone).length, "Proofs waiting"],
+                ].map(([value, label]) => (
+                  <div key={label} className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
+                    <p className="font-black text-stone-950">{value}</p>
+                    <p className="text-xs font-medium text-stone-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
+                  <p className="font-black text-stone-950">{details.duration_days} days</p>
+                  <p className="text-xs font-medium text-stone-500">Campaign duration</p>
                 </div>
-              ))}
+                <div className="donor-tech-metric rounded-2xl bg-orange-50/70 p-3 shadow-sm">
+                  <p className="font-black text-stone-950">{weiAsEth(details.on_chain_goal_wei ?? details.goal_wei)}</p>
+                  <p className="text-xs font-medium text-stone-500">Funding goal</p>
+                </div>
+              </div>
+              <div className="donor-donate-card mt-5 rounded-2xl border border-orange-100 p-4 shadow-sm">
+                <div className="flex items-center justify-between text-xs font-black text-stone-500">
+                  <span className="uppercase tracking-[0.14em]">Funding progress</span>
+                  <span>{campaignProgress(details)}% of {weiAsEth(details.on_chain_goal_wei ?? details.goal_wei)}</span>
+                </div>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-orange-100">
+                  <div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${campaignProgress(details)}%` }} />
+                </div>
+                <p className="mt-3 text-xs font-semibold text-stone-500">
+                  Raised on-chain: {weiAsEth(details.on_chain_total_raised_wei)}
+                </p>
+              </div>
+              {details.contract_address ? (
+                <p className="mt-3 break-all rounded-xl bg-stone-100 px-3 py-2 font-mono text-xs text-stone-600">
+                  Contract: {details.contract_address}
+                </p>
+              ) : null}
             </div>
           </div>
-          <div className="mt-4">
-            <TransactionLinks
-              transactions={[
-                {
-                  label: "Deployment tx",
-                  hash: details.deployment_tx_hash,
-                },
-                {
-                  label: "Cancellation tx",
-                  hash: details.cancellation_tx_hash,
-                },
-              ]}
-            />
+          <div className="mx-4 mt-1 grid gap-4 sm:mx-5 lg:grid-cols-3">
+            <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4 shadow-sm lg:col-span-2">
+              <p className="text-sm font-semibold text-stone-950">Campaign usage plan</p>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                {details.description || "No campaign usage plan was provided."}
+              </p>
+            </div>
+            <div className="donor-ledger-row rounded-2xl border border-orange-100 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-stone-950">Shelter profile</p>
+              <p className="mt-2 font-black text-[var(--color-orange)]">
+                {details.shelter_name || details.shelter_id}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-stone-600">
+                Verified shelter on PawChain.
+              </p>
+            </div>
+          </div>
+          <div className="mx-4 mt-1 rounded-2xl border border-orange-100 p-4 shadow-sm sm:mx-5">
+            <p className="text-sm font-semibold text-stone-950">Blockchain transparency</p>
+            <div className="mt-3">
+              <TransactionLinks
+                transactions={[
+                  { label: "Deployment tx", hash: details.deployment_tx_hash },
+                  { label: "Cancellation tx", hash: details.cancellation_tx_hash },
+                ]}
+              />
+            </div>
           </div>
           {details.rejection_reason ? (
             <div className="mt-4 rounded-xl bg-orange-50 p-4 font-bold">
@@ -1669,21 +1720,45 @@ export default function CampaignManagementPage() {
               </div>
             </div>
           ) : null}
-          <h3 className="mt-6 text-xl font-black">Milestone plan</h3>
-          <div className="mt-3 space-y-3">
-            {details.campaign_milestones?.map((item, index) => (
+          <div className="mx-4 mt-4 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm sm:mx-5">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+              Milestone plan
+            </p>
+            <p className="mt-1 text-lg font-black text-stone-950">
+              Transparent release stages
+            </p>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+            {details.campaign_milestones?.map((item, index) => {
+              const fundingState = milestoneFundingState(
+                details.campaign_milestones,
+                index,
+                campaignProgress(details),
+              );
+              const isLocked = fundingState.tone === "locked";
+              return (
               <div
                 key={item.id}
-                className="rounded-xl border border-orange-100 p-4"
+                className={[
+                  "donor-ledger-row rounded-2xl border p-3 shadow-sm transition hover:-translate-y-0.5",
+                  isLocked
+                    ? "border-slate-200 bg-slate-50/70 opacity-80"
+                    : fundingState.tone === "active"
+                      ? "border-[var(--color-orange)] bg-orange-50/45"
+                      : "border-orange-100 hover:border-orange-200",
+                ].join(" ")}
               >
                 <div className="flex justify-between gap-3">
-                  <p className="font-black">
-                    {index + 1}. {item.title}
-                  </p>
-                  <span className="text-sm font-black text-[var(--color-orange)]">
-                    {item.percentage}% · {item.status}
-                  </span>
+                  <div className="flex items-start gap-3">
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white text-xs font-black ring-1 ${isLocked ? "text-slate-400 ring-slate-200" : "text-[var(--color-orange)] ring-orange-100"}`}>{index + 1}</span>
+                    <p className={isLocked ? "font-black text-slate-500" : "font-black"}>{item.title}</p>
+                  </div>
+                  <span className={`inline-flex shrink-0 self-start items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] ${fundingState.tone === "complete" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : fundingState.tone === "active" ? "bg-orange-50 text-[var(--color-orange)] ring-1 ring-orange-100" : "bg-slate-100 text-slate-500 ring-1 ring-slate-200"}`}>{fundingState.label}</span>
                 </div>
+                <p className={`mt-2 text-xs font-semibold ${isLocked ? "text-slate-400" : "text-[var(--color-orange)]"}`}>{item.percentage}% release</p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                  <div className={`h-full rounded-full transition-all ${fundingState.tone === "complete" ? "bg-emerald-500" : fundingState.tone === "active" ? "bg-[var(--color-orange)]" : "bg-slate-300"}`} style={{ width: `${fundingState.progress}%` }} />
+                </div>
+                <p className="mt-1 text-[11px] font-semibold text-stone-400">{Math.round(fundingState.progress)}% of this stage funded</p>
                 <p className="mt-2 text-sm text-stone-600">
                   {item.description}
                 </p>
@@ -1699,11 +1774,59 @@ export default function CampaignManagementPage() {
                   Created {date(item.created_at)} · Updated{" "}
                   {date(item.updated_at)}
                 </p>
+                <div className="mt-3">
+                  <TransactionLinks
+                    transactions={[
+                      { label: "Proof tx", hash: item.proof_tx_hash },
+                      { label: "Review tx", hash: item.review_tx_hash },
+                      { label: "Release tx", hash: item.release_tx_hash },
+                    ]}
+                  />
+                </div>
               </div>
-            ))}
-          </div>
+              );
+            })}
             </div>
-            <div className="flex flex-col gap-3 border-t border-orange-100 bg-white p-4 sm:flex-row sm:justify-end sm:p-5">
+          </div>
+          {campaigns.some(
+            (campaign) =>
+              campaign.shelter_id === details.shelter_id &&
+              campaign.id !== details.id,
+          ) ? (
+            <div className="mx-4 mt-4 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm sm:mx-5">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
+                Other campaigns
+              </p>
+              <p className="mt-1 text-lg font-black text-stone-950">
+                More from this shelter
+              </p>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {campaigns
+                  .filter(
+                    (campaign) =>
+                      campaign.shelter_id === details.shelter_id &&
+                      campaign.id !== details.id,
+                  )
+                  .map((campaign) => (
+                    <button
+                      key={campaign.id}
+                      type="button"
+                      onClick={() => setDetails(campaign)}
+                      className="rounded-xl bg-orange-50/40 p-3 text-left transition hover:-translate-y-0.5 hover:bg-orange-100/70"
+                    >
+                      <p className="text-sm font-semibold text-stone-950">
+                        {campaign.title}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-stone-500">
+                        {campaignProgress(campaign)}% raised
+                      </p>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ) : null}
+            </div>
+            <div className="flex shrink-0 flex-col gap-3 border-t border-orange-100 bg-white/95 p-4 backdrop-blur-xl sm:flex-row sm:justify-end sm:p-5">
               <button
                 type="button"
                 onClick={() => {

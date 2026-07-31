@@ -6,16 +6,14 @@ import { getDashboardProfile } from "@/lib/dashboard-access";
 import { getActiveDonorCampaigns } from "@/lib/donor-campaigns";
 import { getDonorDonations } from "@/lib/donor-donations";
 import {
-  getExplorerNetworkName,
   getTransactionExplorerUrl,
 } from "@/lib/block-explorer";
-import { getShelters } from "../campaignData";
 import { RefundClaimButton } from "../tracking/RefundClaimButton";
-import { getLatestEthMyrRate } from "@/lib/currency";
 
 type DashboardProps = {
   searchParams?: Promise<{
     walletAddress?: string;
+    range?: string;
   }>;
 };
 
@@ -24,7 +22,7 @@ function StatusPill({ status }: { status: string }) {
     Waiting: "border-slate-200 bg-slate-50 text-slate-600",
     Confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
     Failed: "border-red-200 bg-red-50 text-red-700",
-    Refunded: "border-sky-200 bg-sky-50 text-sky-700",
+    Refunded: "border-red-200 bg-red-50 text-red-700",
     "Under review": "border-amber-200 bg-amber-50 text-amber-700",
     "Funds released": "border-emerald-200 bg-emerald-50 text-emerald-700",
     "Pending proof": "border-slate-200 bg-slate-50 text-slate-600",
@@ -33,17 +31,29 @@ function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={[
-        "inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold",
+        "inline-flex min-w-[6.5rem] items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
         styles[status] ?? "bg-slate-100 text-slate-600",
       ].join(" ")}
     >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
+        {status === "Waiting" || status === "Pending proof" ? (
+          <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2 2" /></>
+        ) : status === "Failed" ? (
+          <path d="m9 9 6 6m0-6-6 6" />
+        ) : status === "Refunded" ? (
+          <path d="M7 12h10m-4-4 4 4-4 4" />
+        ) : (
+          <path d="M9 12.5 11 14.5 15.5 9.5" />
+        )}
+      </svg>
       {status}
     </span>
   );
 }
 
 function formatAmount(amount: number, currency: string) {
-  return `${currency} ${amount.toLocaleString("en-MY", {
+  const displayCurrency = currency === "RM" ? "MYR" : currency;
+  return `${displayCurrency} ${amount.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -54,13 +64,6 @@ function formatEth(amount: number) {
     minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
-}
-
-function formatLiveMyr(amount: number) {
-  return `Approx. live MYR ${amount.toLocaleString("en-MY", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
 }
 
 function formatDate(value: string) {
@@ -75,8 +78,19 @@ function shortHash(value: string) {
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
 }
 
+function dashboardRangeHref(range: string, walletAddress?: string) {
+  const params = new URLSearchParams();
+  if (walletAddress && walletAddress !== "-") params.set("walletAddress", walletAddress);
+  if (range !== "30") params.set("range", range);
+  const query = params.toString();
+  return query ? `/Donor/dashboard?${query}` : "/Donor/dashboard";
+}
+
 export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const params = await searchParams;
+  const activeRange = ["30", "90", "all"].includes(params?.range ?? "")
+    ? (params?.range as "30" | "90" | "all")
+    : "30";
   const { userId, profile, accessMode, roleNFT } = await getDashboardProfile(
     "donor",
     params?.walletAddress,
@@ -103,9 +117,6 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     activeCampaigns = [];
   }
 
-  const ethMyrRate = (await getLatestEthMyrRate()).rate;
-  const totalLiveMyr = donationData.summary.totalEth * ethMyrRate;
-  const shelters = getShelters(activeCampaigns);
   const latestCampaigns = activeCampaigns.slice(0, 3);
   const contractConnectedCampaigns = activeCampaigns.filter(
     (campaign) => Boolean(campaign.contractAddress),
@@ -124,23 +135,78 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     0,
   );
   const latestRefund = claimedRefunds[0];
-  const latestDonationTx = donationData.summary.latestDonation?.txHash ?? "";
-  const latestDonationTxUrl = latestDonationTx
-    ? getTransactionExplorerUrl(latestDonationTx)
-    : "";
+  const now = Date.now();
+  const rangeDays = activeRange === "30" ? 30 : activeRange === "90" ? 90 : null;
+  const earliestDonationTime = donationData.donations.length > 0
+    ? Math.min(...donationData.donations.map((donation) => new Date(donation.createdAt).getTime()))
+    : now - 30 * 86_400_000;
+  const rangeStart = rangeDays
+    ? now - rangeDays * 86_400_000
+    : earliestDonationTime;
+  const rangeDonations = donationData.donations.filter(
+    (donation) => new Date(donation.createdAt).getTime() >= rangeStart,
+  );
+  const rangeConfirmed = rangeDonations.filter(
+    (donation) => !["Failed", "Refunded"].includes(donation.status),
+  );
+  const rangeTotalMyr = rangeConfirmed.reduce(
+    (total, donation) => total + donation.amount,
+    0,
+  );
+  const previousRangeTotalMyr = rangeDays
+    ? donationData.donations
+        .filter((donation) => {
+          const timestamp = new Date(donation.createdAt).getTime();
+          return (
+            timestamp >= rangeStart - rangeDays * 86_400_000 &&
+            timestamp < rangeStart &&
+            !["Failed", "Refunded"].includes(donation.status)
+          );
+        })
+        .reduce((total, donation) => total + donation.amount, 0)
+    : null;
+  const rangeTrend = previousRangeTotalMyr && previousRangeTotalMyr > 0
+    ? ((rangeTotalMyr - previousRangeTotalMyr) / previousRangeTotalMyr) * 100
+    : null;
+  const rangeCampaignCount = new Set(
+    rangeConfirmed.map((donation) => donation.campaignId),
+  ).size;
+  const chartStart = Math.min(rangeStart, now - 86_400_000);
+  const bucketDuration = Math.max(1, (now - chartStart) / 6);
+  const chartData = Array.from({ length: 6 }, (_, index) => {
+    const start = chartStart + index * bucketDuration;
+    const end = index === 5 ? now + 1 : start + bucketDuration;
+    const value = rangeConfirmed
+      .filter((donation) => {
+        const timestamp = new Date(donation.createdAt).getTime();
+        return timestamp >= start && timestamp < end;
+      })
+      .reduce((total, donation) => total + donation.amount, 0);
+    return {
+      label: new Intl.DateTimeFormat("en-MY", { day: "numeric", month: "short" }).format(new Date(end - 1)),
+      value,
+    };
+  });
+  const maxChartValue = Math.max(...chartData.map((point) => point.value), 1);
   const summaryStats = [
     {
       label: "Total donated",
-      value: `${donationData.summary.totalEth.toLocaleString("en-MY", {
-        minimumFractionDigits: 4,
-        maximumFractionDigits: 6,
-      })} ETH`,
-      detail: formatLiveMyr(totalLiveMyr),
+      value: formatAmount(rangeTotalMyr, "MYR"),
+      detail:
+        activeRange === "all"
+          ? "Lifetime recorded value"
+          : rangeTrend !== null
+            ? `${rangeTrend >= 0 ? "↑" : "↓"} ${Math.abs(rangeTrend).toFixed(0)}% vs previous ${activeRange} days`
+            : rangeTotalMyr > 0
+              ? "New support in this period"
+              : `Last ${activeRange} days`,
+      tone: "orange",
     },
     {
-      label: "Active campaigns",
-      value: String(activeCampaigns.length),
-      detail: `${shelters.length} verified shelters available`,
+      label: "Confirmed support",
+      value: String(rangeConfirmed.length),
+      detail: `${rangeCampaignCount} campaigns in this period`,
+      tone: "violet",
     },
     {
       label: "Refund status",
@@ -156,6 +222,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           : totalRefundedEth > 0
             ? `${formatEth(totalRefundedEth)} received`
             : "No pending refunds",
+      tone: potentialRefunds.length > 0 ? "amber" : claimedRefunds.length > 0 ? "violet" : "slate",
     },
   ];
 
@@ -176,10 +243,10 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                     Total donated
                   </p>
                   <p className="donor-eth-gradient mt-1 text-5xl font-black tracking-tight sm:text-6xl">
-                    {formatEth(donationData.summary.totalEth)}
+                    {formatAmount(donationData.summary.totalAmount, "MYR")}
                   </p>
                   <p className="mt-2 text-sm font-semibold text-stone-500">
-                    {formatLiveMyr(totalLiveMyr)}
+                    Historical value saved when each donation was confirmed
                   </p>
                 </div>
                 <DonorDashboardMetrics
@@ -219,20 +286,49 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
 
       <section className="overflow-hidden rounded-[1.35rem] border border-orange-100 bg-white shadow-sm">
         <div className="border-b border-orange-100 p-4 sm:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
-                Control center
+                Dashboard overview
               </p>
               <h2 className="mt-1 text-xl font-black text-stone-950">
-                What needs your attention
+                Your giving at a glance
               </h2>
+              </div>
+              <div className="flex flex-wrap gap-2" aria-label="Dashboard date range">
+                {[
+                  ["30", "30 days"],
+                  ["90", "90 days"],
+                  ["all", "All time"],
+                ].map(([value, label]) => (
+                  <Link
+                    key={value}
+                    href={dashboardRangeHref(value, walletAddress)}
+                    scroll={false}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-black transition ${activeRange === value ? "border-violet-300 bg-violet-100 text-violet-800 ring-2 ring-violet-100" : "border-slate-200 bg-white text-stone-600 hover:bg-slate-50"}`}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[34rem]">
+            <div className="grid gap-2 sm:grid-cols-3">
             {summaryStats.map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-2xl border border-orange-100 bg-orange-50/25 p-3"
+                className={[
+                  "rounded-2xl border p-3 shadow-sm",
+                  stat.tone === "violet"
+                    ? "border-violet-100 bg-violet-50/45"
+                    : stat.tone === "amber"
+                      ? "border-amber-200 bg-amber-50/55"
+                      : stat.tone === "red"
+                        ? "border-red-200 bg-red-50/55"
+                        : stat.tone === "slate"
+                          ? "border-slate-200 bg-slate-50/70"
+                          : "border-orange-100 bg-orange-50/45",
+                ].join(" ")}
               >
                 <p className="text-[11px] font-black uppercase tracking-[0.12em] text-stone-400">
                   {stat.label}
@@ -249,8 +345,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           </div>
         </div>
 
-        <div className="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="border-b border-orange-100 bg-gradient-to-br from-white to-orange-50/35 p-4 sm:p-5 xl:border-r xl:border-b-0">
+        <div className="grid gap-0 xl:grid-cols-[0.72fr_1.28fr]">
+          <div className="border-b border-orange-100 bg-orange-50/15 p-4 xl:border-r xl:border-b-0">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
@@ -260,7 +356,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   {potentialRefunds.length > 0
                     ? "Refund ready to review"
                     : latestRefund
-                      ? "Latest refund claimed"
+                      ? "Latest refund received"
                       : "No refund action needed"}
                 </h3>
               </div>
@@ -277,11 +373,25 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 {potentialRefunds.length > 0
                   ? "Claim check"
                   : latestRefund
-                    ? "Claimed"
+                    ? "Received"
                     : "Clear"}
               </span>
             </div>
-            <div className="mt-4">
+            <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="p-2.5">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Needs check</p>
+                <p className="mt-1 text-lg font-black text-amber-700">{potentialRefunds.length}</p>
+              </div>
+              <div className="border-l border-slate-100 bg-violet-50/30 p-2.5">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
+                <p className="mt-1 text-lg font-black text-violet-700">{claimedRefunds.length}</p>
+              </div>
+              <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Returned</p>
+                <p className="mt-1 text-sm font-black text-emerald-800">{formatEth(totalRefundedEth)}</p>
+              </div>
+            </div>
+            <div className="mt-3">
               {potentialRefunds.length > 0 ? (
                 potentialRefunds.slice(0, 1).map((donation) => (
                   <article key={donation.id}>
@@ -301,9 +411,9 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   </article>
                 ))
               ) : latestRefund ? (
-                <article className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-white p-4 shadow-sm">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
-                    Received
+                <article className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
+                    Most recent return
                   </p>
                   <p className="mt-1 text-xl font-black text-stone-950">
                     +{latestRefund.refundAmountEth > 0
@@ -313,20 +423,20 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   <p className="mt-1 text-sm font-semibold text-stone-600">
                     {latestRefund.campaignTitle}
                   </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-black">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-black">
                     {latestRefund.refundTxHash ? (
                       <a
                         href={getTransactionExplorerUrl(latestRefund.refundTxHash)}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[var(--color-orange)] transition hover:text-stone-950"
+                        className="rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-orange-700 transition hover:bg-orange-100"
                       >
                         Etherscan proof
                       </a>
                     ) : null}
                     <Link
                       href="/Donor/tracking"
-                      className="text-emerald-700 transition hover:text-stone-950"
+                      className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-violet-700 transition hover:bg-violet-100"
                     >
                       View ledger
                     </Link>
@@ -344,75 +454,42 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-orange)]">
-                  Live campaigns
+                  Contribution trend
                 </p>
                 <h3 className="mt-1 text-lg font-black text-stone-950">
-                  Open for support
+                  Recorded MYR over time
                 </h3>
               </div>
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                {getExplorerNetworkName()}
+              <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">
+                {activeRange === "all" ? "All time" : `${activeRange} days`}
               </span>
             </div>
-            <div className="mt-4 space-y-2">
-              {latestCampaigns.length > 0 ? (
-                latestCampaigns.map((campaign) => (
-                  <Link
-                    key={campaign.id}
-                    href={`/Donor/campaigns/${campaign.id}`}
-                    className="group block rounded-2xl border border-orange-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--color-orange)] hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black text-stone-950 group-hover:text-[var(--color-orange)]">
-                          {campaign.title}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-stone-500">
-                          {campaign.shelter} - {campaign.daysLeft} days left
-                        </p>
-                      </div>
-                      <span className="text-xs font-black text-stone-950">
-                        {campaign.raised}%
-                      </span>
+            <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50/25 p-4">
+              <div className="flex h-44 items-end gap-2 border-b border-orange-100 pb-2">
+                {chartData.map((point, index) => (
+                  <div key={`${point.label}-${index}`} className="group flex h-full min-w-0 flex-1 flex-col justify-end">
+                    <div className="mb-1 text-center text-[9px] font-black text-orange-700 opacity-0 transition group-hover:opacity-100">
+                      {point.value > 0 ? formatAmount(point.value, "MYR") : "MYR 0"}
                     </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-orange-100">
-                      <div
-                        className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
-                        style={{ width: `${campaign.raised}%` }}
-                      />
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/25 p-4 text-sm font-semibold text-stone-600">
-                  No active campaigns approved yet.
-                </div>
-              )}
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/70 to-white px-3 py-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-400">
-                  Latest proof
-                </p>
-                {latestDonationTxUrl ? (
-                  <a
-                    href={latestDonationTxUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 block break-all text-xs font-black text-[var(--color-orange)] transition hover:text-stone-950"
-                  >
-                    {shortHash(latestDonationTx)}
-                  </a>
-                ) : (
-                  <p className="mt-1 text-xs font-semibold text-stone-500">
-                    No transaction yet
-                  </p>
-                )}
+                    <div
+                      className="rounded-t-lg bg-[var(--color-orange)] shadow-[0_0_14px_rgba(249,115,22,0.16)] transition hover:bg-orange-600"
+                      style={{ height: point.value > 0 ? `${Math.max(4, (point.value / maxChartValue) * 100)}%` : "0%" }}
+                      title={`${point.label}: ${formatAmount(point.value, "MYR")}`}
+                    />
+                  </div>
+                ))}
               </div>
-              <p className="text-right text-xs font-semibold text-stone-500">
-                {donationData.summary.confirmedCount} verified records across{" "}
-                {contractConnectedCampaigns.length} smart campaigns
+              <div className="mt-2 grid grid-cols-6 gap-2 text-center text-[9px] font-semibold text-stone-400">
+                {chartData.map((point, index) => <span key={`${point.label}-axis-${index}`} className="truncate">{point.label}</span>)}
+              </div>
+              <p className="mt-3 text-xs leading-5 text-stone-500">
+                Uses the MYR value saved when each donation was confirmed, not today&apos;s exchange rate.
               </p>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <Link href="/Donor/tracking" className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-center text-xs font-black text-violet-700 transition hover:bg-violet-100">Track funds</Link>
+              <Link href="/Donor/badges" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-black text-amber-700 transition hover:bg-amber-100">NFT progress</Link>
+              <Link href="/Donor/discover" className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-center text-xs font-black text-orange-700 transition hover:bg-orange-100">Support again</Link>
             </div>
           </div>
         </div>
@@ -454,9 +531,26 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                     <p className="mt-1 text-xs font-medium text-stone-500">
                       {donation.shelterName} - {formatDate(donation.createdAt)}
                     </p>
-                    <p className="mt-2 break-all text-xs font-semibold text-stone-500">
-                      Tx: {shortHash(donation.txHash)}
-                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <a
+                        href={getTransactionExplorerUrl(donation.txHash)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 font-mono text-[10px] font-black text-violet-700 transition hover:border-violet-400 hover:bg-violet-100"
+                      >
+                        Donation TX {shortHash(donation.txHash)} ↗
+                      </a>
+                      {donation.refundTxHash ? (
+                        <a
+                          href={getTransactionExplorerUrl(donation.refundTxHash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 font-mono text-[10px] font-black text-red-700 transition hover:border-red-400 hover:bg-red-100"
+                        >
+                          Refund TX {shortHash(donation.refundTxHash)} ↗
+                        </a>
+                      ) : null}
+                    </div>
                     <Link
                       href={`/Donor/receipt/${donation.id}${
                         walletAddress && walletAddress !== "-"
@@ -470,16 +564,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   </div>
                   <div className="text-left sm:text-right">
                     <p className="text-sm font-black text-stone-950">
-                      {donation.amountEth > 0
-                        ? `${donation.amountEth.toLocaleString("en-MY", {
-                            minimumFractionDigits: 4,
-                            maximumFractionDigits: 6,
-                          })} ETH`
-                        : formatAmount(donation.amount, donation.currency)}
+                      {formatAmount(donation.amount, donation.currency)}
                     </p>
                     {donation.amountEth > 0 ? (
                       <p className="text-xs font-semibold text-stone-500">
-                        {formatLiveMyr(donation.amountEth * ethMyrRate)}
+                        {formatEth(donation.amountEth)} confirmed
                       </p>
                     ) : null}
                     <StatusPill status={donation.status} />

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  getActiveDonorCampaigns,
   getDonorCampaignsByIds,
 } from "@/lib/donor-campaigns";
 import { getDonorDonations } from "@/lib/donor-donations";
@@ -14,6 +13,7 @@ type TrackingPageProps = {
   searchParams?: Promise<{
     walletAddress?: string;
     filter?: string;
+    releaseFilter?: string;
   }>;
 };
 
@@ -22,7 +22,8 @@ const statusStyles: Record<string, string> = {
   Approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Confirmed: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Refunded: "border-sky-200 bg-sky-50 text-sky-700",
+  Refunded: "border-red-200 bg-red-50 text-red-700",
+  Closed: "border-stone-300 bg-stone-100 text-stone-700",
   Failed: "border-red-200 bg-red-50 text-red-700",
   Submitted: "border-amber-200 bg-amber-50 text-amber-700",
   Rejected: "border-red-200 bg-red-50 text-red-700",
@@ -32,7 +33,11 @@ const statusStyles: Record<string, string> = {
 
 function StatusPill({ status }: { status: string }) {
   const icon =
-    status === "Confirmed" || status === "Completed" || status === "Approved"
+    status === "Active"
+      ? "M13 2 5 14h6l-1 8 8-12h-6l1-8"
+      : status === "Closed"
+        ? "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z"
+        : status === "Confirmed" || status === "Completed" || status === "Approved"
       ? "M9 12.5 11 14.5 15.5 9.5"
       : status === "Failed" || status === "Rejected"
         ? "m9 9 6 6m0-6-6 6"
@@ -133,27 +138,63 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function getBaseColorName(classString: string): string {
-  const match = classString.match(/border-(\w+)-\d+/);
-  if (match && match[1]) {
-    return match[1];
-  }
-
-  return "slate";
-}
-
 function shortHash(value: string) {
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
 }
 
 const donationFilterTabs = [
-  { key: "all", label: "All", status: "Pending" },
-  { key: "pending", label: "Pending", status: "Pending" },
-  { key: "confirmed", label: "Confirmed", status: "Confirmed" },
-  { key: "refund", label: "Refund", status: "Refunded" },
+  { key: "all", label: "All", classes: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100", activeRing: "ring-violet-100" },
+  { key: "pending", label: "Pending", classes: "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100", activeRing: "ring-slate-100" },
+  { key: "confirmed", label: "Confirmed", classes: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100", activeRing: "ring-emerald-100" },
+  { key: "refund", label: "Refund", classes: "border-red-200 bg-red-50 text-red-700 hover:bg-red-100", activeRing: "ring-red-100" },
 ];
 
-function withFilterHref(filter: string, walletAddress?: string) {
+const releaseFilterTabs = [
+  { key: "all", label: "All", classes: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" },
+  { key: "funding", label: "Funding", classes: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" },
+  { key: "review", label: "Proof review", classes: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100" },
+  { key: "released", label: "Released", classes: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" },
+  { key: "closed", label: "Closed", classes: "border-stone-300 bg-stone-100 text-stone-700 hover:bg-stone-200" },
+];
+
+function getMilestoneGuidance(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized === "active") return "Funding is open. Donations remain locked in the campaign contract until this stage is fully funded.";
+  if (normalized === "pending" || normalized === "waiting" || normalized === "locked") return "This stage is waiting for the earlier funding or release steps to finish.";
+  if (normalized === "submitted" || normalized === "pending review") return "The shelter submitted proof. An admin is verifying it before funds can be released.";
+  if (normalized === "rejected") return "The submitted proof needs correction. No funds are released while it is rejected.";
+  if (normalized === "approved" || normalized === "withdrawable") return "Proof is approved. The shelter can release this stage from the smart contract.";
+  if (normalized === "released") return "This stage was released on-chain to the shelter. The transaction proof is available below.";
+  if (normalized === "completed") return "Funding, proof verification, and the on-chain release are complete.";
+  return "The smart contract is recording this stage's current state.";
+}
+
+function formatMilestoneValue(
+  goalEth: number | undefined,
+  goalMyr: number | undefined,
+  percentage: number,
+  ethMyrRate: number,
+) {
+  const ethAmount = getMilestoneAmount(goalEth, percentage);
+  if (ethAmount > 0) {
+    return (
+      <>
+        <span className="block text-left">{formatEth(ethAmount)}</span>
+        <span className="mt-0.5 block text-left text-[10px] font-semibold text-stone-500">
+          {formatLiveMyr(ethAmount * ethMyrRate)}
+        </span>
+      </>
+    );
+  }
+
+  return formatMyr(getMilestoneAmount(goalMyr, percentage));
+}
+
+function withFilterHref(
+  filter: string,
+  walletAddress?: string,
+  releaseFilter = "all",
+) {
   const params = new URLSearchParams();
 
   if (walletAddress) {
@@ -163,7 +204,23 @@ function withFilterHref(filter: string, walletAddress?: string) {
   if (filter !== "all") {
     params.set("filter", filter);
   }
+  if (releaseFilter !== "all") {
+    params.set("releaseFilter", releaseFilter);
+  }
 
+  const query = params.toString();
+  return query ? `/Donor/tracking?${query}` : "/Donor/tracking";
+}
+
+function withReleaseFilterHref(
+  releaseFilter: string,
+  donationFilter: string,
+  walletAddress?: string,
+) {
+  const params = new URLSearchParams();
+  if (walletAddress) params.set("walletAddress", walletAddress);
+  if (donationFilter !== "all") params.set("filter", donationFilter);
+  if (releaseFilter !== "all") params.set("releaseFilter", releaseFilter);
   const query = params.toString();
   return query ? `/Donor/tracking?${query}` : "/Donor/tracking";
 }
@@ -178,7 +235,12 @@ export default async function DonorTrackingPage({
   )
     ? (params?.filter as "pending" | "confirmed" | "refund")
     : "all";
-  let campaigns: Awaited<ReturnType<typeof getActiveDonorCampaigns>> = [];
+  const activeReleaseFilter = ["funding", "review", "released", "closed"].includes(
+    params?.releaseFilter ?? "",
+  )
+    ? (params?.releaseFilter as "funding" | "review" | "released" | "closed")
+    : "all";
+  let campaigns: Awaited<ReturnType<typeof getDonorCampaignsByIds>> = [];
   let donationData: Awaited<ReturnType<typeof getDonorDonations>> = {
     donations: [],
     summary: {
@@ -193,19 +255,12 @@ export default async function DonorTrackingPage({
 
   try {
     donationData = await getDonorDonations(walletAddress);
-    const [activeCampaigns, donatedCampaigns] = await Promise.all([
-      getActiveDonorCampaigns(),
-      getDonorCampaignsByIds(
+    const donatedCampaignIds = [
+      ...new Set(
         donationData.donations.map((donation) => donation.campaignId),
       ),
-    ]);
-    const campaignMap = new Map(
-      [...activeCampaigns, ...donatedCampaigns].map((campaign) => [
-        campaign.id,
-        campaign,
-      ]),
-    );
-    campaigns = [...campaignMap.values()];
+    ];
+    campaigns = await getDonorCampaignsByIds(donatedCampaignIds);
   } catch {
     campaigns = [];
   }
@@ -227,6 +282,30 @@ export default async function DonorTrackingPage({
     }
 
     return true;
+  });
+  const filteredReleaseCampaigns = campaigns.filter((campaign) => {
+    if (activeReleaseFilter === "all") return true;
+    const campaignStatus = campaign.status.toLowerCase();
+    const milestoneStatuses = (campaign.milestoneDetails ?? []).map((milestone) =>
+      milestone.status.toLowerCase(),
+    );
+    const currentMilestoneStatus =
+      milestoneStatuses[campaign.currentMilestoneIndex ?? 0] ?? "";
+    if (activeReleaseFilter === "funding") {
+      return (
+        campaignStatus === "active" &&
+        (!currentMilestoneStatus || ["active", "locked", "pending", "waiting"].includes(currentMilestoneStatus))
+      );
+    }
+    if (activeReleaseFilter === "review") {
+      return milestoneStatuses.some((status) =>
+        ["submitted", "pending review", "rejected", "approved", "withdrawable"].includes(status),
+      );
+    }
+    if (activeReleaseFilter === "released") {
+      return milestoneStatuses.some((status) => ["released", "completed"].includes(status));
+    }
+    return ["closed", "refunding"].includes(campaignStatus);
   });
 
   return (
@@ -282,24 +361,14 @@ export default async function DonorTrackingPage({
             <div className="flex flex-wrap gap-2">
               {donationFilterTabs.map((tab) => {
                 const active = activeFilter === tab.key;
-                const baseStatusClasses =
-                  statusStyles[tab.status] ??
-                  "border-slate-200 bg-slate-50 text-slate-600";
-                const baseColorName = getBaseColorName(baseStatusClasses);
-
-                const inactiveClasses = [
-                  baseStatusClasses, // Apply the base color (border, bg, text)
-                  "hover:-translate-y-0.5", // Animation
-                  `hover:bg-${baseColorName}-100`, // Lighter background on hover
-                ].join(" ");
 
                 return (
                   <Link
                     key={tab.key}
-                    href={withFilterHref(tab.key, walletAddress)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black shadow-sm transition ${active ? `${baseStatusClasses} scale-[1.03] ring-2 ring-orange-100` : inactiveClasses}`}
+                    href={withFilterHref(tab.key, walletAddress, activeReleaseFilter)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black shadow-sm transition hover:-translate-y-0.5 ${tab.classes} ${active ? `relative z-10 scale-110 ring-2 ${tab.activeRing}` : ""}`}
                   >
-                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" />
+                    <span className={`${active ? "h-2.5 w-2.5 ring-2 ring-current/20" : "h-1.5 w-1.5"} rounded-full bg-current opacity-80 transition-all`} />
                     {tab.label}
                   </Link>
                 );
@@ -375,10 +444,10 @@ export default async function DonorTrackingPage({
                           </p>
                         ) : null}
                         {donation.refundTxHash ? (
-                          <details className="group mt-1.5 overflow-hidden rounded-xl border border-emerald-100 bg-white/90 shadow-sm transition open:bg-emerald-50/35">
+                          <details className="group mt-1.5 overflow-hidden rounded-xl border border-red-100 bg-white/90 shadow-sm transition open:bg-red-50/35">
                             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-1.5 [&::-webkit-details-marker]:hidden">
                               <div className="min-w-0">
-                                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-700">
                                   Refund
                                 </p>
                                 <p className="mt-0.5 break-words text-xs font-black leading-5 text-stone-950">
@@ -388,11 +457,11 @@ export default async function DonorTrackingPage({
                                     : "Confirmed"}
                                 </p>
                               </div>
-                              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-[var(--color-orange)] ring-1 ring-emerald-100 transition group-open:text-emerald-700">
+                              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-red-700 ring-1 ring-red-100 transition group-open:bg-red-50">
                                 View proof
                               </span>
                             </summary>
-                            <div className="border-t border-emerald-100 px-2.5 py-2">
+                            <div className="border-t border-red-100 px-2.5 py-2">
                               <div className="grid gap-2 text-[11px] font-semibold text-stone-500">
                                 <div className="flex items-center justify-between gap-3">
                                   <span>Transfer type</span>
@@ -450,7 +519,9 @@ export default async function DonorTrackingPage({
                         {formatDate(donation.createdAt)}
                       </p>
                       <div className="flex justify-start lg:justify-center">
-                        <StatusPill status={donation.status} />
+                        <StatusPill
+                          status={donation.refundTxHash ? "Refunded" : donation.status}
+                        />
                       </div>
                     </article>
                   ))}
@@ -512,14 +583,76 @@ export default async function DonorTrackingPage({
                 Milestones
               </p>
               <h2 className="mt-1 text-xl font-black text-stone-950">
-                Release monitor
+                Where your donation goes
               </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+                Follow each protected funding stage from donation to verified
+                release, with every important action recorded on-chain.
+              </p>
             </div>
           </div>
 
+          <div className="mt-4 flex gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-stone-950 text-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.18)]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+                <path d="M7 11V8a5 5 0 0 1 10 0v3" />
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d="M12 15v2" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-black text-stone-950">Why milestone releases protect your donation</p>
+              <p className="mt-1 text-xs leading-5 text-stone-600">
+                The shelter does not receive the entire campaign fund at once. Each portion stays locked in the smart contract until its funding target is reached, supporting proof is reviewed, and the release is approved.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid overflow-hidden rounded-2xl border border-violet-100 bg-[linear-gradient(120deg,#faf5ff,#fff,#fff7ed)] sm:grid-cols-3">
+            {[
+              ["1", "Fund stage", "Donor ETH is secured in the campaign contract."],
+              ["2", "Verify proof", "The shelter submits evidence for admin review."],
+              ["3", "Release on-chain", "Approved funds become available to the shelter."],
+            ].map(([step, title, detail], index) => (
+              <div key={step} className={`flex gap-3 p-4 ${index > 0 ? "border-t border-violet-100 sm:border-l sm:border-t-0" : ""}`}>
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-violet-600 font-mono text-xs font-black text-white shadow-[0_0_18px_rgba(124,58,237,0.22)]">
+                  {step}
+                </span>
+                <div>
+                  <p className="text-sm font-black text-stone-950">{title}</p>
+                  <p className="mt-1 text-xs leading-5 text-stone-500">{detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {campaigns.length > 0 ? (
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">
+                Show campaigns by milestone state
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {releaseFilterTabs.map((tab) => {
+                  const active = activeReleaseFilter === tab.key;
+                  return (
+                    <Link
+                      key={tab.key}
+                      href={withReleaseFilterHref(tab.key, activeFilter, walletAddress)}
+                      scroll={false}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black shadow-sm transition hover:-translate-y-0.5 ${tab.classes} ${active ? "relative z-10 scale-110 ring-2 ring-violet-100" : ""}`}
+                    >
+                      <span className={`${active ? "h-2.5 w-2.5 ring-2 ring-current/20" : "h-1.5 w-1.5"} rounded-full bg-current opacity-80 transition-all`} />
+                      {tab.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <div className="donor-thin-scroll mt-4 max-h-[38rem] space-y-3 overflow-y-auto overscroll-contain">
-            {campaigns.length > 0 ? (
-              campaigns.map((campaign) => (
+            {filteredReleaseCampaigns.length > 0 ? (
+              filteredReleaseCampaigns.map((campaign) => (
                 <article
                   key={`${campaign.id}-milestones`}
                   className="group overflow-hidden rounded-2xl border border-orange-100 bg-white/95 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-[0_16px_36px_rgba(120,72,0,0.08)]"
@@ -532,7 +665,7 @@ export default async function DonorTrackingPage({
                       </h3>
                       <div className="mt-3 pl-2">
                         <div className="flex items-center justify-between gap-4 text-xs font-black text-stone-600">
-                          <span>{campaign.raised}% funded</span>
+                          <span>Total campaign funding: {campaign.raised}%</span>
                           <span>{campaign.goal}</span>
                         </div>
                         <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-white shadow-inner">
@@ -542,10 +675,12 @@ export default async function DonorTrackingPage({
                               width: `${Math.min(100, Math.max(0, campaign.raised))}%`,
                             }}
                           />
-                          {campaign.raised <= 0 ? (
-                            <span className="absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[var(--color-orange)] shadow-[0_0_12px_rgba(249,115,22,0.45)]" />
-                          ) : null}
                         </div>
+                        <p className="mt-1.5 text-[10px] font-semibold text-stone-500">
+                          {campaign.raised <= 0
+                            ? "No confirmed campaign funding yet."
+                            : "This bar shows confirmed funding toward the full campaign goal."}
+                        </p>
                       </div>
                     </div>
                     <StatusPill status={campaign.status} />
@@ -579,21 +714,19 @@ export default async function DonorTrackingPage({
                           <p className="text-sm font-black text-stone-950">
                             {milestone.title}
                           </p>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-stone-500">
-                            <span>{milestone.percentage}% release</span>
-                            <span>
-                              Stage{" "}
-                              {formatMyr(
-                                getMilestoneAmount(
-                                  campaign.goalAmount,
-                                  milestone.percentage,
-                                ),
-                              )}
-                            </span>
-                            <span>
-                              Target{" "}
-                              {formatMyr(
-                                getMilestoneAmount(
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div className="rounded-xl border border-orange-100 bg-orange-50/45 px-3 py-2 text-left">
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-700">This stage unlocks</p>
+                              <p className="mt-1 text-left text-xs font-black text-stone-900">
+                                {formatMilestoneValue(campaign.onChainGoalEth, campaign.goalAmount, milestone.percentage, ethMyrRate)}
+                                <span className="mt-0.5 block text-left font-semibold text-stone-500">({milestone.percentage}% of campaign)</span>
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-violet-100 bg-violet-50/45 px-3 py-2 text-left">
+                              <p className="text-left text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">Campaign funding target</p>
+                              <p className="mt-1 text-left text-xs font-black text-stone-900">
+                                {formatMilestoneValue(
+                                  campaign.onChainGoalEth,
                                   campaign.goalAmount,
                                   getCumulativeMilestonePercentage(
                                     campaign.milestoneDetails ??
@@ -608,29 +741,27 @@ export default async function DonorTrackingPage({
                                       })),
                                     index,
                                   ),
-                                ),
-                              )}
-                            </span>
-                          </div>
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-stone-100">
-                            <div
-                              className="donor-ledger-progress h-full rounded-full bg-[linear-gradient(90deg,#f97316,#f59e0b,#facc15)]"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  Math.max(0, milestone.percentage),
-                                )}%`,
-                              }}
-                            />
+                                  ethMyrRate,
+                                )}
+                                <span className="mt-0.5 block text-left font-semibold text-violet-600">Cumulative target</span>
+                              </p>
+                            </div>
                           </div>
                           {milestone.requirement ? (
                             <p className="mt-1 text-xs font-medium text-stone-500">
-                              Release condition: {milestone.requirement}
+                              Proof required: {milestone.requirement}
                             </p>
                           ) : null}
-                          <p className="mt-1 text-xs font-medium text-stone-500">
-                            Proof status: {milestone.status}
-                          </p>
+                          <div className="mt-2 flex gap-2 rounded-xl border border-slate-200 bg-slate-50/75 px-3 py-2.5">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden="true">
+                              <path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" />
+                              <path d="m9 12 2 2 4-4" />
+                            </svg>
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">What this status means</p>
+                              <p className="mt-1 text-xs leading-5 text-stone-600">{getMilestoneGuidance(milestone.status)}</p>
+                            </div>
+                          </div>
                           <div className="mt-2">
                             <TransactionLinks
                               proofTxHash={milestone.proofTxHash}
@@ -648,11 +779,14 @@ export default async function DonorTrackingPage({
             ) : (
               <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
                 <p className="text-sm font-black text-stone-950">
-                  No milestone plans to track yet
+                  {campaigns.length > 0
+                    ? `No ${activeReleaseFilter} campaigns`
+                    : "No milestone plans to track yet"}
                 </p>
                 <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                  Milestone plans will appear after active campaigns are
-                  available.
+                  {campaigns.length > 0
+                    ? "Choose another milestone-state filter to view your other supported campaigns."
+                    : "Campaign milestones will appear here after your first confirmed donation."}
                 </p>
               </div>
             )}

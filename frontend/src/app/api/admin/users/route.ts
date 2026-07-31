@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminWallet } from "@/lib/admin-wallets";
+import { getRoleBadgeSummary } from "@/lib/role-nft";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: NextRequest) {
@@ -10,32 +11,30 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const [profileResult, applicationResult] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, role, full_name, email, wallet_address, account_status, deactivation_reason, deactivated_at, deactivated_by, created_at, updated_at")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("shelter_applications")
-        .select("user_id, shelter_name, registration_id, shelter_address, contact_phone, website_url, status, updated_at")
-        .order("updated_at", { ascending: false }),
-    ]);
+    const profileResult = await supabase
+      .from("profiles")
+      .select("id, role, full_name, email, wallet_address, account_status, deactivation_reason, deactivated_at, deactivated_by, created_at, updated_at")
+      .eq("role", "donor")
+      .order("created_at", { ascending: false });
 
     if (profileResult.error) throw profileResult.error;
-    if (applicationResult.error) throw applicationResult.error;
 
-    const applications = new Map<string, NonNullable<typeof applicationResult.data>[number]>();
-    for (const application of applicationResult.data ?? []) {
-      if (!applications.has(application.user_id)) {
-        applications.set(application.user_id, application);
-      }
-    }
+    const users = await Promise.all(
+      (profileResult.data ?? []).map(async (profile) => {
+        const roleBadge =
+          profile.role === "donor" && profile.wallet_address
+            ? await getRoleBadgeSummary(profile.wallet_address).catch(() => null)
+            : null;
+
+        return {
+          ...profile,
+          donor_badge_level: roleBadge?.donorLevel ?? null,
+        };
+      }),
+    );
 
     return NextResponse.json({
-      users: (profileResult.data ?? []).map((profile) => ({
-        ...profile,
-        shelter_application: applications.get(profile.id) ?? null,
-      })),
+      users,
     });
   } catch (error) {
     return NextResponse.json(
