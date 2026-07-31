@@ -293,7 +293,7 @@ export default function DonorDonatePage() {
   const [campaignLoadError, setCampaignLoadError] = useState("");
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [selectedId, setSelectedId] = useState(initialCampaign ?? "");
-  const [amount, setAmount] = useState("0.0125");
+  const [amount, setAmount] = useState("100");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [donationError, setDonationError] = useState("");
@@ -673,7 +673,15 @@ export default function DonorDonatePage() {
     !Number.isFinite(parsedAmount) ||
     parsedAmount <= 0;
   const numericAmount = hasInvalidAmount ? 0 : parsedAmount;
-  const myrEstimate = numericAmount * ethToMyrRate;
+  const myrEstimate = numericAmount;
+  const donationEthAmount =
+    ethToMyrRate > 0 && Number.isFinite(ethToMyrRate)
+      ? numericAmount / ethToMyrRate
+      : 0;
+  const donationEthInput =
+    donationEthAmount > 0
+      ? donationEthAmount.toFixed(18).replace(/\.?0+$/, "")
+      : "0";
   const walletBalanceEth = walletBalance
     ? Number(formatEther(walletBalance.value))
     : null;
@@ -775,13 +783,9 @@ export default function DonorDonatePage() {
     currentStage?.remainingWei !== undefined
       ? Number(formatEther(currentStage.remainingWei))
       : currentStageRemaining / ethToMyrRate;
-  const currentStageEthInput =
-    currentStage?.remainingWei !== null &&
-    currentStage?.remainingWei !== undefined
-      ? formatEther(currentStage.remainingWei)
-      : currentStageEth.toFixed(6);
+  const currentStageMyrInput = currentStageRemaining.toFixed(2);
   const currentStageEthDisplay = formatEthText(currentStageEth);
-  const donationEthDisplay = formatEthText(numericAmount);
+  const donationEthDisplay = formatEthText(donationEthAmount);
   const isOpenForFunding =
     Boolean(currentStage) &&
     currentStageRemaining > 0 &&
@@ -814,7 +818,7 @@ export default function DonorDonatePage() {
     : "This campaign has reached all milestone targets.";
   const parsedDonationWei = hasInvalidAmount
     ? null
-    : parseEthInput(trimmedAmount);
+    : parseEthInput(donationEthInput);
   const exceedsCurrentStage =
     !hasInvalidAmount &&
     Boolean(currentStage) &&
@@ -822,13 +826,13 @@ export default function DonorDonatePage() {
     currentStage?.remainingWei !== undefined
       ? parsedDonationWei !== null &&
         parsedDonationWei > currentStage.remainingWei
-      : myrEstimate > currentStageRemaining + 0.01);
+    : numericAmount > currentStageRemaining + 0.01);
   const stageLimitMessage = currentStage
     ? currentStageRemaining <= 0
       ? milestoneGateMessage
       : `This milestone stage only needs ${currentStageEthDisplay} more. Please donate within the current stage before the next milestone unlocks.`
     : "This campaign has reached all milestone targets.";
-  const requiredTotalEth = numericAmount + estimatedGasEth;
+  const requiredTotalEth = donationEthAmount + estimatedGasEth;
   const requiredTotalEthDisplay = formatEthText(requiredTotalEth);
   const estimatedGasMyr = estimatedGasEth * ethToMyrRate;
   const requiredTotalMyr = requiredTotalEth * ethToMyrRate;
@@ -857,7 +861,7 @@ export default function DonorDonatePage() {
     }
 
     if (hasInvalidAmount) {
-      setDonationError("Please enter a valid ETH amount greater than 0.");
+      setDonationError("Please enter a valid MYR amount greater than 0.");
       return;
     }
 
@@ -916,9 +920,9 @@ export default function DonorDonatePage() {
 
     let donationValue: bigint;
     try {
-      donationValue = parseEther(trimmedAmount);
+      donationValue = parseEther(donationEthInput);
     } catch {
-      setDonationError("Please enter a valid ETH amount, for example 0.01.");
+      setDonationError("Please enter a valid MYR amount.");
       return;
     }
 
@@ -997,7 +1001,7 @@ export default function DonorDonatePage() {
               Donate with ETH.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Select a campaign, enter ETH, and confirm the transaction
+              Select a campaign, enter MYR, and confirm the ETH transaction
               in your wallet.
             </p>
           </div>
@@ -1236,121 +1240,6 @@ export default function DonorDonatePage() {
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-orange-100 bg-gradient-to-r from-orange-50/80 to-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                    Connected wallet
-                  </p>
-                  <p className="mt-1 font-mono text-sm font-black text-stone-950">
-                    {shortWallet}
-                  </p>
-                </div>
-                <div className="text-left sm:text-right">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                    Available balance
-                  </p>
-                  {walletBalanceEth !== null ? (
-                    <>
-                      <p className="mt-1 text-sm font-black text-stone-950">
-                        {formatEthText(walletBalanceEth)}
-                      </p>
-                      <p className="text-xs font-semibold text-stone-500">
-                        {formatLiveMyr(walletBalanceMyr ?? 0)}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-1 text-sm font-semibold text-stone-500">
-                      Connect wallet to view balance
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-[11.5rem_1fr]">
-                <label className="border-b border-orange-100 bg-white px-4 py-4 sm:border-b-0 sm:border-r">
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                    Token
-                  </span>
-                  <div className="mt-2 flex h-12 items-center gap-2.5 rounded-xl border border-orange-100 bg-white px-3 shadow-sm">
-                    <EthIcon />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-base font-black text-stone-950">ETH</p>
-                      <p className="text-xs font-semibold text-stone-400">
-                        Native token
-                      </p>
-                    </div>
-                  </div>
-                </label>
-                <label className="block bg-white px-4 py-4">
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                    ETH amount
-                  </span>
-                  <div className="mt-2 flex items-end justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50/25 px-3 py-2.5 focus-within:border-[var(--color-orange)] focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
-                    <input
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      inputMode="decimal"
-                      suppressHydrationWarning
-                      className="min-w-0 flex-1 border-0 bg-transparent text-3xl font-black text-stone-950 outline-none placeholder:text-stone-300"
-                      placeholder="0.00"
-                    />
-                    <span className="pb-1 text-sm font-black text-stone-400">
-                      ETH
-                    </span>
-                  </div>
-                  {hasInvalidAmount ? (
-                    <p className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
-                      Please enter a valid ETH amount greater than 0.
-                    </p>
-                  ) : null}
-                  {exceedsCurrentStage ? (
-                    <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                      {stageLimitMessage}
-                    </p>
-                  ) : null}
-                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2">
-                    <span className="text-xs font-semibold text-stone-500">
-                      Live MYR estimate
-                    </span>
-                    <span className="text-sm font-black text-stone-950">
-                      {formatLiveMyr(myrEstimate)}
-                    </span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Quick local presets
-              </p>
-              <p className="text-xs font-semibold text-stone-500">
-                Live rate: 1 ETH = {formatMyr(ethToMyrRate)}
-              </p>
-            </div>
-            <div className="mt-2 grid grid-cols-4 gap-2">
-              {quickAmountsMyr.map((quickAmount) => {
-                const ethAmount = quickAmount / ethToMyrRate;
-
-                return (
-                  <button
-                    key={quickAmount}
-                    type="button"
-                    onClick={() => setAmount(ethAmount.toFixed(6))}
-                    suppressHydrationWarning
-                    className={[
-                      "rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5",
-                      Math.abs(numericAmount - ethAmount) < 0.000001
-                        ? "border-[var(--color-orange)] bg-orange-50 text-[var(--color-orange)]"
-                        : "border-orange-100 bg-white text-stone-700 hover:border-orange-200 hover:bg-orange-50",
-                    ].join(" ")}
-                  >
-                    RM {quickAmount}
-                  </button>
-                );
-              })}
-            </div>
             <div className="donor-gradient-card mt-4 rounded-2xl border border-orange-100 bg-white p-3 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
@@ -1401,6 +1290,120 @@ export default function DonorDonatePage() {
                 </p>
               ) : null}
             </div>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+              <div className="flex flex-col gap-3 border-b border-orange-100 bg-gradient-to-r from-orange-50/80 to-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                    Connected wallet
+                  </p>
+                  <p className="mt-1 font-mono text-sm font-black text-stone-950">
+                    {shortWallet}
+                  </p>
+                </div>
+                <div className="text-left sm:text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                    Available balance
+                  </p>
+                  {walletBalanceEth !== null ? (
+                    <>
+                      <p className="mt-1 text-sm font-black text-stone-950">
+                        {formatEthText(walletBalanceEth)}
+                      </p>
+                      <p className="text-xs font-semibold text-stone-500">
+                        {formatLiveMyr(walletBalanceMyr ?? 0)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm font-semibold text-stone-500">
+                      Connect wallet to view balance
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-[11.5rem_1fr]">
+                <label className="border-b border-orange-100 bg-white px-4 py-4 sm:border-b-0 sm:border-r">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    Token
+                  </span>
+                  <div className="mt-2 flex h-12 items-center gap-2.5 rounded-xl border border-orange-100 bg-white px-3 shadow-sm">
+                    <EthIcon />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-black text-stone-950">ETH</p>
+                      <p className="text-xs font-semibold text-stone-400">
+                        Native token
+                      </p>
+                    </div>
+                  </div>
+                </label>
+                <label className="block bg-white px-4 py-4">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                    MYR amount
+                  </span>
+                  <div className="mt-2 flex items-end justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50/25 px-3 py-2.5 focus-within:border-[var(--color-orange)] focus-within:bg-white focus-within:ring-2 focus-within:ring-orange-100">
+                    <input
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      inputMode="decimal"
+                      suppressHydrationWarning
+                      className="min-w-0 flex-1 border-0 bg-transparent text-3xl font-black text-stone-950 outline-none placeholder:text-stone-300"
+                      placeholder="0.00"
+                    />
+                    <span className="pb-1 text-sm font-black text-stone-400">
+                      MYR
+                    </span>
+                  </div>
+                  {hasInvalidAmount ? (
+                    <p className="mt-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                      Please enter a valid MYR amount greater than 0.
+                    </p>
+                  ) : null}
+                  {exceedsCurrentStage ? (
+                    <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                      {stageLimitMessage}
+                    </p>
+                  ) : null}
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-orange-100 bg-white px-3 py-2">
+                    <span className="text-xs font-semibold text-stone-500">
+                      Approx. ETH value
+                    </span>
+                    <span className="text-sm font-black text-stone-950">
+                      {donationEthDisplay}
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
+                Quick local presets
+              </p>
+              <p className="text-xs font-semibold text-stone-500">
+                Live rate: 1 ETH = {formatMyr(ethToMyrRate)}
+              </p>
+            </div>
+            <div className="mt-2 grid grid-cols-4 gap-2">
+              {quickAmountsMyr.map((quickAmount) => {
+                return (
+                  <button
+                    key={quickAmount}
+                    type="button"
+                    onClick={() => setAmount(String(quickAmount))}
+                    suppressHydrationWarning
+                    className={[
+                      "rounded-xl border px-3 py-2 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5",
+                      Math.abs(numericAmount - quickAmount) < 0.01
+                        ? "border-[var(--color-orange)] bg-orange-50 text-[var(--color-orange)]"
+                        : "border-orange-100 bg-white text-stone-700 hover:border-orange-200 hover:bg-orange-50",
+                    ].join(" ")}
+                  >
+                    RM {quickAmount}
+                  </button>
+                );
+              })}
+            </div>
             <button
               type="button"
               disabled={
@@ -1409,7 +1412,7 @@ export default function DonorDonatePage() {
                 isLoadingOnChainBase ||
                 isLoadingOnChainMilestone
               }
-              onClick={() => setAmount(currentStageEthInput)}
+              onClick={() => setAmount(currentStageMyrInput)}
               suppressHydrationWarning
               className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--color-orange)] bg-white px-3 py-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-orange-100 disabled:bg-orange-50/40 disabled:opacity-60"
             >
@@ -1505,8 +1508,8 @@ export default function DonorDonatePage() {
                 </summary>
                 <div className="divide-y divide-orange-100 border-t border-orange-100 text-sm">
                   {[
+                    ["MYR donation", formatLiveMyr(myrEstimate)],
                     ["ETH donation", donationEthDisplay],
-                    ["Live MYR estimate", formatLiveMyr(myrEstimate)],
                     ["Gas buffer", `${formatEthText(estimatedGasEth)} / ${formatLiveMyr(estimatedGasMyr)}`],
                     ["Estimated total", `${requiredTotalEthDisplay} / ${formatLiveMyr(requiredTotalMyr)}`],
                     ["Rate", `${rateLabel}: 1 ETH = ${formatMyr(ethToMyrRate)}`],
