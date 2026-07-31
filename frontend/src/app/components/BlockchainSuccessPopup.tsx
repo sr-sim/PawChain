@@ -10,6 +10,7 @@ type BlockchainSuccessPopupProps = {
   message: string;
   txHash?: string;
   transactions?: { label: string; hash: string }[];
+  details?: { label: string; value: string }[];
   actionLabel?: string;
   onClose: () => void;
   autoCloseMs?: number;
@@ -24,6 +25,7 @@ export function BlockchainSuccessPopup({
   message,
   txHash = "",
   transactions = [],
+  details = [],
   actionLabel = "View transaction",
   onClose,
   autoCloseMs = 0,
@@ -161,6 +163,24 @@ export function BlockchainSuccessPopup({
               <p className="mt-1 break-all font-mono text-xs font-bold leading-5 text-stone-700">
                 {txHash}
               </p>
+            </div>
+          ) : null}
+
+          {details.length > 0 ? (
+            <div className="mt-4 overflow-hidden rounded-xl border border-orange-100 bg-white">
+              {details.map((detail) => (
+                <div
+                  key={`${detail.label}-${detail.value}`}
+                  className="flex items-center justify-between gap-4 border-b border-orange-100 px-3 py-2 last:border-b-0"
+                >
+                  <span className="text-[10px] font-black uppercase tracking-wide text-stone-400">
+                    {detail.label}
+                  </span>
+                  <span className="text-right text-xs font-black text-stone-800">
+                    {detail.value}
+                  </span>
+                </div>
+              ))}
             </div>
           ) : null}
 

@@ -239,9 +239,7 @@ export function DashboardTopBar({
                   <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--color-orange)] px-1.5 py-0.5 text-center text-[0.65rem] font-black leading-none text-white ring-2 ring-white">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
-                ) : (
-                  <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-white" />
-                )}
+                ) : null}
               </button>
 
               {isNotificationOpen ? (
@@ -262,9 +260,7 @@ export function DashboardTopBar({
                     {hasUnread && resolvedMarkAllNotificationsRead ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          void resolvedMarkAllNotificationsRead()
-                        }
+                        onClick={() => void resolvedMarkAllNotificationsRead()}
                         suppressHydrationWarning
                         className="rounded-full border border-orange-200 bg-white px-3 py-1.5 text-xs font-black text-[var(--color-orange)] transition hover:bg-orange-50"
                       >
@@ -282,8 +278,8 @@ export function DashboardTopBar({
                             item.href
                               ? item.href
                               : item.campaign_id
-                              ? `/Donor/campaigns/${item.campaign_id}`
-                              : resolvedNotificationHref
+                                ? `/Donor/campaigns/${item.campaign_id}`
+                                : resolvedNotificationHref
                           }
                           onClick={() => setIsNotificationOpen(false)}
                           className={[

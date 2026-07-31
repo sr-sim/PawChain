@@ -217,6 +217,7 @@ export function DonorCampaignSlideshow({
           </div>
         </>
       ) : null}
+      {/* Manual navigation controls removed to ensure auto-slide only */}
     </section>
   );
 }

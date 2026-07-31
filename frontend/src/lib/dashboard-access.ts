@@ -39,9 +39,21 @@ export async function getDashboardProfile(
     };
   }
 
-  const roleStatus = await getRoleNFTStatus(walletAddress);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, wallet_address")
+    .ilike("wallet_address", walletAddress)
+    .eq("role", expectedRole)
+    .maybeSingle();
+  let roleStatus: Awaited<ReturnType<typeof getRoleNFTStatus>> | null = null;
 
-  if (!roleStatus.hasNFT || roleStatus.dbRole !== expectedRole) {
+  try {
+    roleStatus = await getRoleNFTStatus(walletAddress);
+  } catch {
+    roleStatus = null;
+  }
+
+  if (roleStatus && (!roleStatus.hasNFT || roleStatus.dbRole !== expectedRole)) {
     return {
       userId: null,
       profile: null,
@@ -50,12 +62,6 @@ export async function getDashboardProfile(
     };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, role, wallet_address")
-    .ilike("wallet_address", walletAddress)
-    .eq("role", expectedRole)
-    .maybeSingle();
   const shelterImageUrl =
     expectedRole === "shelter"
       ? await getOptionalShelterImageUrl(supabase, profile?.id)
@@ -65,6 +71,6 @@ export async function getDashboardProfile(
     userId: profile?.id ?? null,
     profile: profile ? { ...profile, shelter_image_url: shelterImageUrl } : null,
     accessMode: "wallet" as const,
-    roleNFT: roleStatus.roleNFT,
+    roleNFT: roleStatus?.roleNFT ?? null,
   };
 }
