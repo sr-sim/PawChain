@@ -132,6 +132,8 @@ The current PawChain contracts are deployed on Ethereum Sepolia:
 - **RoleNFT:** [`0x2F2bFC356D87a901CDe862B5D0DFc20017838C43`](https://sepolia.etherscan.io/address/0x2F2bFC356D87a901CDe862B5D0DFc20017838C43#code)
 - **CampaignFactory:** [`0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa`](https://sepolia.etherscan.io/address/0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa#code)
 
+Individual Campaign contracts are created automatically by the CampaignFactory whenever an administrator approves a campaign. They are not listed here because every approved campaign has a different contract address; each address is available from its campaign page and deployment transaction.
+
 Use these addresses in `frontend/.env.local`:
 
 ```env
@@ -206,37 +208,61 @@ PawChain/
 │   ├── metadata/        # RoleNFT metadata
 │   └── test/            # Hardhat tests
 ├── frontend/
-│   ├── src/app/         # Pages and API routes
-│   ├── src/lib/         # Blockchain, database, and domain logic
-│   ├── src/context/     # Wallet context
-│   └── public/          # Static assets
+│   ├── public/          # Images and static assets
+│   ├── scripts/         # RoleNFT seeding script
+│   └── src/
+│       ├── app/         # Donor, Shelter, Admin, registration, and API routes
+│       ├── context/     # Shared Web3 wallet context
+│       ├── lib/         # Blockchain, Supabase, session, and domain logic
+│       ├── styles/      # Shared theme styles
+│       └── utils/       # Web3 configuration
 └── package.json         # Root commands
 ```
 
-## 🚀 Detailed setup
+## 🚀 Run the application locally
 
-### 1. Prerequisites
+### Prerequisites
 
-Install or prepare:
+#### Node.js and npm
 
-- Node.js 20 or later and npm.
-- MetaMask or another compatible browser wallet.
-- A Supabase project containing the PawChain database tables and storage buckets.
-- A Reown Cloud project for wallet connection.
-- A Sepolia RPC endpoint and Sepolia ETH for deployment and transaction gas.
-- IPFS metadata CIDs for the donor badge levels and shelter badge.
-- A Gmail account with an App Password if Hero certificate email is required.
-
-Check the local tools:
+Install Node.js 20 or later from [nodejs.org](https://nodejs.org/), then verify:
 
 ```powershell
 node --version
 npm --version
 ```
 
-### 2. Install dependencies
+#### MetaMask
 
-From the repository root:
+Install MetaMask, create or import a test wallet, and select **Ethereum Sepolia**:
+
+```text
+Network: Ethereum Sepolia
+Chain ID: 11155111
+Currency: ETH
+Explorer: https://sepolia.etherscan.io
+```
+
+The wallets used for deployment and testing need Sepolia ETH for gas.
+
+#### Required services
+
+- A Supabase project with the PawChain tables and storage buckets.
+- A Reown Cloud project for wallet connection.
+- A Sepolia RPC URL.
+- IPFS metadata CIDs for RoleNFT badges.
+- Gmail with an App Password for Hero certificate emails.
+
+### Setup steps
+
+#### 1. Clone the repository
+
+```powershell
+git clone https://github.com/sr-sim/PawChain.git
+cd PawChain
+```
+
+#### 2. Install dependencies
 
 ```powershell
 npm install
@@ -244,74 +270,25 @@ npm --prefix backend install
 npm --prefix frontend install
 ```
 
-### 3. Configure the backend
+#### 3. Configure the frontend
 
-Create `backend/.env`:
-
-```env
-DEPLOYER_PRIVATE_KEY=
-SEPOLIA_RPC_URL=
-```
-
-| Variable | Purpose |
-| --- | --- |
-| `DEPLOYER_PRIVATE_KEY` | Private key of the wallet that deploys the contracts. This wallet becomes the owner when deploying `RoleNFT`. Include the `0x` prefix if available; the Hardhat configuration also accepts the key without it. |
-| `SEPOLIA_RPC_URL` | HTTPS RPC endpoint for Ethereum Sepolia, obtained from a provider such as Alchemy, Infura, or another Ethereum RPC service. |
-
-The deployer must have enough Sepolia ETH to pay deployment gas. Never use a wallet that holds real mainnet funds and never commit this file.
-
-Compile and test the contracts before deployment:
-
-```powershell
-npm.cmd --prefix backend run compile
-npm.cmd run test:backend
-```
-
-### 4. Deploy the contracts
-
-For a new Sepolia deployment, deploy `RoleNFT` first:
-
-```powershell
-cd backend
-npx hardhat ignition deploy ignition/modules/RoleNFT.ts --network sepolia --deployment-id pawchain-role-nft-sepolia
-```
-
-Copy the deployed `RoleNFT` address from the command output. Then place it in `backend/ignition/parameters/sepolia-campaign-factory-v3.json`:
-
-```json
-{
-  "CampaignFactoryRefundV3SepoliaModule": {
-    "roleNFTAddress": "0xYOUR_ROLE_NFT_ADDRESS"
-  }
-}
-```
-
-Deploy the V3 CampaignFactory:
-
-```powershell
-npm.cmd run deploy:factory:v3:sepolia
-cd ..
-```
-
-Copy the deployed `CampaignFactory` address. The deployment module also authorizes the factory as a RoleNFT recorder manager, allowing newly created Campaign contracts to record donor badge progress.
-
-If the contracts are already deployed, skip this step and use the existing RoleNFT and CampaignFactory addresses. Both addresses must belong to Sepolia and to the same PawChain deployment.
-
-### 5. Configure the frontend
-
-Create `frontend/.env.local` with the following values. Next.js also reads `frontend/.env`, but the included `seed-role-nfts.mjs` script specifically reads `.env.local`, so `.env.local` is recommended.
+Create `frontend/.env.local`:
 
 ```env
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+
+# Reown and Sepolia
 NEXT_PUBLIC_PROJECT_ID=
-NEXT_PUBLIC_ROLE_NFT_ADDRESS=
-NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=
+NEXT_PUBLIC_ROLE_NFT_ADDRESS=0x2F2bFC356D87a901CDe862B5D0DFc20017838C43
+NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 NEXT_PUBLIC_CHAIN_ID=11155111
 NEXT_PUBLIC_RPC_URL=
 ROLE_NFT_MINTER_PRIVATE_KEY=
 
+# RoleNFT metadata
 DONOR_METADATA_CID=
 SHELTER_METADATA_CID=
 BRONZE_DONOR_METADATA_CID=
@@ -319,93 +296,101 @@ SILVER_DONOR_METADATA_CID=
 GOLD_DONOR_METADATA_CID=
 HERO_DONOR_METADATA_CID=
 
-CERTIFICATE_FROM_NAME=
+# Certificate email and wallet session
+CERTIFICATE_FROM_NAME=PawChain Certificates
 GMAIL_SMTP_USER=
 GMAIL_APP_PASSWORD=
 WALLET_SESSION_SECRET=
 ```
 
-#### Supabase
+Get the Supabase values from **Supabase Dashboard → Project Settings → API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use IPFS metadata CIDs for the badge variables.
 
-| Variable | Value |
-| --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Project URL from **Supabase Dashboard → Project Settings → API**. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anonymous key from the same Supabase API settings page. Do not use the service-role key here. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only service-role key used by protected API routes. Obtain it from the Supabase API settings and never expose it with a `NEXT_PUBLIC_` prefix. |
+`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` should contain at least 32 random characters.
 
-The configured Supabase project must contain the tables and storage expected by PawChain. The URL and anonymous key are exposed to the browser, so database access must be protected by appropriate Supabase policies and server-side API checks. The service-role key bypasses normal Row Level Security and must remain secret.
+Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
-#### Wallet and Sepolia network
+#### 4. Configure the backend
 
-| Variable | Value |
-| --- | --- |
-| `NEXT_PUBLIC_PROJECT_ID` | Project ID from the Reown Cloud dashboard. |
-| `NEXT_PUBLIC_ROLE_NFT_ADDRESS` | Sepolia address produced by the RoleNFT deployment. |
-| `NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS` | Sepolia address produced by the V3 CampaignFactory deployment. |
-| `NEXT_PUBLIC_CHAIN_ID` | Use `11155111` for Ethereum Sepolia. |
-| `NEXT_PUBLIC_RPC_URL` | The Sepolia RPC URL used by the application to read blockchain state. |
-| `ROLE_NFT_MINTER_PRIVATE_KEY` | Server-only private key for a RoleNFT administrator authorized to mint and revoke role badges. It must start with `0x`. |
+The contracts are already deployed. This file is needed only when compiling, testing, or redeploying them. Create `backend/.env`:
 
-`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to the RoleNFT owner or one of the administrator addresses recognized by the contract. Despite being stored under the frontend directory, it is used only by server-side code and must never use the `NEXT_PUBLIC_` prefix.
+```env
+DEPLOYER_PRIVATE_KEY=
+SEPOLIA_RPC_URL=
+```
 
-#### RoleNFT metadata
+The deployer wallet must have Sepolia ETH. To compile and test:
 
-| Variable | Metadata represented |
-| --- | --- |
-| `DONOR_METADATA_CID` | Normal donor badge metadata. |
-| `SHELTER_METADATA_CID` | Verified shelter badge metadata. |
-| `BRONZE_DONOR_METADATA_CID` | Bronze donor badge metadata. |
-| `SILVER_DONOR_METADATA_CID` | Silver donor badge metadata. |
-| `GOLD_DONOR_METADATA_CID` | Gold donor badge metadata. |
-| `HERO_DONOR_METADATA_CID` | Hero donor badge metadata. |
+```powershell
+npm.cmd --prefix backend run compile
+npm.cmd run test:backend
+```
 
-Use the IPFS metadata CID only, for example `Qm...` or `bafy...`, rather than a local filename. Each metadata JSON file should contain the badge name, description, image URI, and any desired attributes. The referenced image must already be accessible through IPFS.
-
-#### Certificate email and wallet sessions
-
-| Variable | Value |
-| --- | --- |
-| `CERTIFICATE_FROM_NAME` | Sender name shown on Hero certificate emails, such as `PawChain Certificates`. |
-| `GMAIL_SMTP_USER` | Gmail address used to send certificates. |
-| `GMAIL_APP_PASSWORD` | Google App Password for that Gmail account, not the normal account password. |
-| `WALLET_SESSION_SECRET` | Random server secret used to protect signed wallet sessions; use at least 32 characters. |
-
-Generate a wallet-session secret with a password manager or another cryptographically secure secret generator. Restart the frontend whenever environment values change.
-
-### 6. Add Sepolia to the wallet
-
-Configure the user's wallet with:
-
-| Setting | Value |
-| --- | --- |
-| Network name | Ethereum Sepolia |
-| Chain ID | `11155111` |
-| Currency symbol | `ETH` |
-| RPC URL | The same Sepolia endpoint configured above |
-| Block explorer | `https://sepolia.etherscan.io` |
-
-Fund administrator, shelter, and donor test wallets with Sepolia ETH before testing blockchain actions.
-
-### 7. Start the application
-
-From the repository root:
+#### 5. Start the development server
 
 ```powershell
 npm.cmd run frontend
 ```
 
-Open [http://localhost:3000](http://localhost:3000), connect a wallet on Sepolia, and complete the wallet-signature authentication flow.
+Open [http://localhost:3000](http://localhost:3000), connect MetaMask to Sepolia, select a role, and start using PawChain.
 
-For local Hardhat development instead of Sepolia, use `npm.cmd run dev:all`. That workflow deploys fresh local contracts, so use chain ID `31337`, the local RPC URL `http://127.0.0.1:8545`, and the newly emitted local contract addresses.
+### Administrator account setup
 
-### Setup checklist
+Administrators are internal users and cannot create an account through the public registration form. Admin access is determined directly by the deployed RoleNFT contract through `isAdmin(walletAddress)`, so an administrator does not need a donor or shelter profile in Supabase.
 
-- [ ] Backend dependencies installed and contracts compiled.
-- [ ] Deployer wallet funded with Sepolia ETH.
-- [ ] RoleNFT deployed and its address recorded.
-- [ ] CampaignFactory deployed using the same RoleNFT address.
-- [ ] Reown, Supabase, network, contract, metadata, email, and session variables configured.
-- [ ] RoleNFT minter key belongs to an authorized administrator.
-- [ ] Frontend restarted after environment changes.
-- [ ] Wallet connected to chain ID `11155111`.
-- [ ] Shelter registration, admin approval, campaign deployment, donation, and milestone flow tested with separate wallets.
+For the current Sepolia deployment, the connected wallet must be one of the following:
+
+- The wallet that owns the deployed RoleNFT contract.
+- `0x6aFf4af1a3f45adBbEa5d64955387b2f809521A6`
+- `0x0D900c6FeF62E96Aa8Cf5788170A516aC66f3776`
+
+To prepare lecturer access:
+
+1. Choose a dedicated authorized Sepolia test wallet intended for demonstration. Do not reuse a wallet that controls real funds.
+2. Provide its private key to the lecturer through a secure private channel. Never place the key in this README, GitHub, email screenshots, or presentation slides.
+3. In MetaMask, select **Add account or hardware wallet → Import account** and import the private key.
+4. Switch MetaMask to **Ethereum Sepolia** with chain ID `11155111`.
+5. Ensure the wallet has a small amount of Sepolia ETH for administrative transactions.
+6. Start PawChain and connect the imported wallet.
+7. Sign the wallet-authentication message. PawChain checks the wallet against `RoleNFT.isAdmin()` and redirects an authorized wallet to `/Admin/dashboard`.
+
+Set the same authorized wallet key in `frontend/.env.local` when the server must mint or revoke RoleNFTs:
+
+```env
+ROLE_NFT_MINTER_PRIVATE_KEY=0xYOUR_AUTHORIZED_ADMIN_PRIVATE_KEY
+```
+
+This variable is server-only. Do not add `NEXT_PUBLIC_` to its name, and do not commit `frontend/.env.local`.
+
+An arbitrary lecturer wallet cannot be made an administrator through the UI or database. With the current contract, use an already authorized wallet, transfer RoleNFT ownership from the current owner, or deploy a new RoleNFT contract configured for the lecturer's test wallet.
+
+For a fresh local Hardhat deployment, the first Hardhat account deploys RoleNFT and becomes its owner, so it is automatically an administrator. Import that account's private key from the local Hardhat terminal into MetaMask, connect to `http://127.0.0.1:8545` with chain ID `31337`, and use the newly deployed local contract addresses.
+
+## 🔧 Troubleshooting
+
+### Wallet connection issues
+
+- Confirm MetaMask is connected to Ethereum Sepolia with chain ID `11155111`.
+- Confirm `NEXT_PUBLIC_PROJECT_ID` and `NEXT_PUBLIC_RPC_URL` are correct.
+- Check that the wallet has enough Sepolia ETH for gas.
+- Disconnect and reconnect the wallet after changing networks.
+
+### Contract errors
+
+- Confirm the RoleNFT and CampaignFactory addresses match the deployed Sepolia contracts listed above.
+- Confirm the administrator or minter wallet is authorized by the RoleNFT contract.
+- Restart the frontend after changing environment variables.
+
+### Administrator access denied
+
+- Confirm MetaMask is using the intended administrator address.
+- Confirm the wallet is connected to the same network as `NEXT_PUBLIC_ROLE_NFT_ADDRESS`.
+- Confirm the configured RoleNFT address is `0x2F2bFC356D87a901CDe862B5D0DFc20017838C43` for the current Sepolia deployment.
+- Check the wallet with the RoleNFT contract's `isAdmin(address)` read function on Etherscan.
+- Admin access cannot be granted by inserting an `admin` row into Supabase; the wallet must be authorized by the smart contract.
+
+### Frontend or database errors
+
+- Confirm all required variables exist in `frontend/.env.local`.
+- Confirm the Supabase URL and keys belong to the same project.
+- Check that the required Supabase tables, storage buckets, and access policies exist.
+- Check the terminal and browser console for the specific error message.
