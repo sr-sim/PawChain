@@ -12,6 +12,7 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { DonorProofEvidence } from "@/app/components/DonorProofEvidence";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 import { formatPercentage } from "@/lib/format-percentage";
 
@@ -26,7 +27,11 @@ type DonorCampaign = Campaign & {
   deploymentTxHash?: string | null;
   milestoneDetails?: {
     title: string;
+    description?: string;
+    requirement?: string;
     percentage: number;
+    status?: string;
+    proofUrl?: string | null;
     proofTxHash?: string | null;
     reviewTxHash?: string | null;
     releaseTxHash?: string | null;
@@ -35,7 +40,11 @@ type DonorCampaign = Campaign & {
 
 type MilestoneDisplay = {
   title: string;
+  description?: string;
+  requirement?: string;
   percentage: number;
+  status?: string;
+  proofUrl?: string | null;
   proofTxHash?: string | null;
   reviewTxHash?: string | null;
   releaseTxHash?: string | null;
@@ -1483,7 +1492,6 @@ export default function DonorDiscoverPage() {
                     selectedCampaign.raised,
                   );
                   const isLocked = fundingState.tone === "locked";
-
                   return (
                   <div
                     key={milestone.title}
@@ -1556,6 +1564,11 @@ export default function DonorDiscoverPage() {
                         <p className="mt-1 text-[11px] font-semibold text-stone-400">
                           {formatPercentage(fundingState.progress)}% of this stage funded
                         </p>
+                        {milestone.description ? (
+                          <p className="mt-2 text-xs leading-5 text-stone-600">
+                            {milestone.description}
+                          </p>
+                        ) : null}
                         <p className="text-xs font-semibold text-stone-500">
                           Stage:{" "}
                           {getMilestoneDisplayAmount(
@@ -1573,6 +1586,12 @@ export default function DonorDiscoverPage() {
                             ),
                           )}
                         </p>
+                        {milestone.status ? (
+                          <p className="text-xs font-semibold text-stone-500">
+                            Proof status: {milestone.status}
+                          </p>
+                        ) : null}
+                        <DonorProofEvidence proofUrl={milestone.proofUrl} />
                       </div>
                     </div>
                     <div className="mt-3">

@@ -5,6 +5,7 @@ import {
 import { getDonorDonations } from "@/lib/donor-donations";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { DonorProofEvidence } from "@/app/components/DonorProofEvidence";
 import { RefundClaimButton } from "./RefundClaimButton";
 import { getLatestEthMyrRate } from "@/lib/currency";
 import { AnimatedEthTotal } from "./AnimatedEthTotal";
@@ -283,6 +284,16 @@ export default async function DonorTrackingPage({
 
     return true;
   });
+  const campaignDonationTotals = donationData.donations.reduce(
+    (map, donation) => {
+      map.set(
+        donation.campaignId,
+        (map.get(donation.campaignId) ?? 0) + donation.amountEth,
+      );
+      return map;
+    },
+    new Map<string, number>(),
+  );
   const filteredReleaseCampaigns = campaigns.filter((campaign) => {
     if (activeReleaseFilter === "all") return true;
     const campaignStatus = campaign.status.toLowerCase();
@@ -461,7 +472,9 @@ export default async function DonorTrackingPage({
                                 </p>
                                 {donation.refundAmountEth > 0 ? (
                                   <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
-                                    {formatMyr(donation.refundAmount)}
+                                    {formatMyr(
+                                      donation.refundAmountEth * ethMyrRate,
+                                    )}
                                   </p>
                                 ) : null}
                               </div>
@@ -505,6 +518,11 @@ export default async function DonorTrackingPage({
                         <RefundClaimButton
                           campaignId={donation.campaignId}
                           contractAddress={donation.contractAddress}
+                          donationAmountEth={donation.amountEth}
+                          campaignDonationTotalEth={
+                            campaignDonationTotals.get(donation.campaignId) ??
+                            donation.amountEth
+                          }
                         />
                       </div>
                       <div className="text-left lg:text-center">
@@ -699,6 +717,7 @@ export default async function DonorTrackingPage({
                       campaign.milestoneDetails ??
                       campaign.milestones.map((milestone) => ({
                         ...milestone,
+                        description: "",
                         requirement: "",
                         status: "Pending",
                         proofUrl: null,
@@ -722,6 +741,11 @@ export default async function DonorTrackingPage({
                           <p className="text-sm font-black text-stone-950">
                             {milestone.title}
                           </p>
+                          {milestone.description ? (
+                            <p className="mt-2 text-xs leading-5 text-stone-600">
+                              {milestone.description}
+                            </p>
+                          ) : null}
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             <div className="rounded-xl border border-orange-100 bg-orange-50/45 px-3 py-2 text-left">
                               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-700">This stage unlocks</p>
@@ -755,11 +779,7 @@ export default async function DonorTrackingPage({
                               </p>
                             </div>
                           </div>
-                          {milestone.requirement ? (
-                            <p className="mt-1 text-xs font-medium text-stone-500">
-                              Proof required: {milestone.requirement}
-                            </p>
-                          ) : null}
+                          <DonorProofEvidence proofUrl={milestone.proofUrl} />
                           <div className="mt-2 flex gap-2 rounded-xl border border-slate-200 bg-slate-50/75 px-3 py-2.5">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden="true">
                               <path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" />
