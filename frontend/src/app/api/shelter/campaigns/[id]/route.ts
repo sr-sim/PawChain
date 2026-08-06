@@ -250,9 +250,9 @@ export async function PATCH(
       );
     }
 
-    if (campaign.campaign_status !== "rejected") {
+    if (!["pending_approval", "rejected"].includes(campaign.campaign_status)) {
       return NextResponse.json(
-        { message: "Only rejected campaigns can be edited." },
+        { message: "Only pending or rejected campaigns can be edited before approval." },
         { status: 403 },
       );
     }

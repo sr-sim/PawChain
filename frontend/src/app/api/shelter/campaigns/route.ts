@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
     const imageUrl = String(body.imageUrl ?? "").trim();
     const goalEth = String(body.goalEth ?? "").trim();
     const ethMyrRate = Number(body.ethMyrRate);
+    const requestedGoalMyr = Number(body.goalAmount);
     const validGoalEth = /^\d+(?:\.\d{1,18})?$/.test(goalEth) && parseEther(goalEth) > BigInt(0);
     const goalAmount = Number(goalEth) * ethMyrRate;
     const durationDays = Number(body.durationDays);
@@ -120,9 +121,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!validGoalEth || !Number.isFinite(ethMyrRate) || ethMyrRate <= 0 || !Number.isFinite(goalAmount)) {
+    if (!validGoalEth || !Number.isFinite(ethMyrRate) || ethMyrRate <= 0 || !Number.isFinite(goalAmount) || requestedGoalMyr < 1000 || requestedGoalMyr % 100 !== 0) {
       return NextResponse.json(
-        { message: "Enter a valid ETH goal and conversion rate." },
+        { message: "Enter a goal of at least MYR 1,000 in increments of MYR 100." },
         { status: 400 },
       );
     }

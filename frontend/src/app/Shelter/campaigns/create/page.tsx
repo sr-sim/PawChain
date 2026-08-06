@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAppKit, useAppKitAccount } from "@reown/appkit/react";
 import type { UrgencyLevel } from "@/app/components/campaigns/campaign-types";
+import { AlertExclamationIcon } from "@/app/components/AlertExclamationIcon";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type CampaignForm = {
@@ -98,18 +99,40 @@ function FieldLabel({
   );
 }
 
+function InfoTooltip({ label, children, compact = false }: { label: string; children: ReactNode; compact?: boolean }) {
+  return (
+    <span className="group relative inline-flex shrink-0 align-middle">
+      <button
+        type="button"
+        aria-label={label}
+        className={`grid place-items-center text-[#f51621] drop-shadow-[0_1px_1px_rgba(120,0,0,0.25)] transition hover:scale-105 hover:text-red-600 focus:outline-none focus:ring-red-100 ${compact ? "h-4 w-4 focus:ring-2" : "h-7 w-7 focus:ring-4"}`}
+      >
+        <AlertExclamationIcon className={compact ? "h-4 w-4" : "h-7 w-7"} />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-[calc(100%+0.5rem)] z-50 hidden w-64 rounded-xl border border-orange-200 bg-white p-3 text-xs font-semibold normal-case leading-5 tracking-normal text-stone-600 shadow-xl group-hover:block group-focus-within:block"
+      >
+        {children}
+      </span>
+    </span>
+  );
+}
+
 function ThemedDropdown({
   value,
   onChange,
   placeholder,
   options,
   leadingIcon,
+  tone = "orange",
 }: {
   value: string;
   placeholder: string;
   options: SelectOption[];
   onChange: (value: string) => void;
   leadingIcon?: ReactNode;
+  tone?: "orange" | "violet";
 }) {
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -138,10 +161,10 @@ function ThemedDropdown({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         className={[
-          "flex w-full items-center justify-between gap-3 rounded-2xl border bg-orange-50/40 px-4 py-3 text-left text-base font-black leading-6 text-stone-950 outline-none transition",
+          "flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-base font-black leading-6 text-stone-950 outline-none transition",
           open
-            ? "border-[var(--color-orange)] bg-white ring-4 ring-orange-100"
-            : "border-orange-100 hover:bg-orange-50",
+            ? tone === "violet" ? "border-violet-600 bg-white ring-4 ring-violet-100" : "border-[var(--color-orange)] bg-white ring-4 ring-orange-100"
+            : tone === "violet" ? "border-violet-300 bg-white hover:border-violet-500" : "border-orange-100 bg-orange-50/40 hover:bg-orange-50",
         ].join(" ")}
       >
         <span className="flex items-center gap-3">{leadingIcon}{selectedLabel || placeholder}</span>
@@ -183,8 +206,8 @@ function ThemedDropdown({
                   className={[
                     "flex w-full items-center px-4 py-2.5 text-left text-sm font-black transition",
                     selected
-                      ? "bg-[var(--color-orange)] text-white"
-                      : "text-stone-800 hover:bg-orange-50 hover:text-stone-950",
+                      ? tone === "violet" ? "bg-violet-600 text-white" : "bg-[var(--color-orange)] text-white"
+                      : tone === "violet" ? "text-stone-800 hover:bg-violet-50 hover:text-stone-950" : "text-stone-800 hover:bg-orange-50 hover:text-stone-950",
                   ].join(" ")}
                 >
                   {option.label}
@@ -210,8 +233,16 @@ const durationOptions: SelectOption[] = [
   { label: "90 days", value: "90" },
 ];
 
+const proofRequirementOptions: SelectOption[] = [
+  { label: "Veterinary invoice", value: "Veterinary invoice" },
+  { label: "Medication receipt", value: "Medication receipt" },
+  { label: "Treatment or discharge report", value: "Treatment or discharge report" },
+  { label: "Animal care supply receipt", value: "Animal care supply receipt" },
+  { label: "Photo or video evidence", value: "Photo or video evidence" },
+];
+
 function formatMYR(value: number | string) {
-  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0))}`;
+  return `≈ live MYR ${new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0))}`;
 }
 
 function formatETH(value: number | string) {
@@ -219,15 +250,13 @@ function formatETH(value: number | string) {
   return `${Number.isFinite(amount) ? amount.toLocaleString("en-MY", { maximumFractionDigits: 8 }) : "0"} ETH`;
 }
 
-function normalizeEthInput(value: string) {
-  const cleaned = value.replace(/[^\d.]/g, "");
-  const [wholePart = "", ...decimalParts] = cleaned.split(".");
+function myrToEth(value: string, rate: number) {
+  const myr = Number(value || 0);
+  return rate > 0 && Number.isFinite(myr) ? myr / rate : 0;
+}
 
-  if (decimalParts.length === 0) {
-    return wholePart;
-  }
-
-  return `${wholePart || "0"}.${decimalParts.join("").slice(0, 18)}`;
+function ethInputFromMyr(value: string, rate: number) {
+  return myrToEth(value, rate).toFixed(18).replace(/\.?0+$/, "");
 }
 
 function proofRequirementItems(value: string) {
@@ -261,6 +290,7 @@ function MilestoneEditorRow({
   milestone,
   index,
   cumulative,
+  maxPercentage,
   goalAmount,
   ethMyrRate,
   canRemove,
@@ -270,24 +300,42 @@ function MilestoneEditorRow({
   milestone: MilestoneForm;
   index: number;
   cumulative: number;
+  maxPercentage: number;
   goalAmount: string;
   ethMyrRate: number;
   canRemove: boolean;
   onUpdate: (key: keyof MilestoneForm, value: string) => void;
   onRemove: () => void;
 }) {
-  const allocation = Number(goalAmount || 0) * Number(milestone.percentage || 0) / 100;
+  const allocation = myrToEth(goalAmount, ethMyrRate) * Number(milestone.percentage || 0) / 100;
 
   return (
-    <article className={`relative rounded-2xl border p-5 pl-16 ${index === 0 ? "border-[#FFCD80] bg-[linear-gradient(135deg,#FFFCC9,#FFFFFF)]" : "border-orange-200 bg-white"}`}>
+    <article className={`relative rounded-2xl border p-5 pl-16 focus-within:z-30 ${index === 0 ? "border-[#FFCD80] bg-[linear-gradient(135deg,#FFFCC9,#FFFFFF)]" : "border-orange-200 bg-white"}`}>
       <span className="absolute left-3 top-5 grid h-10 w-10 place-items-center rounded-full border border-orange-300 bg-orange-50 text-base font-black text-[var(--color-orange)]">{index + 1}</span>
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_0.55fr_0.6fr_0.8fr_1fr_auto] xl:items-start">
-        <div className="space-y-2"><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Milestone title</label><input value={milestone.title} onChange={(event) => onUpdate("title", event.target.value)} placeholder={index === 0 ? "Name the emergency milestone" : `Milestone ${index + 1} title`} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 text-sm font-black outline-none focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100" required /><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Description</label><textarea value={milestone.description} onChange={(event) => onUpdate("description", event.target.value)} placeholder="Describe what this milestone will achieve" rows={2} className="w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required />{index === 0 ? <p className="rounded-lg bg-orange-50 px-2 py-1.5 text-[10px] font-bold text-orange-700">Usage proof is uploaded after this fund is withdrawn.</p> : null}</div>
-        <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Percentage</label><div className="relative mt-2"><input value={milestone.percentage} onChange={(event) => onUpdate("percentage", event.target.value)} min="5" max="100" step="5" type="number" onWheel={preventWheelNumberChange} readOnly={index === 0} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 pr-7 text-sm font-black outline-none focus:border-[var(--color-orange)]" required /><span className="absolute right-3 top-2 text-xs font-black text-stone-400">%</span></div>{index === 0 ? <span className="mt-2 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Fixed</span> : null}</div>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)] xl:items-start">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-2 xl:items-start">
+        <div className="space-y-2"><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Milestone title</label><input value={milestone.title} onChange={(event) => onUpdate("title", event.target.value)} placeholder={index === 0 ? "Name the emergency milestone" : `Milestone ${index + 1} title`} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 text-sm font-black outline-none focus:border-[var(--color-orange)] focus:ring-2 focus:ring-orange-100" required /><div className="flex h-4 items-center gap-1"><label className="text-[10px] font-black uppercase leading-none tracking-wide text-stone-500">Description</label><InfoTooltip compact label="Explain usage proof">Usage proof is uploaded after this fund is withdrawn.</InfoTooltip></div><textarea value={milestone.description} onChange={(event) => onUpdate("description", event.target.value)} placeholder="Describe what this milestone will achieve" rows={2} className="w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required /></div>
+        <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Percentage</label><div className="relative mt-2"><input value={milestone.percentage} onChange={(event) => { const next = event.target.value; onUpdate("percentage", next === "" ? "" : String(Math.min(maxPercentage, Math.max(1, Number(next))))); }} min={index === 0 ? 5 : 1} max={maxPercentage} step="1" type="number" onWheel={preventWheelNumberChange} readOnly={index === 0} className="w-full rounded-xl border border-orange-100 bg-white px-3 py-2 pr-7 text-sm font-black outline-none focus:border-[var(--color-orange)]" required /><span className="absolute right-3 top-2 text-xs font-black text-stone-400">%</span></div>{index === 0 ? <span className="mt-2 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Fixed</span> : <p className="mt-1 text-[10px] font-semibold text-stone-400">Maximum available: {maxPercentage}%</p>}</div>
         <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Cumulative</p><p className="mt-3 text-sm font-black text-stone-950">{cumulative}%</p></div>
         <div><p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Est. allocation</p><p className="mt-3 text-sm font-black text-stone-950">{formatETH(allocation)}</p><p className="mt-1 text-[10px] font-bold text-stone-400">{formatMYR(allocation * ethMyrRate)}</p></div>
-        <div><label className="block text-[10px] font-black uppercase tracking-wide text-stone-500">Proof requirements</label><textarea value={milestone.requirement} onChange={(event) => onUpdate("requirement", event.target.value)} placeholder={"Add one proof item per line\ne.g. Veterinary invoice\nMedication receipt"} rows={4} className="mt-2 w-full resize-none rounded-xl border border-orange-100 bg-white px-3 py-2 text-xs font-semibold leading-5 outline-none focus:border-[var(--color-orange)]" required /><p className="mt-1 text-[10px] font-semibold text-stone-400">Use a new line, comma, or semicolon between items.</p></div>
-        <div>{index === 0 ? <span className="inline-flex rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-700 ring-1 ring-violet-200">Locked 5%</span> : <button type="button" onClick={onRemove} disabled={!canRemove} aria-label={`Remove milestone ${index + 1}`} className="rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 hover:bg-red-50 disabled:opacity-40">Delete</button>}</div>
+        <div>{index === 0 ? null : <button type="button" onClick={onRemove} disabled={!canRemove} aria-label={`Remove milestone ${index + 1}`} className="rounded-xl border border-red-100 px-3 py-2 text-xs font-black text-red-600 hover:bg-red-50 disabled:opacity-40">Delete</button>}</div>
+      </div>
+
+      <section className="relative z-10 rounded-2xl border border-violet-200 bg-white shadow-[0_8px_24px_rgba(91,67,180,0.08)]">
+        <div className="flex flex-col gap-3 border-b border-violet-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-violet-200 bg-violet-50 text-violet-600" aria-hidden="true">
+              <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none"><path d="M12 3 19 6v5c0 4.6-2.8 7.8-7 10-4.2-2.2-7-5.4-7-10V6l7-3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="m9.5 11.5 1.7 1.7 3.5-3.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </span>
+            <div><h4 className="text-base font-black text-slate-900">Proof Requirement</h4><p className="mt-0.5 text-xs font-semibold text-slate-500">Select the evidence required for this milestone.</p></div>
+          </div>
+          {index === 0 ? <span className="inline-flex w-fit items-center gap-2 rounded-full bg-violet-50 px-4 py-2 text-xs font-black text-violet-600"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true"><rect x="4" y="8" width="12" height="9" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M7 8V6a3 3 0 0 1 6 0v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>Locked 5%</span> : null}
+        </div>
+        <div className="space-y-4 p-5">
+          <div><label className="text-sm font-black text-slate-900">Required Proof <span className="text-red-500">*</span></label><div className="mt-2"><ThemedDropdown tone="violet" value={milestone.requirement} onChange={(value) => onUpdate("requirement", value)} placeholder="Select required proof" options={proofRequirementOptions} /></div></div>
+          <div className="flex items-center gap-3 rounded-xl bg-violet-50/70 px-4 py-3 text-xs font-semibold text-slate-600"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-violet-600 text-[11px] font-black text-violet-600" aria-hidden="true">i</span><p>Choose the evidence required to verify and unlock this milestone.</p></div>
+        </div>
+      </section>
       </div>
     </article>
   );
@@ -332,10 +380,11 @@ export default function CreateCampaignPage() {
       !form.title.trim() ||
       !form.description.trim() ||
       !form.goalAmount ||
-      Number(form.goalAmount) <= 0 ||
+      Number(form.goalAmount) < 1000 ||
+      Number(form.goalAmount) % 100 !== 0 ||
       !form.imageUrl
     ) {
-      setError("Complete every required campaign field, upload a campaign image, and enter a positive ETH goal. Values below 1 ETH are allowed.");
+      setError("Complete every required campaign field, upload an image, and enter a goal of at least MYR 1,000 in increments of MYR 100.");
       return false;
     }
 
@@ -444,8 +493,8 @@ export default function CreateCampaignPage() {
           title: form.title,
           description: form.description,
           urgencyLevel: form.urgencyLevel,
-          goalAmount: Number(form.goalAmount) * ethMyrRate,
-          goalEth: form.goalAmount,
+          goalAmount: Number(form.goalAmount),
+          goalEth: ethInputFromMyr(form.goalAmount, ethMyrRate),
           ethMyrRate,
           durationDays: Number(form.durationDays),
           imageUrl: form.imageUrl,
@@ -541,7 +590,7 @@ export default function CreateCampaignPage() {
               </div>
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(15rem,0.65fr)_minmax(14rem,0.55fr)]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(15rem,0.65fr)]">
               <FieldLabel label="Campaign Title *">
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-3.5 grid h-6 w-6 place-items-center rounded-lg bg-orange-50" aria-hidden="true"><img src="/images/logo.png" alt="" className="h-5 w-5 object-contain" /></span>
@@ -558,22 +607,17 @@ export default function CreateCampaignPage() {
               </FieldLabel>
 
               <FieldLabel label="Urgency Level *">
-                <ThemedDropdown
+                <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1"><ThemedDropdown
                   value={form.urgencyLevel}
                   placeholder="Select urgency"
                   options={urgencyOptions}
                   leadingIcon={<span className="h-2.5 w-2.5 rounded-full bg-[var(--color-orange)]" aria-hidden="true" />}
                   onChange={(urgencyLevel) => setForm((current) => ({ ...current, urgencyLevel: urgencyLevel as UrgencyLevel }))}
-                />
-              </FieldLabel>
-
-              <aside className="space-y-3 lg:row-span-2">
-                <div className="relative min-h-36 overflow-hidden rounded-xl border border-orange-200 bg-[linear-gradient(135deg,#FFFDF8,#FFF4E5)] p-4 pr-24">
-                  <p className="flex items-center gap-2 text-sm font-black text-stone-950"><span className="grid h-5 w-5 place-items-center rounded-full bg-violet-700 text-xs text-white">i</span> What&apos;s urgency level?</p>
-                  <p className="mt-3 text-xs font-semibold leading-5 text-stone-600">It helps donors understand how time-sensitive your campaign is.</p>
-                  <img src="/images/donor-dashboard-pets-transparent.png" alt="" className="absolute -bottom-2 -right-2 h-24 w-24 object-contain" aria-hidden="true" />
+                /></div>
+                <InfoTooltip label="Explain urgency level">Urgency helps donors understand how time-sensitive your campaign is.</InfoTooltip>
                 </div>
-              </aside>
+              </FieldLabel>
 
               <div className="lg:col-span-2">
                 <FieldLabel label="Campaign Description *">
@@ -594,21 +638,26 @@ export default function CreateCampaignPage() {
               </div>
 
               <div className="lg:col-start-1">
-              <FieldLabel label="Goal Amount (ETH) *">
+              <FieldLabel label="Goal Amount (MYR) *">
                 <div className="relative">
-                  <span className="pointer-events-none absolute left-3 top-3.5 grid h-6 w-6 place-items-center rounded-lg bg-violet-50" aria-hidden="true"><img src="/images/ethereum-logo.svg" alt="" className="h-4 w-4 object-contain" /></span>
+                  <span className="pointer-events-none absolute left-3 top-3.5 text-sm font-black text-stone-500" aria-hidden="true">RM</span>
                   <input
                     value={form.goalAmount}
-                    onChange={(event) => setForm((current) => ({ ...current, goalAmount: normalizeEthInput(event.target.value) }))}
-                    inputMode="decimal"
-                    type="text"
-                    placeholder="e.g. 0.5"
-                    className="w-full rounded-xl border border-orange-200 bg-white py-3.5 pl-12 pr-14 text-base font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"
+                    onChange={(event) => setForm((current) => ({ ...current, goalAmount: event.target.value }))}
+                    min="1000"
+                    step="100"
+                    type="number"
+                    onWheel={preventWheelNumberChange}
+                    placeholder="e.g. 1000"
+                    aria-invalid={form.goalAmount !== "" && Number(form.goalAmount) < 1000}
+                    aria-describedby={form.goalAmount !== "" && Number(form.goalAmount) < 1000 ? "goal-amount-error" : undefined}
+                    className={`w-full rounded-xl border bg-white py-3.5 pl-12 pr-14 text-base font-bold text-stone-950 outline-none transition ${form.goalAmount !== "" && Number(form.goalAmount) < 1000 ? "border-red-500 focus:border-red-500 focus:ring-4 focus:ring-red-100" : "border-orange-200 focus:border-[var(--color-orange)] focus:ring-4 focus:ring-orange-100"}`}
                     required
                   />
-                  <span className="absolute right-4 top-3.5 text-sm font-black text-stone-600">ETH</span>
+                  <span className="absolute right-4 top-3.5 text-sm font-black text-stone-600">MYR</span>
                 </div>
-                <p className="mt-2 text-xs font-bold text-stone-600">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)} · 1 ETH ≈ MYR {ethMyrRate.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                {form.goalAmount !== "" && Number(form.goalAmount) < 1000 ? <p id="goal-amount-error" role="alert" className="mt-2 text-xs font-black text-red-600">Goal amount must be at least MYR 1,000.</p> : null}
+                <p className="mt-2 text-xs font-bold text-stone-600">≈ {formatETH(myrToEth(form.goalAmount, ethMyrRate))} · 1 ETH ≈ live MYR {ethMyrRate.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </FieldLabel>
               </div>
 
@@ -685,6 +734,7 @@ export default function CreateCampaignPage() {
                     milestone={milestone}
                     index={index}
                     cumulative={milestones.slice(0, index + 1).reduce((sum, item) => sum + Number(item.percentage || 0), 0)}
+                    maxPercentage={Math.max(0, 100 - milestones.slice(0, index).reduce((sum, item) => sum + Number(item.percentage || 0), 0))}
                     goalAmount={form.goalAmount}
                     ethMyrRate={ethMyrRate}
                     canRemove={milestones.length > 2}
@@ -719,9 +769,9 @@ export default function CreateCampaignPage() {
                 <div className="h-80 overflow-hidden rounded-2xl border-2 border-orange-200 bg-orange-50">{form.imageUrl ? <img src={form.imageUrl} alt="Campaign preview" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-base font-black text-orange-400">No campaign image</div>}</div>
                 <div className="rounded-2xl border border-orange-200 bg-white/70 p-5">
                   <div className="flex flex-wrap items-center gap-3"><h3 className="text-3xl font-black text-stone-950">{form.title}</h3><span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-black capitalize text-[var(--color-orange)] ring-1 ring-orange-200">{form.urgencyLevel}</span></div>
-                  <p className="mt-3 line-clamp-3 text-base font-semibold leading-7 text-stone-600">{form.description}</p>
+                  <p className="mt-3 whitespace-pre-wrap break-words text-base font-semibold leading-7 text-stone-600">{form.description}</p>
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-orange-200 bg-orange-50/30 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Goal</p><p className="mt-2 text-xl font-black">{formatETH(form.goalAmount)}</p><p className="mt-1 text-xs font-bold text-stone-500">{formatMYR(Number(form.goalAmount || 0) * ethMyrRate)}</p></div>
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50/30 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Goal</p><p className="mt-2 text-xl font-black">MYR {Number(form.goalAmount || 0).toLocaleString("en-MY")}</p><p className="mt-1 text-xs font-bold text-stone-500">≈ {formatETH(myrToEth(form.goalAmount, ethMyrRate))}</p></div>
                     <div className="rounded-2xl border border-orange-200 bg-orange-50/30 p-4"><p className="text-xs font-black uppercase tracking-wide text-stone-500">Duration</p><p className="mt-2 text-xl font-black">{form.durationDays} days</p><p className="mt-1 text-xs font-bold text-stone-500">Campaign period</p></div>
                   </div>
                 </div>
@@ -737,7 +787,7 @@ export default function CreateCampaignPage() {
               <div className="relative mt-5 space-y-3 before:absolute before:bottom-8 before:left-[1.4rem] before:top-8 before:w-0.5 before:bg-orange-200">
                 {milestones.map((milestone, index) => {
                   const cumulative = milestones.slice(0, index + 1).reduce((sum, item) => sum + Number(item.percentage || 0), 0);
-                  const allocation = Number(form.goalAmount || 0) * Number(milestone.percentage || 0) / 100;
+                  const allocation = myrToEth(form.goalAmount, ethMyrRate) * Number(milestone.percentage || 0) / 100;
                   return (
                     <article key={`review-${index}`} className={`relative rounded-2xl border-2 p-4 pl-16 ${index === 0 ? "border-orange-200 bg-[#FFFCC9]/25" : "border-orange-100 bg-white"}`}>
                       <span className="absolute left-3 top-5 grid h-11 w-11 place-items-center rounded-full border border-orange-300 bg-orange-50 text-base font-black text-[var(--color-orange)]">{index + 1}</span>

@@ -18,7 +18,7 @@ function formatEth(value: number) {
 }
 
 function formatLiveMyr(value: number) {
-  return `Approx. live MYR: MYR ${value.toLocaleString("en-MY", {
+  return `≈ live MYR ${value.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

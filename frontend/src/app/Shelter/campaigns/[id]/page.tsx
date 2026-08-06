@@ -139,6 +139,31 @@ export default function CampaignDetailPage() {
     loadCampaign();
   }, [address, params.id]);
 
+  useEffect(() => {
+    if (!campaign) return;
+
+    const requestedFocus = new URLSearchParams(window.location.search).get("focus");
+    const targetId = requestedFocus === "milestones"
+      ? "milestone-details"
+      : requestedFocus === "campaign"
+        ? "campaign-overview"
+        : window.location.hash.slice(1);
+    if (targetId !== "campaign-overview" && targetId !== "milestone-details") return;
+
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(targetId);
+      if (targetId === "milestone-details") {
+        target?.focus({ preventScroll: true });
+      }
+      target?.scrollIntoView({
+        behavior: targetId === "milestone-details" ? "smooth" : "auto",
+        block: "start",
+      });
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, [campaign, milestones.length]);
+
   const goalEth = onChainGoal !== undefined
     ? Number(formatEther(onChainGoal))
     : campaign?.goal_wei
@@ -163,19 +188,15 @@ export default function CampaignDetailPage() {
     return nextIndex === -1 ? orderedMilestones.length : nextIndex + 1;
   }, [orderedMilestones]);
 
-  const canEdit = campaign?.campaign_status === "rejected";
+  const canEdit = campaign != null && ["pending_approval", "rejected"].includes(campaign.campaign_status) && !campaign.contract_address;
 
   const editAccessMessage = useMemo(() => {
     if (!campaign) {
       return "";
     }
 
-    if (campaign.campaign_status === "rejected") {
-      return "Editable now: update campaign info and milestones, then submit again for approval.";
-    }
-
-    if (campaign.campaign_status === "pending_approval") {
-      return "Locked after submission while waiting for admin approval.";
+    if (["pending_approval", "rejected"].includes(campaign.campaign_status) && !campaign.contract_address) {
+      return "Editable now: update campaign information and milestones before admin approval.";
     }
 
     return `Locked while ${readableStatus(campaign.campaign_status)}.`;
@@ -228,7 +249,7 @@ export default function CampaignDetailPage() {
         <>
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
           <div className="space-y-6">
-          <section className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(155,86,20,0.08)] sm:p-6">
+          <section id="campaign-overview" className="scroll-mt-24 rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(155,86,20,0.08)] sm:p-6">
             <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
               <div className="overflow-hidden rounded-2xl border border-orange-100 bg-orange-50">
                 {campaign.image_url ? <img src={campaign.image_url} alt="" className="aspect-[4/3] h-full w-full object-cover" /> : <div className="grid aspect-[4/3] h-full place-items-center text-[var(--color-orange)]"><CampaignIcon /></div>}
@@ -308,7 +329,7 @@ export default function CampaignDetailPage() {
               </div>
             ) : null}
 
-            <div id="milestone-details" className="mt-7 scroll-mt-24 border-t border-orange-100 pt-5"><h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Milestone timeline & proof submission</h3></div>
+            <div id="milestone-details" tabIndex={-1} className="mt-7 flex min-h-14 scroll-mt-24 items-center justify-start rounded-xl border border-orange-200 bg-orange-50/40 px-4 py-3 text-left outline-none transition target:border-orange-400 target:bg-orange-50 target:ring-2 target:ring-orange-200 focus:border-orange-400 focus:bg-orange-50 focus:ring-2 focus:ring-orange-200"><h3 className="text-sm font-black uppercase leading-5 tracking-wide text-stone-600">Milestone timeline & proof submission</h3></div>
             <div className="mt-5 space-y-4">
               {milestones.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50/40 p-6 text-center text-sm font-black text-stone-600">
