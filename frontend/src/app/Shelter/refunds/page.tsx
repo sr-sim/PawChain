@@ -268,7 +268,7 @@ export default async function ShelterRefundsPage({ searchParams }: PageProps) {
                         {row.donor_name || "Anonymous donor"}
                       </p>
                       <p className="mt-1 font-mono text-xs text-stone-500">
-                        {shortAddress(row.donor_id)}
+                        {shortAddress(row.donor_wallet_address)}
                       </p>
                     </div>
                     <div>

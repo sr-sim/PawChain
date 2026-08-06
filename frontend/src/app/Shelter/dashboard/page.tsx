@@ -92,7 +92,7 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
           }),
         ]);
         const progress = goalWei > BigInt(0)
-          ? Number((raisedWei * BigInt(10_000)) / goalWei) / 100
+          ? Number((raisedWei * BigInt(10_000) + goalWei / BigInt(2)) / goalWei) / 100
           : 0;
 
         return [
@@ -152,7 +152,7 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
     0,
   );
   const progress = totalGoal > 0
-    ? Math.min(100, Math.floor((totalRaised / totalGoal) * 10_000) / 100)
+    ? Math.min(100, Math.round((totalRaised / totalGoal) * 10_000) / 100)
     : 0;
   const contractConnectedCampaigns = displayedCampaigns.filter(
     (campaign) => Boolean(campaign.contract_address),
@@ -243,6 +243,16 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
           </div>
         </div>
       </section>
+
+      <aside className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm shadow-sm" aria-label="Admin contact information">
+        <span className="font-bold text-stone-500">Need help? Contact the PawChain admin:</span>
+        <a
+          href="mailto:pawchain.admin@gmail.com"
+          className="font-black text-[var(--color-orange)] underline decoration-orange-200 underline-offset-4 transition hover:text-orange-700"
+        >
+          pawchain.admin@gmail.com
+        </a>
+      </aside>
 
       <section className="grid w-full items-stretch gap-6 min-[1200px]:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]" aria-label="Market and quick actions">
         <ShelterEthMyrMarketCard />

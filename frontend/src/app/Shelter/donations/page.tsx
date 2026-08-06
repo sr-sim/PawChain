@@ -178,7 +178,7 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
                 const refunded = record.status === "refunded";
                 return (
                   <tr key={record.key} className="transition hover:bg-orange-50/35">
-                    <td className="px-5 py-4"><p className="font-black text-stone-950">{donation.donor_name?.trim() || "Anonymous donor"}</p><p className="mt-1 font-mono text-[10px] font-semibold text-stone-400">{shortAddress(donation.donor_id)}</p></td>
+                    <td className="px-5 py-4"><p className="font-black text-stone-950">{donation.donor_name?.trim() || "Anonymous donor"}</p><p className="mt-1 font-mono text-[10px] font-semibold text-stone-400">{shortAddress(donation.donor_wallet_address)}</p></td>
                     <td><Link href={`/Shelter/campaigns/${donation.campaign_id}`} className="font-black hover:text-[var(--color-orange)]">{campaignMap.get(donation.campaign_id)?.title ?? "Campaign"}</Link></td>
                     <td>
                       <p className="font-black text-stone-950">{formatEth(record.amountEth)}</p>

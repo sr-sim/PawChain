@@ -40,6 +40,7 @@ export type ShelterDonationRecord = {
   status: string;
   created_at: string;
   donor_name: string | null;
+  donor_wallet_address: string | null;
 };
 
 export async function getShelterPortalData(userId?: string | null) {
@@ -77,15 +78,29 @@ export async function getShelterPortalData(userId?: string | null) {
       .order("created_at", { ascending: false }),
   ]);
 
-  const rawDonations = (donationRows ?? []) as Omit<ShelterDonationRecord, "donor_name">[];
+  const rawDonations = (donationRows ?? []) as Omit<
+    ShelterDonationRecord,
+    "donor_name" | "donor_wallet_address"
+  >[];
   const donorIds = [...new Set(rawDonations.map((donation) => donation.donor_id).filter(Boolean))];
   const { data: donorProfiles } = donorIds.length
-    ? await supabase.from("profiles").select("id, full_name").in("id", donorIds)
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, wallet_address")
+        .in("id", donorIds)
     : { data: [] };
   const donorNames = new Map(
     (donorProfiles ?? []).map((profile) => [
       String(profile.id),
       typeof profile.full_name === "string" ? profile.full_name : null,
+    ]),
+  );
+  const donorWalletAddresses = new Map(
+    (donorProfiles ?? []).map((profile) => [
+      String(profile.id),
+      typeof profile.wallet_address === "string"
+        ? profile.wallet_address
+        : null,
     ]),
   );
 
@@ -95,6 +110,8 @@ export async function getShelterPortalData(userId?: string | null) {
     donations: rawDonations.map((donation) => ({
       ...donation,
       donor_name: donorNames.get(donation.donor_id) ?? null,
+      donor_wallet_address:
+        donorWalletAddresses.get(donation.donor_id) ?? null,
     })),
   };
 }

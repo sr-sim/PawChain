@@ -20,6 +20,7 @@ type ShelterMilestoneCardProps = {
   walletAddress?: string;
   contractAddress?: string | null;
   goalEth?: number;
+  raisedEth?: number;
   ethMyrRate?: number;
   cumulativePercentage?: number;
   canUploadProof?: boolean;
@@ -84,6 +85,7 @@ export function MilestoneCard({
   walletAddress,
   contractAddress,
   goalEth = 0,
+  raisedEth = 0,
   ethMyrRate = 0,
   cumulativePercentage = 0,
   canUploadProof = false,
@@ -144,6 +146,26 @@ export function MilestoneCard({
     proofAllowedOnChain;
   const canWithdraw =
     canUploadProof && showWithdrawAction && milestoneActions.canWithdraw;
+  const milestonePercentage = Number(milestone.percentage || 0);
+  const milestoneAllocationEth = (goalEth * milestonePercentage) / 100;
+  const previousMilestonesPercentage = Math.max(
+    0,
+    cumulativePercentage - milestonePercentage,
+  );
+  const milestoneStartEth = (goalEth * previousMilestonesPercentage) / 100;
+  const milestoneFundedEth = Math.min(
+    milestoneAllocationEth,
+    Math.max(0, raisedEth - milestoneStartEth),
+  );
+  const milestoneProgress =
+    milestoneAllocationEth > 0
+      ? Math.min(
+          100,
+          Math.round((milestoneFundedEth / milestoneAllocationEth) * 10000) /
+            100,
+        )
+      : 0;
+  const formattedMilestoneProgress = milestoneProgress.toFixed(2);
 
   async function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -605,6 +627,35 @@ export function MilestoneCard({
             </div>
           </div>
         ) : null}
+
+        <div className="mt-4 rounded-2xl border border-orange-200 bg-white p-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wide text-stone-500">
+                Milestone funding progress
+              </p>
+              <p className="mt-1 text-sm font-black text-stone-950">
+                {milestoneFundedEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} / {milestoneAllocationEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH
+              </p>
+            </div>
+            <p className="text-lg font-black text-orange-500">
+              {formattedMilestoneProgress}%
+            </p>
+          </div>
+          <div
+            className="mt-3 h-2.5 overflow-hidden rounded-full bg-stone-200"
+            role="progressbar"
+            aria-label={`Milestone ${index + 1} funding progress`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={milestoneProgress}
+          >
+            <div
+              className="h-full rounded-full bg-orange-500 transition-[width] duration-500"
+              style={{ width: `${milestoneProgress}%` }}
+            />
+          </div>
+        </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Funds (ETH)</p><p className="mt-1 text-sm font-black text-stone-950">{(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH</p></div>
