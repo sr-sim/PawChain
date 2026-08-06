@@ -145,7 +145,7 @@ function getProgress(currentAmount: number | string | null, goalAmount: number |
     return 0;
   }
 
-  return Math.min(100, (current / goal) * 100);
+  return Math.min(100, Math.round((current / goal) * 10_000) / 100);
 }
 
 function getOnChainStatusLabel(status: number) {
@@ -214,7 +214,10 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
           status === "Completed"
             ? 100
             : goalEth > 0
-              ? Math.min(100, (totalRaisedEth / goalEth) * 100)
+              ? Math.min(
+                  100,
+                  Math.round((totalRaisedEth / goalEth) * 10_000) / 100,
+                )
               : 0;
 
         return [

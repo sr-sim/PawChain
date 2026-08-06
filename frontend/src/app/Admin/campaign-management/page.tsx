@@ -131,7 +131,9 @@ const campaignProgress = (campaign: Campaign) => {
   if (campaign.on_chain_status === 1) return 100;
   const raised = Number(campaign.on_chain_total_raised_wei ?? 0);
   const goal = Number(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? 0);
-  return goal > 0 ? Math.min(100, (raised / goal) * 100) : 0;
+  return goal > 0
+    ? Math.min(100, Math.round((raised / goal) * 10_000) / 100)
+    : 0;
 };
 const campaignDaysLeft = (campaign: Campaign) => {
   const deadline = campaign.blockchain_deadline
