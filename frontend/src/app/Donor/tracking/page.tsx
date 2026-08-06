@@ -284,6 +284,41 @@ export default async function DonorTrackingPage({
 
     return true;
   });
+  const campaignRefunds = donationData.donations.reduce(
+    (map, donation) => {
+      if (!donation.refundTxHash) {
+        return map;
+      }
+
+      const existing = map.get(donation.campaignId);
+      map.set(donation.campaignId, {
+        txHash: donation.refundTxHash,
+        refundedAt: donation.refundedAt,
+        refundAmountEth:
+          (existing?.refundAmountEth ?? 0) + Number(donation.refundAmountEth || 0),
+        refundAmount:
+          (existing?.refundAmount ?? 0) + Number(donation.refundAmount || 0),
+      });
+
+      return map;
+    },
+    new Map<
+      string,
+      {
+        txHash: string;
+        refundedAt: string | null;
+        refundAmountEth: number;
+        refundAmount: number;
+      }
+    >(),
+  );
+  const campaignRefundDisplayRows = filteredDonations.reduce((map, donation) => {
+    if (campaignRefunds.has(donation.campaignId) && !map.has(donation.campaignId)) {
+      map.set(donation.campaignId, donation.id);
+    }
+
+    return map;
+  }, new Map<string, string>());
   const campaignDonationTotals = donationData.donations.reduce(
     (map, donation) => {
       map.set(
@@ -420,7 +455,17 @@ export default async function DonorTrackingPage({
               </div>
               {filteredDonations.length > 0 ? (
                 <div className="donor-thin-scroll max-h-[27.25rem] space-y-2.5 overflow-y-auto overscroll-contain p-3">
-                  {filteredDonations.map((donation) => (
+                  {filteredDonations.map((donation) => {
+                    const campaignRefund =
+                      campaignRefundDisplayRows.get(donation.campaignId) ===
+                      donation.id
+                        ? campaignRefunds.get(donation.campaignId)
+                        : undefined;
+                    const hasCampaignRefund = campaignRefunds.has(
+                      donation.campaignId,
+                    );
+
+                    return (
                     <article
                       key={donation.id}
                       className="grid gap-4 rounded-2xl border border-orange-100 bg-white/90 px-4 py-3 text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white hover:shadow-[0_16px_34px_rgba(120,72,0,0.08)] lg:grid-cols-[1.45fr_0.95fr_1.1fr_0.68fr_8rem] lg:items-center"
@@ -494,23 +539,23 @@ export default async function DonorTrackingPage({
                             {formatMyr(donation.amount)}
                           </p>
                         ) : null}
-                        {donation.refundTxHash ? (
+                        {campaignRefund ? (
                           <details className="group mt-1.5 overflow-hidden rounded-xl border border-red-100 bg-white/90 shadow-sm transition open:bg-red-50/35">
                             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-1.5 [&::-webkit-details-marker]:hidden">
                               <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-700">
-                                  Refund
+                                  Campaign refund
                                 </p>
                                 <p className="mt-0.5 break-words text-xs font-black leading-5 text-stone-950">
                                   +
-                                  {donation.refundAmountEth > 0
-                                    ? formatEth(donation.refundAmountEth)
+                                  {campaignRefund.refundAmountEth > 0
+                                    ? formatEth(campaignRefund.refundAmountEth)
                                     : "Confirmed"}
                                 </p>
-                                {donation.refundAmountEth > 0 ? (
+                                {campaignRefund.refundAmountEth > 0 ? (
                                   <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
                                     {formatMyr(
-                                      donation.refundAmountEth * ethMyrRate,
+                                      campaignRefund.refundAmountEth * ethMyrRate,
                                     )}
                                   </p>
                                 ) : null}
@@ -527,11 +572,11 @@ export default async function DonorTrackingPage({
                                     Internal contract transfer
                                   </span>
                                 </div>
-                                {donation.refundedAt ? (
+                                {campaignRefund.refundedAt ? (
                                   <div className="flex items-center justify-between gap-3">
                                     <span>Confirmed</span>
                                     <span className="text-right text-stone-800">
-                                      {formatDate(donation.refundedAt)}
+                                      {formatDate(campaignRefund.refundedAt)}
                                     </span>
                                   </div>
                                 ) : null}
@@ -539,13 +584,13 @@ export default async function DonorTrackingPage({
                                   <span>Refund tx</span>
                                   <a
                                     href={getTransactionExplorerUrl(
-                                      donation.refundTxHash,
+                                      campaignRefund.txHash,
                                     )}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="text-right font-black text-[var(--color-orange)] transition hover:text-stone-950"
                                   >
-                                    {shortHash(donation.refundTxHash)}
+                                    {shortHash(campaignRefund.txHash)}
                                   </a>
                                 </div>
                               </div>
@@ -585,11 +630,12 @@ export default async function DonorTrackingPage({
                       </p>
                       <div className="flex justify-start lg:justify-center">
                         <StatusPill
-                          status={donation.refundTxHash ? "Refunded" : donation.status}
+                          status={hasCampaignRefund ? "Refunded" : donation.status}
                         />
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="px-5 py-8 text-center">
