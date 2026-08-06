@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useChainId, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { decodeEventLog, formatEther, isAddress, type Address } from "viem";
@@ -22,10 +23,15 @@ function formatLiveMyr(value: number) {
 export function RefundClaimButton({
   campaignId,
   contractAddress,
+  donationAmountEth = 0,
+  campaignDonationTotalEth = 0,
 }: {
   campaignId: string;
   contractAddress: string | null;
+  donationAmountEth?: number;
+  campaignDonationTotalEth?: number;
 }) {
+  const router = useRouter();
   const { address } = useAppKitAccount();
   const chainId = useChainId();
   const publicClient = usePublicClient();
@@ -83,11 +89,11 @@ export function RefundClaimButton({
     };
   }, []);
 
-  if (!refundable || refundable <= BigInt(0)) {
+  if ((!refundable || refundable <= BigInt(0)) && confirmedRefundEth === null) {
     return null;
   }
 
-  const refundableEth = Number(formatEther(refundable));
+  const refundableEth = refundable ? Number(formatEther(refundable)) : 0;
   const refundableMyr = refundableEth * ethMyrRate;
   const claimTxUrl = claimedTxHash ? getTransactionExplorerUrl(claimedTxHash) : "";
   const confirmedRefundMyr =
@@ -164,8 +170,12 @@ export function RefundClaimButton({
         refundLog?.eventName === "RefundClaimed"
           ? Number(formatEther(refundLog.args.amount))
           : refundableEth;
+      const rowRefundAmount =
+        campaignDonationTotalEth > 0 && donationAmountEth > 0
+          ? refundedAmount * (donationAmountEth / campaignDonationTotalEth)
+          : refundedAmount;
 
-      setConfirmedRefundEth(refundedAmount);
+      setConfirmedRefundEth(rowRefundAmount);
       const response = await fetch("/api/donor/refunds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,6 +200,17 @@ export function RefundClaimButton({
               maximumFractionDigits: 6,
             })} ETH`,
           },
+          ...(rowRefundAmount !== refundedAmount
+            ? [
+                {
+                  label: "This record",
+                  value: `${rowRefundAmount.toLocaleString("en-MY", {
+                    minimumFractionDigits: 4,
+                    maximumFractionDigits: 6,
+                  })} ETH`,
+                },
+              ]
+            : []),
           {
             label: "Estimated value",
             value: formatLiveMyr(refundedAmount * ethMyrRate),
@@ -197,6 +218,7 @@ export function RefundClaimButton({
           { label: "Transfer type", value: "Internal contract transfer" },
         ],
       });
+      router.refresh();
       await refetch();
     } catch (error) {
       const rawMessage =
@@ -214,7 +236,7 @@ export function RefundClaimButton({
         status: "failed",
         title: "Refund not completed",
         message: friendlyMessage,
-        txHash: claimedTxHash,
+        txHash: "",
       });
     } finally {
       setBusy(false);
@@ -230,43 +252,50 @@ export function RefundClaimButton({
         message={blockchainPopup?.message ?? ""}
         txHash={blockchainPopup?.txHash ?? ""}
         details={blockchainPopup?.details ?? []}
-        actionLabel="View refund proof"
+        actionLabel={
+          blockchainPopup?.status === "confirmed"
+            ? "View refund proof"
+            : "View transaction"
+        }
         onClose={() => setBlockchainPopup(null)}
         autoCloseMs={0}
       />
-      <div className="flex items-center justify-between gap-2 px-2.5 py-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--color-orange)]">
-            Refund available
-          </p>
-          <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <p className="text-sm font-black text-stone-950">
-              {refundableEth.toLocaleString("en-MY", {
-                maximumFractionDigits: 6,
-              })}{" "}
-              ETH
+      {confirmedRefundEth === null ? (
+        <div className="flex items-center justify-between gap-2 px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--color-orange)]">
+              Refund available
             </p>
-            <p className="text-xs font-semibold text-stone-500">
-              {formatLiveMyr(refundableMyr)}
-            </p>
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <p className="text-sm font-black text-stone-950">
+                {refundableEth.toLocaleString("en-MY", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 6,
+                })}{" "}
+                ETH
+              </p>
+              <p className="text-xs font-semibold text-stone-500">
+                {formatLiveMyr(refundableMyr)}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void claimRefund()}
-          className="inline-flex shrink-0 items-center justify-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-[10px] font-black text-[var(--color-orange)] transition hover:-translate-y-0.5 hover:bg-white hover:text-orange-700 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-55"
-        >
-          {busy ? "Confirming" : "Claim"}
-        </button>
-      </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void claimRefund()}
+            className="inline-flex shrink-0 items-center justify-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-[10px] font-black text-[var(--color-orange)] transition hover:-translate-y-0.5 hover:bg-white hover:text-orange-700 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-55"
+          >
+            {busy ? "Confirming" : "Claim"}
+          </button>
+        </div>
+      ) : null}
       {confirmedRefundEth !== null ? (
-        <div className="border-t border-emerald-100 bg-emerald-50/70 px-2.5 py-2">
-          <div className="flex items-center justify-between gap-2">
+        <details className="group border-t border-emerald-100 bg-emerald-50/70">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 [&::-webkit-details-marker]:hidden">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                Refund received
+                Refund
               </p>
               <p className="mt-0.5 text-xs font-black text-stone-950">
                 +{confirmedRefundEth.toLocaleString("en-MY", {
@@ -281,17 +310,47 @@ export function RefundClaimButton({
               ) : null}
             </div>
             {claimTxUrl ? (
-              <a
-                href={claimTxUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black text-emerald-700 transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50"
+              <span
+                className="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-black text-emerald-700 transition group-open:bg-emerald-50"
               >
                 View proof
-              </a>
+              </span>
             ) : null}
+          </summary>
+          <div className="border-t border-emerald-100 px-2.5 py-2">
+            <div className="grid gap-2 text-[11px] font-semibold text-stone-500">
+              <div className="flex items-center justify-between gap-3">
+                <span>Transfer type</span>
+                <span className="text-right text-stone-800">
+                  Internal contract transfer
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>Confirmed</span>
+                <span className="text-right text-stone-800">
+                  {new Intl.DateTimeFormat("en-MY", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  }).format(new Date())}
+                </span>
+              </div>
+              {claimTxUrl ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span>Refund tx</span>
+                  <a
+                    href={claimTxUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-right font-black text-[var(--color-orange)] transition hover:text-stone-950"
+                  >
+                    {claimedTxHash.slice(0, 10)}...{claimedTxHash.slice(-8)}
+                  </a>
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
+        </details>
       ) : null}
       {message ? (
         <div
@@ -305,7 +364,7 @@ export function RefundClaimButton({
           ].join(" ")}
         >
           <p>{message}</p>
-          {claimTxUrl ? (
+          {messageType === "success" && claimTxUrl ? (
             <a
               href={claimTxUrl}
               target="_blank"

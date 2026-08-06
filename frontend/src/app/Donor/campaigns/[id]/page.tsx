@@ -8,6 +8,7 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { DonorProofEvidence } from "@/app/components/DonorProofEvidence";
 import { formatPercentage } from "@/lib/format-percentage";
 
 export const dynamic = "force-dynamic";
@@ -585,7 +586,6 @@ export default async function DonorCampaignDetailPage({
                   campaign.raised,
                 );
                 const isLocked = fundingState.tone === "locked";
-
                 return (
                 <div
                   key={milestone.title}
@@ -663,11 +663,7 @@ export default async function DonorCampaignDetailPage({
                       {milestone.description}
                     </p>
                   ) : null}
-                  {milestone.requirement ? (
-                    <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
-                      Release condition: {milestone.requirement}
-                    </p>
-                  ) : null}
+                  <DonorProofEvidence proofUrl={milestone.proofUrl} />
                     </div>
                     <div className="grid shrink-0 gap-2 sm:grid-cols-3 lg:w-[28rem]">
                       <div className="rounded-xl bg-white p-3 ring-1 ring-orange-100">
