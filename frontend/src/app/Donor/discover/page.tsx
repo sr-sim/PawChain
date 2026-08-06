@@ -52,9 +52,9 @@ type MilestoneDisplay = {
 
 const urgencies = ["All", "Critical", "High", "Medium"];
 const sortOptions = ["Most urgent", "Deadline soon", "Most progress", "Most donors"];
-const tabs = ["Campaigns", "Completed", "Closed", "Shelters", "Saved"] as const;
+const tabs = ["Active", "Completed", "Closed", "Shelters", "Saved"] as const;
 const tabDesign: Record<(typeof tabs)[number], { icon: string; active: string; inactive: string }> = {
-  Campaigns: { icon: "M4 19V9l8-5 8 5v10H4Zm5 0v-6h6v6", active: "border-orange-400 bg-orange-100 text-orange-800 shadow-orange-100", inactive: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" },
+  Active: { icon: "M4 19V9l8-5 8 5v10H4Zm5 0v-6h6v6", active: "border-orange-400 bg-orange-100 text-orange-800 shadow-orange-100", inactive: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" },
   Completed: { icon: "M5 12.5 10 17l9-10", active: "border-emerald-400 bg-emerald-100 text-emerald-800 shadow-emerald-100", inactive: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" },
   Closed: { icon: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z", active: "border-stone-500 bg-stone-200 text-stone-800 shadow-stone-100", inactive: "border-stone-300 bg-stone-100 text-stone-700 hover:bg-stone-200" },
   Shelters: { icon: "M3 11 12 4l9 7M5 10v10h14V10M9 20v-6h6v6", active: "border-violet-400 bg-violet-100 text-violet-800 shadow-violet-100", inactive: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" },
@@ -411,7 +411,7 @@ export default function DonorDiscoverPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [urgency, setUrgency] = useState("All");
   const [sortBy, setSortBy] = useState(sortOptions[0]);
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Campaigns");
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Active");
   const [isModalMounted, setIsModalMounted] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     searchParams.get("campaign"),
@@ -798,7 +798,7 @@ export default function DonorDiscoverPage() {
   }, [filteredShelters, sortBy]);
 
   const tabCounts: Record<(typeof tabs)[number], number> = {
-    Campaigns: activeCampaigns.length,
+    Active: activeCampaigns.length,
     Completed: completedCampaigns.length,
     Closed: closedCampaigns.length,
     Shelters: sortedShelters.length,
@@ -1295,10 +1295,10 @@ export default function DonorDiscoverPage() {
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
                 {emptyCampaignMessage}
               </p>
-              {campaigns.length > 0 && activeTab !== "Campaigns" ? (
+              {campaigns.length > 0 && activeTab !== "Active" ? (
                 <button
                   type="button"
-                  onClick={() => setActiveTab("Campaigns")}
+                  onClick={() => setActiveTab("Active")}
                   suppressHydrationWarning
                   className="mt-4 inline-flex items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
                 >
@@ -1409,7 +1409,7 @@ export default function DonorDiscoverPage() {
                             type="button"
                             onClick={() => {
                               setSelectedId(campaign.id);
-                              setActiveTab("Campaigns");
+                              setActiveTab("Active");
                             }}
                             suppressHydrationWarning
                             className="w-full rounded-xl bg-orange-50/60 p-2 text-left transition hover:bg-orange-100/70"
