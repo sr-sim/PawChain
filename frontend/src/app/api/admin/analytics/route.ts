@@ -3,6 +3,7 @@ import { formatEther } from "viem";
 import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getVerifiedFinancialEvents } from "@/lib/verified-financial-events";
+import { walletSessionMatches } from "@/lib/wallet-session";
 
 const weiToEth = (value: bigint) => Number(formatEther(value));
 const safeWei = (value: unknown) => {
@@ -25,7 +26,11 @@ function percentageChange(current: number, previous: number) {
 export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
-    if (!(await isAdminWallet(params.get("walletAddress") ?? ""))) {
+    const walletAddress = params.get("walletAddress") ?? "";
+    if (!walletSessionMatches(request, walletAddress)) {
+      return NextResponse.json({ message: "Wallet authentication is required." }, { status: 401 });
+    }
+    if (!(await isAdminWallet(walletAddress))) {
       return NextResponse.json({ message: "Access denied." }, { status: 403 });
     }
 
@@ -132,11 +137,14 @@ export async function GET(request: NextRequest) {
       donationWei > releasedWei + refundWei
         ? donationWei - releasedWei - refundWei
         : BigInt(0);
+    const allTimeConfirmedDonations = verifiedFinancialEvents.filter(
+      (item) => item.transactionType === "donation",
+    );
     const uniqueDonors = new Set(
-      confirmed.map((item) => item.walletAddress.toLowerCase()),
+      allTimeConfirmedDonations.map((item) => item.walletAddress.toLowerCase()),
     ).size;
     const donorCounts = new Map<string, number>();
-    for (const item of confirmed) {
+    for (const item of allTimeConfirmedDonations) {
       const donor = item.walletAddress.toLowerCase();
       donorCounts.set(donor, (donorCounts.get(donor) ?? 0) + 1);
     }
@@ -368,10 +376,15 @@ export async function GET(request: NextRequest) {
         ),
       },
       donorMetrics: {
-        donationCount: confirmed.length,
+        donationCount: allTimeConfirmedDonations.length,
         uniqueDonors,
-        averageDonationEth: confirmed.length
-          ? weiToEth(donationWei) / confirmed.length
+        firstTimeDonors: uniqueDonors - returningDonors,
+        returningDonors,
+        averageDonationEth: allTimeConfirmedDonations.length
+          ? weiToEth(allTimeConfirmedDonations.reduce(
+              (sum, item) => sum + safeWei(item.amountWei),
+              BigInt(0),
+            )) / allTimeConfirmedDonations.length
           : 0,
         returningDonorRate: uniqueDonors
           ? (returningDonors / uniqueDonors) * 100
@@ -397,7 +410,7 @@ export async function GET(request: NextRequest) {
           (item) => item.status === "active" && item.progress < 25,
         ).length,
       },
-      campaignPerformance: campaignPerformance.slice(0, 10),
+      campaignPerformance,
       fundDistribution: [
         { label: "Released", amountEth: weiToEth(releasedWei), amountMyr: 0 },
         { label: "Locked", amountEth: weiToEth(lockedWei), amountMyr: 0 },

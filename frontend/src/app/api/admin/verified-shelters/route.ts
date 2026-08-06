@@ -9,6 +9,7 @@ import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleNFTConfig, getRoleNFTStatus } from "@/lib/role-nft";
 import { roleNFTAbi } from "@/lib/role-nft-abi";
+import { walletSessionMatches } from "@/lib/wallet-session";
 
 class HttpError extends Error {
   constructor(
@@ -19,15 +20,18 @@ class HttpError extends Error {
   }
 }
 
-async function requireAdminAccess(walletAddress: string) {
+async function requireAdminAccess(request: NextRequest, walletAddress: string) {
+  if (!walletSessionMatches(request, walletAddress)) {
+    throw new HttpError("Wallet authentication is required.", 401);
+  }
   if (!(await isAdminWallet(walletAddress))) {
     throw new HttpError("Access denied.", 403);
   }
   return createAdminClient();
 }
 
-async function requireAdminAuditProfile(walletAddress: string) {
-  const supabase = await requireAdminAccess(walletAddress);
+async function requireAdminAuditProfile(request: NextRequest, walletAddress: string) {
+  const supabase = await requireAdminAccess(request, walletAddress);
   const { data: profile } = await supabase
     .from("profiles")
     .select("id")
@@ -102,7 +106,7 @@ async function verifyRoleNFTTransaction({
 export async function GET(request: NextRequest) {
   try {
     const adminWallet = request.nextUrl.searchParams.get("walletAddress") ?? "";
-    const supabase = await requireAdminAccess(adminWallet);
+    const supabase = await requireAdminAccess(request, adminWallet);
     const { data: applications, error: applicationError } = await supabase
       .from("shelter_applications")
       .select("user_id, shelter_name, registration_id, contact_phone, website_url, shelter_address, organization_description, status, reviewed_at")
@@ -167,7 +171,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Invalid account action." }, { status: 400 });
     }
     const { supabase, adminId } =
-      await requireAdminAuditProfile(adminWallet);
+      await requireAdminAuditProfile(request, adminWallet);
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("id, role, wallet_address, account_status")

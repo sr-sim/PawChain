@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
@@ -66,6 +67,7 @@ export async function PATCH(
     const body = await request.json();
     const { id, milestoneId } = await context.params;
     const walletAddress = String(body.walletAddress ?? "").trim();
+    requireWalletSession(request, walletAddress);
     const proofFiles = parseProofFiles(body.proofFiles);
     const proofCID = String(body.proofCID ?? "").trim();
     const txHash = String(body.txHash ?? "").trim();

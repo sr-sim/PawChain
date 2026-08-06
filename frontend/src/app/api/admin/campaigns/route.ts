@@ -10,6 +10,7 @@ import {
 import { campaignFactoryAbi } from "@/lib/campaign-factory-abi";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { notifyCampaignDonors } from "@/lib/donor-notifications";
+import { walletSessionMatches } from "@/lib/wallet-session";
 import {
   decodeEventLog,
   isAddress,
@@ -17,7 +18,10 @@ import {
   type Hash,
 } from "viem";
 
-async function authorize(walletAddress: string) {
+async function authorize(request: NextRequest, walletAddress: string) {
+  if (!walletSessionMatches(request, walletAddress)) {
+    throw new Error("WALLET_SESSION_REQUIRED");
+  }
   if (!(await isAdminWallet(walletAddress))) {
     throw new Error("ADMIN_DENIED");
   }
@@ -27,7 +31,7 @@ async function authorize(walletAddress: string) {
 export async function GET(request: NextRequest) {
   try {
     const walletAddress = request.nextUrl.searchParams.get("walletAddress") ?? "";
-    const supabase = await authorize(walletAddress);
+    const supabase = await authorize(request, walletAddress);
     const { data: campaigns, error } = await supabase
       .from("campaigns")
       .select("id, shelter_id, title, description, goal_amount, current_amount, urgency_level, campaign_status, duration_days, image_url, contract_address, goal_wei, chain_id, factory_address, deployment_tx_hash, cancellation_tx_hash, cancelled_at, cancelled_by, on_chain_campaign_key, eth_myr_rate, blockchain_deadline, created_at, updated_at, rejection_reason, campaign_milestones(id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash, created_at, updated_at)")
@@ -38,8 +42,17 @@ export async function GET(request: NextRequest) {
     const { data: profiles } = shelterIds.length
       ? await supabase.from("profiles").select("id, full_name, wallet_address").in("id", shelterIds)
       : { data: [] };
+    const { data: shelterApplications, error: shelterApplicationError } = shelterIds.length
+      ? await supabase
+          .from("shelter_applications")
+          .select("user_id, contact_phone")
+          .eq("status", "approved")
+          .in("user_id", shelterIds)
+      : { data: [], error: null };
+    if (shelterApplicationError) throw shelterApplicationError;
     const profileMap = new Map((profiles ?? []).map((item) => [item.id, item.full_name]));
     const walletMap = new Map((profiles ?? []).map((item) => [item.id, item.wallet_address]));
+    const phoneMap = new Map((shelterApplications ?? []).map((item) => [item.user_id, item.contact_phone]));
     const campaignIds = (campaigns ?? []).map((item) => item.id);
     const { data: donationRows } = campaignIds.length
       ? await supabase
@@ -148,6 +161,7 @@ export async function GET(request: NextRequest) {
         location: null,
         shelter_name: profileMap.get(item.shelter_id) ?? null,
         shelter_wallet: walletMap.get(item.shelter_id) ?? null,
+        shelter_phone: phoneMap.get(item.shelter_id) ?? null,
         refund_summary:
           refundSummary.get(item.id) ?? {
             donationCount: 0,
@@ -192,7 +206,7 @@ export async function POST(request: NextRequest) {
     if (action === "reject" && !reason) {
       return NextResponse.json({ message: "A rejection reason is required." }, { status: 400 });
     }
-    const supabase = await authorize(walletAddress);
+    const supabase = await authorize(request, walletAddress);
     const { data: campaign, error: lookupError } = await supabase
       .from("campaigns").select("id, shelter_id, title, campaign_status, deployment_tx_hash, contract_address, cancellation_tx_hash, cancelled_at, cancelled_by").eq("id", campaignId).single();
     if (lookupError) throw lookupError;

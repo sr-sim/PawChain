@@ -59,7 +59,7 @@ export function TransactionLinks({
           <span className="font-semibold text-orange-600">
             {shortAddress(transaction.hash)}
           </span>
-          <span aria-hidden="true">-&gt;</span>
+          <span aria-hidden="true">↗</span>
         </a>
       ))}
     </div>

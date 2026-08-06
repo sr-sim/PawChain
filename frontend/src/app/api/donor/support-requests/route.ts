@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,7 @@ async function getDonorProfile(walletAddress: string) {
 export async function GET(request: NextRequest) {
   try {
     const walletAddress = request.nextUrl.searchParams.get("walletAddress");
+    requireWalletSession(request, walletAddress);
     const requestId = request.nextUrl.searchParams.get("id");
 
     if (!walletAddress) {
@@ -107,6 +109,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const walletAddress = String(body.walletAddress ?? "").trim();
+    requireWalletSession(request, walletAddress);
     const target = String(body.target ?? "").trim();
     const concernType = String(body.concernType ?? "").trim();
     const campaignId = String(body.campaignId ?? "").trim();

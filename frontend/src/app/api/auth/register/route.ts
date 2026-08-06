@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mintRoleNFT } from "@/lib/role-nft";
 import {
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
     const fullName = readText(formData, "fullName");
     const email = readText(formData, "email");
     const walletAddress = readText(formData, "walletAddress");
+    requireWalletSession(request, walletAddress);
 
     if (!isRole(role)) {
       return NextResponse.json(

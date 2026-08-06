@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { decodeFunctionData, isAddress, type Address, type Hash } from "viem";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
@@ -13,6 +14,7 @@ export async function POST(
     const { id, milestoneId } = await context.params;
     const body = await request.json();
     const walletAddress = String(body.walletAddress ?? "").trim();
+    requireWalletSession(request, walletAddress);
     const txHash = String(body.txHash ?? "").trim();
 
     if (!walletAddress || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {

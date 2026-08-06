@@ -25,6 +25,8 @@ type AnalyticsData = {
   donorMetrics: {
     donationCount: number;
     uniqueDonors: number;
+    firstTimeDonors: number;
+    returningDonors: number;
     averageDonationEth: number;
     returningDonorRate: number;
   };
@@ -108,12 +110,14 @@ function Panel({
   action,
   children,
   className = "",
+  contentClassName = "",
 }: {
   title: string;
   description: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  contentClassName?: string;
 }) {
   return (
     <section className={`overflow-hidden rounded-[1.4rem] border border-orange-100 bg-white p-5 shadow-[0_14px_38px_rgba(97,55,17,0.07)] ${className}`}>
@@ -124,7 +128,7 @@ function Panel({
         </div>
         {action}
       </div>
-      <div className="mt-5">{children}</div>
+      <div className={`mt-5 ${contentClassName}`}>{children}</div>
     </section>
   );
 }
@@ -161,6 +165,7 @@ function MetricCard({
 }
 
 function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   if (!data.length) {
     return <EmptyState text="Donation activity will appear after confirmed donations in this period." />;
   }
@@ -185,7 +190,8 @@ function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number
         <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-stone-800" /> Donation count</span>
       </div>
       <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[620px]" role="img" aria-label="ETH donated and donation count over time">
+        <div className="relative min-w-[620px]" onMouseLeave={() => setHoveredIndex(null)}>
+        <svg viewBox={`0 0 ${width} ${height}`} className="block w-full" role="img" aria-label="ETH donated and donation count over time">
           {[0, 1, 2, 3].map((line) => (
             <line key={line} x1={padding} x2={width - padding} y1={padding + (plotHeight / 3) * line} y2={padding + (plotHeight / 3) * line} stroke="#e7e5e4" strokeWidth="1" />
           ))}
@@ -210,8 +216,82 @@ function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number
               <title>{`${item.count} donation${item.count === 1 ? "" : "s"}`}</title>
             </circle>
           ))}
+          {data.map((item, index) => {
+            const hitWidth = plotWidth / Math.max(data.length, 1);
+            return <rect key={`hover-${item.date}`} x={x(index) - hitWidth / 2} y={padding} width={hitWidth} height={plotHeight} fill="transparent" onMouseEnter={() => setHoveredIndex(index)} />;
+          })}
+          {hoveredIndex !== null ? <line x1={x(hoveredIndex)} x2={x(hoveredIndex)} y1={padding} y2={padding + plotHeight} stroke="#f97316" strokeWidth="1" strokeDasharray="4 4" pointerEvents="none" /> : null}
         </svg>
+        {hoveredIndex !== null ? (
+          <div className="pointer-events-none absolute top-2 z-10 w-64 rounded-2xl border border-orange-100 bg-white p-4 shadow-xl" style={{ left: `${(x(hoveredIndex) / width) * 100}%`, transform: x(hoveredIndex) / width >= 0.78 ? "translateX(-100%)" : x(hoveredIndex) / width <= 0.22 ? "translateX(0)" : "translateX(-50%)" }}>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600">{new Date(`${data[hoveredIndex].date}T00:00:00`).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" })}</p>
+            <div className="mt-3 space-y-2 text-xs">
+              <div className="flex justify-between gap-3"><span className="text-stone-500">Total ETH donated</span><span className="font-bold text-stone-900">{eth(data[hoveredIndex].amountEth)}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-stone-500">Total MYR value</span><span className="font-bold text-stone-900">{money(data[hoveredIndex].amountEth * rate)}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-stone-500">Total donations</span><span className="font-bold text-stone-900">{data[hoveredIndex].count}</span></div>
+            </div>
+          </div>
+        ) : null}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function CampaignFundingChart({ data, showFilters = true }: { data: AnalyticsData["campaignPerformance"]; showFilters?: boolean }) {
+  const [view, setView] = useState<"top" | "lowest" | "active" | "completed">("top");
+  const displayed = useMemo(() => {
+    if (!showFilters) return data.slice(0, 1);
+    const matching = view === "active" || view === "completed"
+      ? data.filter((campaign) => campaign.status === view)
+      : [...data];
+    return matching
+      .sort((a, b) => view === "lowest" ? a.progress - b.progress : b.progress - a.progress)
+      .slice(0, 8);
+  }, [data, showFilters, view]);
+
+  if (!data.length) return <EmptyState text="Campaign performance will appear when campaigns receive donations." />;
+
+  return (
+    <div>
+      {showFilters ? <div className="mb-4 flex flex-wrap gap-1.5 rounded-xl bg-stone-50 p-1.5 sm:w-fit">
+        {[
+          ["top", "Top funded"],
+          ["lowest", "Lowest funded"],
+          ["active", "Active"],
+          ["completed", "Completed"],
+        ].map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setView(value as typeof view)} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${view === value ? "bg-white text-orange-600 shadow-sm" : "text-stone-500 hover:text-stone-800"}`}>{label}</button>
+        ))}
+      </div> : null}
+      {displayed.length ? <div className="overflow-x-auto pb-2">
+      <div className="relative mx-auto h-72 min-w-[720px] pt-14" style={{ width: `${Math.max(720, displayed.length * 120)}px` }}>
+        <div className="absolute inset-x-0 top-14 h-44">
+          {[0, 25, 50, 75, 100].map((value) => (
+            <div key={value} className="absolute inset-x-0 border-t border-stone-200" style={{ bottom: `${value}%` }}>
+              <span className="absolute -top-2.5 left-0 bg-white pr-2 text-[9px] font-semibold text-stone-400">{value}%</span>
+            </div>
+          ))}
+        </div>
+        <div className="absolute inset-x-8 top-14 flex h-44 items-end justify-around gap-5">
+          {displayed.map((campaign) => (
+            <div key={campaign.id} className="group relative flex h-full min-w-16 flex-1 items-end justify-center">
+              <div className="pointer-events-none absolute left-1/2 top-[-48px] z-10 hidden w-52 -translate-x-1/2 rounded-xl border border-orange-100 bg-white p-3 shadow-xl group-hover:block">
+                <p className="truncate text-xs font-bold text-stone-900">{campaign.title}</p>
+                <div className="mt-2 space-y-1 text-[10px] text-stone-500">
+                  <p className="flex justify-between gap-3"><span>Funding progress</span><strong className="text-stone-800">{percent(campaign.progress)}</strong></p>
+                  <p className="flex justify-between gap-3"><span>Raised</span><strong className="text-stone-800">{eth(campaign.raisedEth)}</strong></p>
+                  <p className="flex justify-between gap-3"><span>Goal</span><strong className="text-stone-800">{eth(campaign.goalEth)}</strong></p>
+                </div>
+              </div>
+              <div className="w-full max-w-14 rounded-t-lg bg-gradient-to-t from-orange-500 to-orange-300 transition group-hover:from-orange-600 group-hover:to-orange-400" style={{ height: `${Math.max(campaign.progress > 0 ? 3 : 0, Math.min(100, campaign.progress))}%` }} />
+              <span className="absolute -bottom-7 left-1/2 w-24 -translate-x-1/2 truncate text-center text-[10px] font-semibold text-stone-500" title={campaign.title}>{campaign.title}</span>
+              <span className="absolute text-[10px] font-black text-stone-700" style={{ bottom: `calc(${Math.min(100, campaign.progress)}% + 5px)` }}>{percent(campaign.progress)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      </div> : <EmptyState text={`No ${view} campaigns are available.`} />}
     </div>
   );
 }
@@ -219,9 +299,13 @@ function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number
 function Donut({
   data,
   center,
+  stacked = false,
+  hideLegend = false,
 }: {
   data: { label: string; value: number; color: string }[];
   center: string;
+  stacked?: boolean;
+  hideLegend?: boolean;
 }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   let cursor = 0;
@@ -234,21 +318,23 @@ function Donut({
     background: total ? `conic-gradient(${stops.join(",")})` : "#e7e5e4",
   } as CSSProperties;
   return (
-    <div className="grid gap-5 sm:grid-cols-[180px_1fr] sm:items-center">
+    <div className={stacked ? "grid gap-5" : "grid gap-5 sm:grid-cols-[180px_1fr] sm:items-center"}>
       <div className="relative mx-auto h-40 w-40 rounded-full" style={style}>
         <div className="absolute inset-7 grid place-items-center rounded-full bg-white text-center shadow-inner">
           <div><p className="text-xl font-bold text-stone-950">{center}</p><p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Total</p></div>
         </div>
       </div>
-      <div className="space-y-3">
-        {data.map((item) => (
-          <div key={item.label} className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-            <span className="flex-1 text-xs font-semibold text-stone-600">{item.label}</span>
-            <span className="text-xs font-bold text-stone-950">{item.value}</span>
-          </div>
-        ))}
-      </div>
+      {!hideLegend ? (
+        <div className={stacked ? "grid gap-3 sm:grid-cols-3" : "space-y-3"}>
+          {data.map((item) => (
+            <div key={item.label} className="flex items-center gap-2.5">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+              <span className="flex-1 text-xs font-semibold text-stone-600">{item.label}</span>
+              <span className="text-xs font-bold text-stone-950">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -263,8 +349,6 @@ export default function AdminAnalyticsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [period, setPeriod] = useState("30");
   const [campaignId, setCampaignId] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [campaignOptions, setCampaignOptions] = useState<{ id: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -280,8 +364,6 @@ export default function AdminAnalyticsPage() {
     setError("");
     try {
       const query = new URLSearchParams({ walletAddress: address, period, campaignId });
-      if (period === "custom" && dateFrom) query.set("dateFrom", dateFrom);
-      if (period === "custom" && dateTo) query.set("dateTo", dateTo);
       const response = await fetch(`/api/admin/analytics?${query}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.message ?? "Unable to load analytics.");
@@ -292,7 +374,7 @@ export default function AdminAnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [address, campaignId, dateFrom, dateTo, isConnected, period]);
+  }, [address, campaignId, isConnected, period]);
 
   useEffect(() => {
     void loadAnalytics();
@@ -316,9 +398,9 @@ export default function AdminAnalyticsPage() {
               <p className="mt-1 max-w-2xl text-sm text-stone-500">Monitor donation activity, campaign performance, fund distribution, and verified on-chain outcomes.</p>
             </div>
             <div className="flex flex-wrap gap-1.5 rounded-2xl border border-orange-100 bg-white p-1.5 shadow-sm">
-              {["7", "30", "90", "all", "custom"].map((value) => (
+              {["7", "30", "90", "all"].map((value) => (
                 <button key={value} type="button" onClick={() => setPeriod(value)} className={`rounded-xl px-3 py-2 text-xs font-bold transition ${period === value ? "bg-orange-500 text-white shadow-sm" : "text-stone-500 hover:bg-orange-50 hover:text-orange-700"}`}>
-                  {value === "all" ? "All time" : value === "custom" ? "Custom" : `${value} days`}
+                  {value === "all" ? "All time" : `${value} days`}
                 </button>
               ))}
             </div>
@@ -332,12 +414,6 @@ export default function AdminAnalyticsPage() {
                 {campaignOptions.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}
               </select>
             </label>
-            {period === "custom" ? (
-              <>
-                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">From<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-2 block rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5 text-sm font-medium normal-case text-stone-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" /></label>
-                <label className="text-xs font-bold uppercase tracking-wide text-stone-500">To<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-2 block rounded-xl border border-orange-100 bg-orange-50/20 px-3 py-2.5 text-sm font-medium normal-case text-stone-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" /></label>
-              </>
-            ) : null}
             <button type="button" onClick={() => void loadAnalytics()} className="rounded-xl bg-stone-950 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400">Refresh analytics</button>
           </section>
 
@@ -353,75 +429,25 @@ export default function AdminAnalyticsPage() {
                 <MetricCard label="Refunds returned to donors" value={eth(data.financial.refundedWei)} secondary={`≈ ${money(weiToMyr(data.financial.refundedWei))} (current rate)`} tone="stone" />
               </section>
 
-              <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
+              <section>
                 <Panel title="Donation activity" description="Confirmed ETH donations and transaction volume during the selected period.">
                   <TrendChart data={data.trend} rate={ethMyrRate} />
-                </Panel>
-                <Panel title="Donor participation" description="Wallet-based engagement for confirmed donations.">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                    {[
-                      ["Confirmed donations", String(data.donorMetrics.donationCount)],
-                      ["Unique donor wallets", String(data.donorMetrics.uniqueDonors)],
-                      ["Average donation", eth(data.donorMetrics.averageDonationEth)],
-                      ["Returning-donor rate", percent(data.donorMetrics.returningDonorRate)],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-4">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">{label}</p>
-                        <p className="mt-1.5 text-xl font-bold text-stone-950">{value}</p>
-                      </div>
-                    ))}
-                  </div>
                 </Panel>
               </section>
 
               <section className="grid gap-5 xl:grid-cols-2">
-                <Panel title="Fund distribution" description="How confirmed campaign funds are currently allocated. ETH remains the primary value.">
+                <Panel title="Fund distribution" description="How confirmed campaign funds are currently allocated. ETH remains the primary value." className="xl:flex xl:flex-col" contentClassName="xl:flex xl:flex-1 xl:flex-col xl:justify-center">
                   {fundTotal ? (
-                    <Donut center={eth(fundTotal)} data={data.fundDistribution.map((item, index) => ({ label: `${item.label} · ${eth(item.amountEth)}`, value: item.amountEth, color: ["#10b981", "#38bdf8", "#78716c"][index] }))} />
+                    <Donut stacked hideLegend center={eth(fundTotal)} data={data.fundDistribution.map((item, index) => ({ label: item.label, value: item.amountEth, color: ["#10b981", "#38bdf8", "#78716c"][index] }))} />
                   ) : <EmptyState text="No confirmed financial distribution is available for this period." />}
                   <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    {data.fundDistribution.map((item) => <div key={item.label} className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"><p className="text-[10px] font-bold uppercase text-stone-400">{item.label}</p><p className="mt-1 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">≈ {money(ethToMyr(item.amountEth))} (current rate)</p></div>)}
+                    {data.fundDistribution.map((item, index) => <div key={item.label} className="rounded-xl border border-orange-100 bg-orange-50/25 p-3"><p className="flex items-center gap-2 text-[10px] font-bold uppercase text-stone-500"><span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ["#10b981", "#38bdf8", "#78716c"][index] }} />{item.label}</p><p className="mt-2 text-sm font-bold">{eth(item.amountEth)}</p><p className="text-[10px] text-stone-400">≈ {money(ethToMyr(item.amountEth))} (current rate)</p></div>)}
                   </div>
                 </Panel>
-                <Panel title="Campaign portfolio" description="Funding health and time-sensitive campaign indicators." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">Manage campaigns ↗</Link>}>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                    {[
-                      ["Active", data.campaignSummary.active],
-                      ["Completed", data.campaignSummary.completed],
-                      ["Fully funded", data.campaignSummary.fullyFunded],
-                      ["Deadline soon", data.campaignSummary.approachingDeadline],
-                      ["Under 25%", data.campaignSummary.underperforming],
-                    ].map(([label, value]) => <div key={label} className="rounded-xl border border-stone-100 bg-stone-50 p-3 text-center"><p className="text-2xl font-bold">{value}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-stone-400">{label}</p></div>)}
-                  </div>
-                  <div className="mt-5 space-y-4">
-                    {data.campaignPerformance.length ? data.campaignPerformance.slice(0, 6).map((campaign) => (
-                      <div key={campaign.id}>
-                        <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="truncate font-semibold text-stone-700">{campaign.title}</span><span className="shrink-0 font-bold">{percent(campaign.progress)}</span></div>
-                        <div className="h-2 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-orange-400" style={{ width: `${Math.min(100, campaign.progress)}%` }} /></div>
-                        <div className="mt-1 flex justify-between text-[10px] text-stone-400"><span>{eth(campaign.raisedEth)} raised</span><span>{campaign.donors} donor{campaign.donors === 1 ? "" : "s"} · {percent(campaign.refundRate)} refunded</span></div>
-                      </div>
-                    )) : <EmptyState text="Campaign performance will appear when campaigns receive donations." />}
-                  </div>
+                <Panel title="Campaign funding progress" description="Percentage of each campaign's funding goal that has been raised." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">View all campaigns ↗</Link>} className="order-3 xl:col-span-2">
+                  <CampaignFundingChart data={data.campaignPerformance} showFilters={campaignId === "all"} />
                 </Panel>
-              </section>
-
-              <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
-                <Panel title="Milestone performance" description="Proof-review pipeline and release readiness." action={<Link href="/Admin/campaign-management" className="text-xs font-bold text-orange-600 hover:underline">Review milestones ↗</Link>}>
-                  <div className="grid gap-4 sm:grid-cols-[1fr_200px]">
-                    <div className="space-y-3">
-                      {data.milestoneMetrics.statuses.map((item) => {
-                        const max = Math.max(...data.milestoneMetrics.statuses.map((status) => status.count), 1);
-                        return <div key={item.status}><div className="mb-1 flex justify-between text-xs font-semibold capitalize text-stone-600"><span>{item.status === "submitted" ? "Awaiting review" : item.status}</span><span>{item.count}</span></div><div className="h-2.5 overflow-hidden rounded-full bg-stone-100"><div className="h-full rounded-full bg-orange-300" style={{ width: `${(item.count / max) * 100}%` }} /></div></div>;
-                      })}
-                    </div>
-                    <div className="grid gap-2">
-                      <div className="rounded-xl bg-stone-50 p-4"><p className="text-[10px] font-bold uppercase text-stone-400">Average review time</p><p className="mt-1 text-xl font-bold">{data.milestoneMetrics.averageReviewHours.toFixed(1)}h</p></div>
-                      <div className="rounded-xl bg-amber-50 p-4"><p className="text-[10px] font-bold uppercase text-amber-700">Delayed over 7 days</p><p className="mt-1 text-xl font-bold text-amber-900">{data.milestoneMetrics.delayed}</p></div>
-                      <div className="rounded-xl bg-emerald-50 p-4"><p className="text-[10px] font-bold uppercase text-emerald-700">Ready for release</p><p className="mt-1 text-xl font-bold text-emerald-900">{data.milestoneMetrics.readyForRelease}</p></div>
-                    </div>
-                  </div>
-                </Panel>
-                <Panel title="Verified transaction activity" description="Confirmed donations, fund releases, and refunds from the same on-chain records as Financial Transaction Records." action={<Link href="/Admin/transactions" className="text-xs font-bold text-orange-600 hover:underline">View transactions ↗</Link>}>
+                <Panel title="Verified transaction activity" description="Confirmed donations, fund releases, and refunds from the same on-chain records as Financial Transaction Records." action={<Link href="/Admin/transactions" className="text-xs font-bold text-orange-600 hover:underline">View transactions ↗</Link>} className="order-2">
                   <Donut center={String(data.blockchainHealth.confirmed + data.blockchainHealth.pending + data.blockchainHealth.failed)} data={[
                     { label: "Confirmed", value: data.blockchainHealth.confirmed, color: "#10b981" },
                     { label: "Pending", value: data.blockchainHealth.pending, color: "#f59e0b" },
