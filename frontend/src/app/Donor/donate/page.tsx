@@ -106,6 +106,53 @@ function parseEthInput(value: string) {
   }
 }
 
+function getDonationFailureMessage(error: unknown) {
+  if (isWalletRejection(error)) {
+    return "The donation was cancelled in MetaMask. No funds were transferred.";
+  }
+
+  let current: unknown = error;
+  const visited = new Set<unknown>();
+  const messages: string[] = [];
+
+  while (current && !visited.has(current)) {
+    visited.add(current);
+    const candidate = current as {
+      cause?: unknown;
+      details?: unknown;
+      message?: unknown;
+      shortMessage?: unknown;
+    };
+
+    [candidate.shortMessage, candidate.message, candidate.details].forEach(
+      (value) => {
+        if (typeof value === "string") {
+          messages.push(value);
+        }
+      },
+    );
+
+    current = candidate.cause;
+  }
+
+  const errorText = messages.join(" ").toLowerCase();
+
+  if (
+    errorText.includes("insufficient funds") ||
+    errorText.includes("exceeds the balance") ||
+    errorText.includes("does not have enough funds") ||
+    errorText.includes("not enough funds")
+  ) {
+    return "Your wallet does not have enough ETH for this donation and gas fee.";
+  }
+
+  if (errorText.includes("chain") || errorText.includes("network")) {
+    return "Please switch to the correct wallet network and try again.";
+  }
+
+  return "The donation could not be completed. Please check your wallet and try again.";
+}
+
 function getMilestoneStatusLabel(status: number) {
   const labels = [
     "Locked",
@@ -314,6 +361,14 @@ export default function DonorDonatePage() {
   const [rateUpdatedAt, setRateUpdatedAt] = useState("");
   const [rateHistory, setRateHistory] = useState<EthMyrHistoryPoint[]>([]);
   const [rateLoadError, setRateLoadError] = useState("");
+
+  useEffect(() => {
+    setIsSubmitted(false);
+    setTransactionHash("");
+    setConfirmedDonationId("");
+    setDonationError("");
+    setBlockchainPopup(null);
+  }, [selectedId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1001,11 +1056,7 @@ export default function DonorDonatePage() {
         txHash,
       });
     } catch (error) {
-      const message = isWalletRejection(error)
-        ? "The donation transaction was cancelled in MetaMask. No funds were transferred."
-        : error instanceof Error
-          ? error.message
-          : "Unable to confirm donation.";
+      const message = getDonationFailureMessage(error);
       setDonationError(message);
       setBlockchainPopup({
         status: "failed",
@@ -1027,11 +1078,11 @@ export default function DonorDonatePage() {
               Donation
             </p>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
-              Donate with ETH.
+              Donate with MYR.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Select a campaign, enter MYR, and confirm the ETH transaction
-              in your wallet.
+              Enter a local amount, review the ETH estimate, and confirm the
+              transaction in your wallet.
             </p>
           </div>
           <EthMyrMarketCard
@@ -1151,6 +1202,11 @@ export default function DonorDonatePage() {
                     onClick={() => {
                       setSelectedId(campaign.id);
                       setExactDonationWei(null);
+                      setIsSubmitted(false);
+                      setTransactionHash("");
+                      setConfirmedDonationId("");
+                      setDonationError("");
+                      setBlockchainPopup(null);
                     }}
                     suppressHydrationWarning
                     className={[

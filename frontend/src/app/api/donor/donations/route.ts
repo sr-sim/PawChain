@@ -149,7 +149,8 @@ export async function POST(request: NextRequest) {
     const rate = Number.isFinite(latestRate.rate)
       ? latestRate.rate
       : Number(campaign.eth_myr_rate ?? demoEthMyrRate);
-    const amountMyr = Number(formatEther(donationAmount)) * rate;
+    const donationEth = Number(formatEther(donationAmount));
+    const amountMyr = donationEth * rate;
     const raisedMyr = Number(formatEther(totalRaised)) * rate;
     const { data: donation, error: insertError } = await supabase
       .from("donations")
@@ -180,7 +181,10 @@ export async function POST(request: NextRequest) {
       donorId: donor.id,
       campaignId,
       title: "Donation confirmed",
-      message: `Your ${Number(formatEther(donationAmount)).toFixed(6)} ETH donation to ${campaign.title} was confirmed on-chain.`,
+      message: `Your ${donationEth.toFixed(6)} ETH donation to ${campaign.title} was confirmed. Approx. MYR ${amountMyr.toLocaleString("en-MY", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}.`,
       status: "success",
     });
 

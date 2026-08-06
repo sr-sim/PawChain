@@ -155,3 +155,60 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const walletAddress = String(body.walletAddress ?? "").trim();
+    const notificationId = String(body.notificationId ?? "").trim();
+    const clearAll = Boolean(body.clearAll);
+
+    if (!walletAddress || (!notificationId && !clearAll)) {
+      return NextResponse.json(
+        { message: "Wallet address and notification selection are required." },
+        { status: 400 },
+      );
+    }
+
+    const donor = await getDonorProfile(walletAddress);
+
+    if (!donor.profile) {
+      return NextResponse.json(
+        { message: "No donor account found." },
+        { status: 404 },
+      );
+    }
+
+    let query = donor.supabase
+      .from("donor_notifications")
+      .delete()
+      .eq("donor_id", donor.profile.id);
+
+    if (!clearAll) {
+      query = query.eq("id", notificationId);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({
+      deleted: true,
+      message: clearAll
+        ? "Notifications cleared."
+        : "Notification deleted.",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to delete donor notification.",
+      },
+      { status: 500 },
+    );
+  }
+}

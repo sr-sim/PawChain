@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PrintReceiptButton } from "@/app/components/PrintReceiptButton";
 import { getDonorDonationById } from "@/lib/donor-donations";
 import {
   getAddressExplorerUrl,
@@ -7,7 +8,6 @@ import {
   getTransactionExplorerUrl,
   shortAddress,
 } from "@/lib/block-explorer";
-import { getLatestEthMyrRate } from "@/lib/currency";
 
 type ReceiptPageProps = {
   params: Promise<{ id: string }>;
@@ -41,13 +41,6 @@ function formatEth(value: number) {
   })} ETH`;
 }
 
-function formatLiveMyr(value: number) {
-  return `Approx. live MYR ${value.toLocaleString("en-MY", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
@@ -71,7 +64,6 @@ export default async function DonorReceiptPage({
     notFound();
   }
 
-  const ethMyrRate = (await getLatestEthMyrRate()).rate;
   const trackingHref = walletAddress
     ? `/Donor/tracking?walletAddress=${encodeURIComponent(walletAddress)}`
     : "/Donor/tracking";
@@ -86,7 +78,7 @@ export default async function DonorReceiptPage({
     ? formatEth(receipt.amountEth)
     : formatAmount(receipt.amount, receipt.currency);
   const receiptAmountEstimate = receipt.amountEth > 0
-    ? formatLiveMyr(receipt.amountEth * ethMyrRate)
+    ? formatAmount(receipt.amount, receipt.currency)
     : "";
 
   return (
@@ -112,15 +104,18 @@ export default async function DonorReceiptPage({
               {receiptAmountEstimate ? ` (${receiptAmountEstimate})` : ""}
             </p>
           </div>
-          <span
-            className={[
-              "w-fit rounded-full border px-3 py-1 text-xs font-semibold",
-              statusStyles[receipt.status] ??
-                "border-slate-200 bg-slate-50 text-slate-600",
-            ].join(" ")}
-          >
-            {receipt.status}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <PrintReceiptButton />
+            <span
+              className={[
+                "w-fit rounded-full border px-3 py-1 text-xs font-semibold",
+                statusStyles[receipt.status] ??
+                  "border-slate-200 bg-slate-50 text-slate-600",
+              ].join(" ")}
+            >
+              {receipt.status}
+            </span>
+          </div>
         </div>
       </section>
 
@@ -144,7 +139,7 @@ export default async function DonorReceiptPage({
               ["Shelter", receipt.shelterName],
               ["Amount", receiptAmount],
               ...(receiptAmountEstimate
-                ? ([["Live MYR estimate", receiptAmountEstimate]] as [string, string][])
+                ? ([["MYR value", receiptAmountEstimate]] as [string, string][])
                 : []),
               ["Network", getExplorerNetworkName()],
               ["Date", formatDate(receipt.createdAt)],
@@ -230,6 +225,11 @@ export default async function DonorReceiptPage({
                       ? `+${formatEth(receipt.refundAmountEth)}`
                       : "Refund confirmed"}
                   </p>
+                  {receipt.refundAmountEth > 0 ? (
+                    <p className="mt-1 text-xs font-semibold text-stone-500">
+                      {formatAmount(receipt.refundAmount, receipt.currency)}
+                    </p>
+                  ) : null}
                   {receipt.refundedAt ? (
                     <p className="mt-1 text-xs font-semibold text-stone-500">
                       {formatDate(receipt.refundedAt)}
