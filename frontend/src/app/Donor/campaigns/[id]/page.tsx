@@ -45,6 +45,13 @@ function formatEth(value: number | undefined | null) {
   })} ETH`;
 }
 
+function normalizeContent(value: string | undefined | null) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function getMilestoneAmount(goalAmount: number | undefined, percentage: number) {
   const goal = Number(goalAmount ?? 0);
   const releasePercentage = Number(percentage);
@@ -193,6 +200,9 @@ export default async function DonorCampaignDetailPage({
     typeof campaign.onChainGoalEth === "number"
       ? formatEth((campaign.onChainGoalEth * Number(percentage || 0)) / 100)
       : formatMyr(getMilestoneAmount(campaign.goalAmount, percentage));
+  const hasDistinctUsagePlan =
+    normalizeContent(campaign.campaignDetails) &&
+    normalizeContent(campaign.campaignDetails) !== normalizeContent(campaign.story);
 
   return (
     <div className="space-y-5">
@@ -220,34 +230,19 @@ export default async function DonorCampaignDetailPage({
             ].join(" ")}
           />
         )}
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+        <div className="space-y-5 p-5 sm:p-6">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start xl:gap-12">
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-orange)]">
                 Campaign detail
               </p>
               <h1 className="mt-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
                 {campaign.title}
               </h1>
-              <p className="mt-2 text-sm font-semibold text-[var(--color-orange)]">
-                {campaign.shelter}
-              </p>
-            </div>
-            {contractUrl && campaign.contractAddress ? (
-              <a
-                href={contractUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="absolute bottom-7 left-7 rounded-full border border-orange-200 bg-white/95 px-3 py-1.5 text-xs font-black text-[var(--color-orange)] shadow-sm transition hover:-translate-y-0.5 hover:bg-orange-50"
-              >
-                Contract {shortAddress(campaign.contractAddress)}
-              </a>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col justify-between p-5 sm:p-7">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <p className="mr-1 text-sm font-black text-[var(--color-orange)]">
+                  {campaign.shelter}
+                </p>
                 <span
                   className={[
                     "rounded-full border px-3 py-1 text-xs font-black",
@@ -259,23 +254,63 @@ export default async function DonorCampaignDetailPage({
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
                   {campaign.status}
                 </span>
-                <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-stone-700">
-                  {getExplorerNetworkName()}
-                </span>
               </div>
-              <h1 className="mt-5 text-3xl font-black tracking-tight text-stone-950 sm:text-4xl">
-                {campaign.title}
-              </h1>
-              <p className="mt-3 text-sm font-black text-[var(--color-orange)]">
-                {campaign.shelter}
-              </p>
-              <p className="mt-5 line-clamp-4 text-sm leading-7 text-stone-600">
-                {campaign.story}
-              </p>
+              <div className="mt-6">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                  Background
+                </p>
+                <p className="mt-2 text-sm leading-7 text-stone-600">
+                  {campaign.story}
+                </p>
+              </div>
             </div>
+            <div className="space-y-4 lg:justify-self-end">
+              {contractUrl && campaign.contractAddress ? (
+                <a
+                  href={contractUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex w-full max-w-[22rem] flex-col items-center justify-center rounded-2xl border border-orange-100 bg-orange-50/70 px-4 py-3 text-center text-xs font-black text-[var(--color-orange)] shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-orange-50"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.16em] text-stone-500">
+                    Contract
+                  </span>
+                  <span className="mt-1 font-mono text-sm">
+                    {shortAddress(campaign.contractAddress)}
+                  </span>
+                </a>
+              ) : null}
+              <div className="w-full max-w-[22rem] rounded-2xl border border-orange-100 bg-white/75 p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
+                  Campaign facts
+                </p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-semibold text-stone-500">Milestones</span>
+                    <span className="font-black text-stone-950">
+                      {campaign.milestones.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-semibold text-stone-500">Network</span>
+                    <span className="font-black text-stone-950">
+                      {getExplorerNetworkName()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-semibold text-stone-500">Release model</span>
+                    <span className="font-black text-stone-950">
+                      Milestone gated
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-3">
-              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/80 p-4">
+          <div className="rounded-[1.35rem] border border-orange-100 bg-gradient-to-br from-orange-50/80 via-white to-amber-50/70 p-3 shadow-sm">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/85 p-4 shadow-sm">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">
                   Raised
                 </p>
@@ -283,7 +318,7 @@ export default async function DonorCampaignDetailPage({
                   {raisedDisplay}
                 </p>
               </div>
-              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/80 p-4">
+              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/85 p-4 shadow-sm">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">
                   Goal
                 </p>
@@ -291,7 +326,7 @@ export default async function DonorCampaignDetailPage({
                   {goalDisplay}
                 </p>
               </div>
-              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/80 p-4">
+              <div className="donor-tech-metric rounded-2xl border border-orange-100 bg-white/85 p-4 shadow-sm">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-stone-500">
                   Progress
                 </p>
@@ -303,9 +338,9 @@ export default async function DonorCampaignDetailPage({
           </div>
         </div>
 
-        <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1fr_22rem]">
+        <div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
           <div className="space-y-5">
-            <div className="donor-gradient-card rounded-2xl border border-orange-100 p-5 shadow-sm">
+            <div className="donor-gradient-card rounded-2xl border border-orange-100 p-4 shadow-sm sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
@@ -319,14 +354,14 @@ export default async function DonorCampaignDetailPage({
                   {campaign.donors} donors
                 </span>
               </div>
-              <div className="mt-5 h-3 overflow-hidden rounded-full bg-orange-100">
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-orange-100">
                 <div
                   className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
                   style={{ width: `${progressWidth}%` }}
                 />
               </div>
               {currentMilestone ? (
-                <div className="mt-4 rounded-xl bg-white/75 px-3 py-2 ring-1 ring-orange-100">
+                <div className="mt-3 rounded-xl bg-white/75 px-3 py-2 ring-1 ring-orange-100">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-500">
                     {campaign.status === "Completed"
                       ? "Final milestone"
@@ -340,8 +375,8 @@ export default async function DonorCampaignDetailPage({
                   </p>
                 </div>
               ) : null}
-              <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-                <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
+              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                <div className="rounded-xl bg-white/80 p-2.5 ring-1 ring-orange-100">
                   <p className="text-xs font-semibold text-stone-500">
                     Amount raised
                   </p>
@@ -349,7 +384,7 @@ export default async function DonorCampaignDetailPage({
                     {raisedDisplay}
                   </p>
                 </div>
-                <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
+                <div className="rounded-xl bg-white/80 p-2.5 ring-1 ring-orange-100">
                   <p className="text-xs font-semibold text-stone-500">
                     Campaign goal
                   </p>
@@ -357,7 +392,7 @@ export default async function DonorCampaignDetailPage({
                     {goalDisplay}
                   </p>
                 </div>
-                <div className="rounded-xl bg-white/80 p-3 ring-1 ring-orange-100">
+                <div className="rounded-xl bg-white/80 p-2.5 ring-1 ring-orange-100">
                   <p className="text-xs font-semibold text-stone-500">
                     Time remaining
                   </p>
@@ -368,15 +403,7 @@ export default async function DonorCampaignDetailPage({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
-                <h2 className="text-base font-black text-stone-950">
-                  Background story
-                </h2>
-                <p className="mt-3 text-sm leading-7 text-stone-600">
-                  {campaign.story}
-                </p>
-              </div>
+            {hasDistinctUsagePlan ? (
               <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
                 <h2 className="text-base font-black text-stone-950">
                   Usage plan
@@ -385,7 +412,7 @@ export default async function DonorCampaignDetailPage({
                   {campaign.campaignDetails}
                 </p>
               </div>
-            </div>
+            ) : null}
           </div>
 
           <aside className="space-y-4">
@@ -420,31 +447,6 @@ export default async function DonorCampaignDetailPage({
               </Link>
             </div>
 
-            <div className="rounded-2xl border border-orange-100 bg-white/80 p-5 shadow-sm">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-stone-500">
-                Campaign facts
-              </p>
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-stone-500">Milestones</span>
-                  <span className="font-black text-stone-950">
-                    {campaign.milestones.length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-stone-500">Network</span>
-                  <span className="font-black text-stone-950">
-                    {getExplorerNetworkName()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-semibold text-stone-500">Release model</span>
-                  <span className="font-black text-stone-950">
-                    Milestone gated
-                  </span>
-                </div>
-              </div>
-            </div>
           </aside>
 
           <div className="lg:col-span-2">
