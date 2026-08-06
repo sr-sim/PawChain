@@ -380,9 +380,9 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    if (factoryFlowVersion !== BigInt(2)) {
+    if (factoryFlowVersion !== BigInt(3)) {
       return NextResponse.json(
-        { message: "CampaignFactory flow version 2 is required." },
+        { message: "CampaignFactory flow version 3 is required." },
         { status: 409 },
       );
     }

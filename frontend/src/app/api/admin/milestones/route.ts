@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         abi: campaignContractAbi,
         functionName: "FLOW_VERSION",
       });
-      isSequentialFlow = flowVersion === BigInt(2);
+      isSequentialFlow = flowVersion >= BigInt(2);
     } catch {
       // Contracts deployed before flow version 2 do not expose FLOW_VERSION.
     }

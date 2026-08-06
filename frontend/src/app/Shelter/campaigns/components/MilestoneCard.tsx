@@ -130,6 +130,8 @@ export function MilestoneCard({
   const onChainStatus = onChainMilestone
     ? Number(onChainMilestone.status)
     : null;
+  const proofIsUnderReview =
+    milestone.status === "submitted" || onChainStatus === 2;
   // Proof is valid only after the milestone funds have been withdrawn
   // (Released), or when the admin rejected an earlier proof submission.
   // Never fall back to the older rule that allowed an Active milestone to
@@ -392,7 +394,7 @@ export function MilestoneCard({
       <SharedMilestoneCard
         milestone={milestone}
         index={index}
-        showProof={showProofUpload}
+        showProof={showProofUpload && !proofIsUnderReview}
         proofAction={
           showProofUpload && canUploadProof ? (
             <div className="mt-4 rounded-2xl border border-dashed border-orange-200 bg-white/72 p-4 text-stone-950">
