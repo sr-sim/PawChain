@@ -25,11 +25,13 @@ export function RefundClaimButton({
   contractAddress,
   donationAmountEth = 0,
   campaignDonationTotalEth = 0,
+  hasRecordedRefund = false,
 }: {
   campaignId: string;
   contractAddress: string | null;
   donationAmountEth?: number;
   campaignDonationTotalEth?: number;
+  hasRecordedRefund?: boolean;
 }) {
   const router = useRouter();
   const { address } = useAppKitAccount();
@@ -89,7 +91,10 @@ export function RefundClaimButton({
     };
   }, []);
 
-  if ((!refundable || refundable <= BigInt(0)) && confirmedRefundEth === null) {
+  if (
+    hasRecordedRefund ||
+    ((!refundable || refundable <= BigInt(0)) && confirmedRefundEth === null)
+  ) {
     return null;
   }
 
@@ -352,28 +357,16 @@ export function RefundClaimButton({
           </div>
         </details>
       ) : null}
-      {message ? (
+      {message && messageType !== "success" ? (
         <div
           className={[
             "mt-3 rounded-xl border px-3 py-2 text-xs font-semibold",
-            messageType === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : messageType === "error"
+            messageType === "error"
                 ? "border-red-200 bg-red-50 text-red-700"
                 : "border-orange-200 bg-orange-50 text-[var(--color-orange)]",
           ].join(" ")}
         >
           <p>{message}</p>
-          {messageType === "success" && claimTxUrl ? (
-            <a
-              href={claimTxUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 inline-flex font-black underline-offset-4 hover:underline"
-            >
-              View internal refund proof on Etherscan
-            </a>
-          ) : null}
         </div>
       ) : null}
     </div>

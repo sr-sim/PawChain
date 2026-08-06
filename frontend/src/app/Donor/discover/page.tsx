@@ -503,6 +503,24 @@ export default function DonorDiscoverPage() {
     });
   }, [searchTerm, urgency]);
 
+  const searchMatchedCampaigns = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return campaigns.filter((campaign) => {
+      return (
+        normalizedSearch.length === 0 ||
+        [
+          campaign.title,
+          campaign.shelter,
+          campaign.story,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch)
+      );
+    });
+  }, [campaigns, searchTerm]);
+
   const sortedCampaigns = useMemo(() => {
     return [...filteredCampaigns].sort((first, second) => {
       if (sortBy === "Deadline soon") {
@@ -522,6 +540,26 @@ export default function DonorDiscoverPage() {
       );
     });
   }, [filteredCampaigns, sortBy]);
+
+  const sortedStatusCampaigns = useMemo(() => {
+    return [...searchMatchedCampaigns].sort((first, second) => {
+      if (sortBy === "Deadline soon") {
+        return first.daysLeft - second.daysLeft;
+      }
+
+      if (sortBy === "Most progress") {
+        return second.raised - first.raised;
+      }
+
+      if (sortBy === "Most donors") {
+        return second.donors - first.donors;
+      }
+
+      return (
+        (urgencyRank[first.urgency] ?? 9) - (urgencyRank[second.urgency] ?? 9)
+      );
+    });
+  }, [searchMatchedCampaigns, sortBy]);
 
   const selectedCampaign = campaigns.find((campaign) => campaign.id === selectedId);
   const selectedCampaignStatus = selectedCampaign
@@ -606,14 +644,14 @@ export default function DonorDiscoverPage() {
   );
   const completedCampaigns = useMemo(
     () =>
-      sortedCampaigns.filter(
+      sortedStatusCampaigns.filter(
         (campaign) => getCampaignDisplayStatus(campaign) === "Completed",
       ),
-    [sortedCampaigns],
+    [sortedStatusCampaigns],
   );
   const closedCampaigns = useMemo(
-    () => sortedCampaigns.filter((campaign) => campaign.status === "Closed"),
-    [sortedCampaigns],
+    () => sortedStatusCampaigns.filter((campaign) => campaign.status === "Closed"),
+    [sortedStatusCampaigns],
   );
   const displayedCampaigns =
     activeTab === "Saved"
@@ -622,9 +660,7 @@ export default function DonorDiscoverPage() {
         ? completedCampaigns
         : activeTab === "Closed"
           ? closedCampaigns
-          : activeCampaigns.length === 0 && campaigns.length > 0
-            ? campaigns.filter((campaign) => canCampaignReceiveDonation(campaign))
-            : activeCampaigns;
+          : activeCampaigns;
   const selectedMilestones = getCampaignMilestoneItems(selectedCampaign);
   const selectedCurrentMilestoneIndex = getCurrentMilestoneIndex(
     selectedMilestones,
@@ -672,20 +708,26 @@ export default function DonorDiscoverPage() {
   }, [filteredShelters, sortBy]);
 
   const tabCounts: Record<(typeof tabs)[number], number> = {
-    Campaigns: campaigns.filter((campaign) => canCampaignReceiveDonation(campaign)).length,
-    Completed: campaigns.filter((campaign) => getCampaignDisplayStatus(campaign) === "Completed").length,
-    Closed: campaigns.filter((campaign) => campaign.status === "Closed").length,
-    Shelters: shelters.length,
-    Saved: savedIds.length,
+    Campaigns: activeCampaigns.length,
+    Completed: completedCampaigns.length,
+    Closed: closedCampaigns.length,
+    Shelters: sortedShelters.length,
+    Saved: savedCampaigns.length,
   };
-  const openCampaignCount = tabCounts.Campaigns;
+  const openCampaignCount = campaigns.filter((campaign) =>
+    canCampaignReceiveDonation(campaign),
+  ).length;
   const emptyCampaignTitle =
     activeTab === "Saved"
       ? "No saved campaigns yet"
       : activeTab === "Completed"
-        ? "No completed campaigns yet"
+        ? searchTerm.trim().length > 0 && campaigns.length > 0
+          ? "No completed campaigns match this search"
+          : "No completed campaigns yet"
       : activeTab === "Closed"
-        ? "No closed campaigns yet"
+        ? searchTerm.trim().length > 0 && campaigns.length > 0
+          ? "No closed campaigns match this search"
+          : "No closed campaigns yet"
       : hasActiveFilters && campaigns.length > 0
         ? "No campaigns match these filters"
         : "No active campaigns found";
@@ -693,9 +735,13 @@ export default function DonorDiscoverPage() {
     activeTab === "Saved"
       ? "Tap the heart on a campaign to keep it in this list."
       : activeTab === "Completed"
-        ? "Completed campaign records will appear here after milestone release is finished."
+        ? searchTerm.trim().length > 0 && campaigns.length > 0
+          ? "Completed campaigns exist, but the current search is hiding them."
+          : "Completed campaign records will appear here after milestone release is finished."
       : activeTab === "Closed"
-        ? "Closed campaigns will appear here after refund or closure actions."
+        ? searchTerm.trim().length > 0 && campaigns.length > 0
+          ? "Closed campaigns exist, but the current search is hiding them."
+          : "Closed campaigns will appear here after refund or closure actions."
       : hasActiveFilters && campaigns.length > 0
         ? "Active campaigns are available, but the current search or filter selection is hiding them."
         : "No active campaigns are available yet. Check again after Admin approves a shelter campaign.";

@@ -115,6 +115,14 @@ export function AdminSidebar({
             <span>●</span>
             <span>Notifications</span>
           </Link>
+          <Link
+            href="/Admin/help-support"
+            onClick={onNavigate}
+            className={`${row} ${pathname === "/Admin/help-support" ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]" : "border-transparent text-slate-700 hover:bg-orange-50"}`}
+          >
+            <span>?</span>
+            <span>Help &amp; Support</span>
+          </Link>
           {items.slice(2).filter(([, href]) => !href).map(([label]) => (
             <div
               key={label}
