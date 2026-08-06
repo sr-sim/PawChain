@@ -23,6 +23,7 @@ import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
 import { demoEthMyrRate, getPawChainId } from "@/lib/campaign-blockchain";
+import { formatPercentage } from "@/lib/format-percentage";
 import { isWalletRejection } from "@/lib/wallet-errors";
 
 type DonorCampaign = Campaign & {
@@ -1249,7 +1250,7 @@ export default function DonorDonatePage() {
                               Campaign funded
                             </span>
                             <span className="shrink-0 text-[var(--color-orange)]">
-                              {Math.round(campaign.raised)}%
+                              {formatPercentage(campaign.raised)}%
                             </span>
                           </div>
                           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">

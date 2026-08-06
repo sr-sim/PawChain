@@ -9,6 +9,7 @@ import {
   getTransactionExplorerUrl,
 } from "@/lib/block-explorer";
 import { RefundClaimButton } from "../tracking/RefundClaimButton";
+import { formatPercentage } from "@/lib/format-percentage";
 
 type DashboardProps = {
   searchParams?: Promise<{
@@ -200,7 +201,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
         activeRange === "all"
           ? "Lifetime recorded value"
           : rangeTrend !== null
-            ? `${rangeTrend >= 0 ? "↑" : "↓"} ${Math.abs(rangeTrend).toFixed(0)}% vs previous ${activeRange} days`
+            ? `${rangeTrend >= 0 ? "Up" : "Down"} ${formatPercentage(Math.abs(rangeTrend))}% vs previous ${activeRange} days`
             : rangeTotalMyr > 0
               ? "New support in this period"
               : `Last ${activeRange} days`,
