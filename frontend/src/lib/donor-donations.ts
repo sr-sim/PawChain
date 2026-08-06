@@ -40,6 +40,14 @@ type CampaignRow = {
   contract_address?: string | null;
 };
 
+type MilestoneRow = {
+  campaign_id: string;
+  title: string;
+  percentage: number | string;
+  on_chain_index?: number | string | null;
+  created_at?: string | null;
+};
+
 function formatNotificationMyr(value: number) {
   return value.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
@@ -48,6 +56,7 @@ function formatNotificationMyr(value: number) {
 }
 
 type OnChainCampaignSnapshot = {
+  goalEth: number;
   progress: number;
   status: string;
 };
@@ -78,6 +87,9 @@ export type DonorDonation = {
   updatedAt: string;
   campaignProgress: number;
   campaignStatus: string;
+  milestoneIndex: number | null;
+  milestonePercentage: number | null;
+  milestoneTitle: string | null;
 };
 
 export type DonorDonationSummary = {
@@ -170,7 +182,7 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
               ? Math.min(100, Math.round((totalRaisedEth / goalEth) * 10_000) / 100)
               : 0;
 
-        return [campaign.id, { progress, status }] as const;
+        return [campaign.id, { goalEth, progress, status }] as const;
       } catch {
         return null;
       }
@@ -178,6 +190,107 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
   );
 
   return new Map(entries.filter(Boolean) as [string, OnChainCampaignSnapshot][]);
+}
+
+async function getDonationRaisedTotals(donations: DonationRow[]) {
+  const donationRows = donations.filter(
+    (donation) =>
+      /^0x[0-9a-fA-F]{64}$/.test(donation.tx_hash) &&
+      donation.contract_address &&
+      isAddress(donation.contract_address),
+  );
+
+  if (donationRows.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const publicClient = getPawChainPublicClient();
+  const entries = await Promise.all(
+    donationRows.map(async (donation) => {
+      try {
+        const receipt = await publicClient.getTransactionReceipt({
+          hash: donation.tx_hash as Hash,
+        });
+        const donationLog = receipt.logs
+          .map((log) => {
+            try {
+              if (
+                log.address.toLowerCase() !==
+                donation.contract_address?.toLowerCase()
+              ) {
+                return null;
+              }
+
+              return decodeEventLog({
+                abi: campaignContractAbi,
+                data: log.data,
+                topics: log.topics,
+              });
+            } catch {
+              return null;
+            }
+          })
+          .find((log) => log?.eventName === "DonationReceived");
+
+        if (donationLog?.eventName !== "DonationReceived") {
+          return null;
+        }
+
+        return [
+          donation.id,
+          Number(formatEther(donationLog.args.totalRaised)),
+        ] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return new Map(entries.filter(Boolean) as [string, number][]);
+}
+
+function getDonationMilestone(
+  milestones: MilestoneRow[],
+  totalRaisedAfterDonation: number | undefined,
+  goalEth: number | undefined,
+) {
+  if (
+    !milestones.length ||
+    !Number.isFinite(totalRaisedAfterDonation) ||
+    !Number.isFinite(goalEth) ||
+    !totalRaisedAfterDonation ||
+    !goalEth ||
+    goalEth <= 0
+  ) {
+    return null;
+  }
+
+  let cumulativePercentage = 0;
+  const epsilon = 0.000000001;
+
+  for (let index = 0; index < milestones.length; index += 1) {
+    const milestone = milestones[index];
+    cumulativePercentage += Number(milestone.percentage || 0);
+    const cumulativeTargetEth = (goalEth * cumulativePercentage) / 100;
+
+    if (totalRaisedAfterDonation <= cumulativeTargetEth + epsilon) {
+      return {
+        index: index + 1,
+        percentage: Number(milestone.percentage || 0),
+        title: milestone.title,
+      };
+    }
+  }
+
+  const finalMilestone = milestones.at(-1);
+
+  return finalMilestone
+    ? {
+        index: milestones.length,
+        percentage: Number(finalMilestone.percentage || 0),
+        title: finalMilestone.title,
+      }
+    : null;
 }
 
 async function getRefundAmounts(donations: DonationRow[]) {
@@ -456,11 +569,47 @@ export async function getDonorDonations(walletAddress?: string) {
       "id, shelter_id, title, goal_amount, current_amount, campaign_status, contract_address",
     )
     .in("id", campaignIds);
+  const { data: milestoneRows } = campaignIds.length
+    ? await supabase
+        .from("campaign_milestones")
+        .select("campaign_id, title, percentage, on_chain_index, created_at")
+        .in("campaign_id", campaignIds)
+        .order("on_chain_index", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true })
+    : { data: [] };
 
   const campaigns = ((campaignRows ?? []) as CampaignRow[]).reduce(
     (map, campaign) => map.set(campaign.id, campaign),
     new Map<string, CampaignRow>(),
   );
+  const milestones = ((milestoneRows ?? []) as MilestoneRow[]).reduce(
+    (map, milestone) => {
+      const existing = map.get(milestone.campaign_id) ?? [];
+      existing.push(milestone);
+      map.set(milestone.campaign_id, existing);
+      return map;
+    },
+    new Map<string, MilestoneRow[]>(),
+  );
+  milestones.forEach((items, campaignId) => {
+    milestones.set(
+      campaignId,
+      [...items].sort((first, second) => {
+        const firstIndex = Number(first.on_chain_index);
+        const secondIndex = Number(second.on_chain_index);
+        const firstHasIndex = Number.isFinite(firstIndex);
+        const secondHasIndex = Number.isFinite(secondIndex);
+
+        if (firstHasIndex && secondHasIndex) return firstIndex - secondIndex;
+        if (firstHasIndex) return -1;
+        if (secondHasIndex) return 1;
+
+        return String(first.created_at ?? "").localeCompare(
+          String(second.created_at ?? ""),
+        );
+      }),
+    );
+  });
   const shelterIds = [
     ...new Set(
       [...campaigns.values()]
@@ -488,12 +637,18 @@ export async function getDonorDonations(walletAddress?: string) {
     campaigns,
   );
   const refundAmounts = await getRefundAmounts(donationsData);
+  const donationRaisedTotals = await getDonationRaisedTotals(donationsData);
 
   const donations = donationsData.map((donation) => {
     const campaign = campaigns.get(donation.campaign_id);
     const onChainSnapshot = campaign
       ? onChainSnapshots.get(campaign.id)
       : undefined;
+    const donationMilestone = getDonationMilestone(
+      milestones.get(donation.campaign_id) ?? [],
+      donationRaisedTotals.get(donation.id),
+      onChainSnapshot?.goalEth,
+    );
     const amount = toNumber(donation.amount);
     const amountEth = donation.amount_wei
       ? Number(formatEther(BigInt(donation.amount_wei)))
@@ -531,6 +686,9 @@ export async function getDonorDonations(walletAddress?: string) {
       campaignStatus:
         onChainSnapshot?.status ??
         (campaign ? normalizeStatus(campaign.campaign_status) : "Unavailable"),
+      milestoneIndex: donationMilestone?.index ?? null,
+      milestonePercentage: donationMilestone?.percentage ?? null,
+      milestoneTitle: donationMilestone?.title ?? null,
     };
   });
 

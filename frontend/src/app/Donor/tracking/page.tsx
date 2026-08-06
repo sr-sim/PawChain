@@ -294,6 +294,26 @@ export default async function DonorTrackingPage({
     },
     new Map<string, number>(),
   );
+  const refundClaimDonationIds = new Set(
+    [
+      ...donationData.donations
+        .reduce((map, donation) => {
+          const campaignStatus = donation.campaignStatus.toLowerCase();
+
+          if (
+            !donation.refundTxHash &&
+            donation.contractAddress &&
+            ["closed", "refunding"].includes(campaignStatus) &&
+            !map.has(donation.campaignId)
+          ) {
+            map.set(donation.campaignId, donation.id);
+          }
+
+          return map;
+        }, new Map<string, string>())
+        .values(),
+    ],
+  );
   const filteredReleaseCampaigns = campaigns.filter((campaign) => {
     if (activeReleaseFilter === "all") return true;
     const campaignStatus = campaign.status.toLowerCase();
@@ -406,12 +426,24 @@ export default async function DonorTrackingPage({
                       className="grid gap-4 rounded-2xl border border-orange-100 bg-white/90 px-4 py-3 text-sm shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white hover:shadow-[0_16px_34px_rgba(120,72,0,0.08)] lg:grid-cols-[1.45fr_0.95fr_1.1fr_0.68fr_8rem] lg:items-center"
                     >
                       <div>
-                        <Link
-                          href={`/Donor/campaigns/${donation.campaignId}`}
-                          className="font-semibold text-stone-950 transition hover:text-[var(--color-orange)]"
-                        >
-                          {donation.campaignTitle}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <Link
+                            href={`/Donor/campaigns/${donation.campaignId}`}
+                            className="font-semibold text-stone-950 transition hover:text-[var(--color-orange)]"
+                          >
+                            {donation.campaignTitle}
+                          </Link>
+                          <Link
+                            href={`/Donor/receipt/${donation.id}${
+                              walletAddress
+                                ? `?walletAddress=${encodeURIComponent(walletAddress)}`
+                                : ""
+                            }`}
+                            className="inline-flex text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950"
+                          >
+                            View receipt
+                          </Link>
+                        </div>
                         <p className="mt-1 text-xs font-medium text-stone-500">
                           {donation.shelterName}
                         </p>
@@ -435,16 +467,21 @@ export default async function DonorTrackingPage({
                             }}
                           />
                         </div>
-                        <Link
-                          href={`/Donor/receipt/${donation.id}${
-                            walletAddress
-                              ? `?walletAddress=${encodeURIComponent(walletAddress)}`
-                              : ""
-                          }`}
-                          className="mt-1.5 inline-flex text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950"
-                        >
-                          View receipt
-                        </Link>
+                        {donation.milestoneTitle ? (
+                          <div className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 text-[11px] font-black text-orange-700">
+                            <span className="shrink-0 text-stone-500">
+                              Stage {donation.milestoneIndex}
+                            </span>
+                            <span className="truncate">
+                              {donation.milestoneTitle}
+                            </span>
+                            {donation.milestonePercentage ? (
+                              <span className="shrink-0 text-stone-500">
+                                {formatPercentage(donation.milestonePercentage)}%
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="rounded-2xl border border-orange-100 bg-orange-50/35 p-3 lg:border-0 lg:bg-transparent lg:p-0">
                         <p className="font-black text-stone-950">
@@ -515,15 +552,17 @@ export default async function DonorTrackingPage({
                             </div>
                           </details>
                         ) : null}
-                        <RefundClaimButton
-                          campaignId={donation.campaignId}
-                          contractAddress={donation.contractAddress}
-                          donationAmountEth={donation.amountEth}
-                          campaignDonationTotalEth={
-                            campaignDonationTotals.get(donation.campaignId) ??
-                            donation.amountEth
-                          }
-                        />
+                        {refundClaimDonationIds.has(donation.id) ? (
+                          <RefundClaimButton
+                            campaignId={donation.campaignId}
+                            contractAddress={donation.contractAddress}
+                            donationAmountEth={donation.amountEth}
+                            campaignDonationTotalEth={
+                              campaignDonationTotals.get(donation.campaignId) ??
+                              donation.amountEth
+                            }
+                          />
+                        ) : null}
                       </div>
                       <div className="text-left lg:text-center">
                         {getTransactionExplorerUrl(donation.txHash) ? (

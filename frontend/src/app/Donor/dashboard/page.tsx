@@ -130,6 +130,34 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
       donation.contractAddress &&
       ["Closed", "Refunding"].includes(donation.campaignStatus),
   );
+  const claimedRefundGroups = [
+    ...claimedRefunds
+      .reduce((map, donation) => {
+        const key = `${donation.campaignId}:${donation.refundTxHash}`;
+        const current = map.get(key);
+
+        if (current) {
+          current.refundAmountEth += donation.refundAmountEth;
+          current.refundAmount += donation.refundAmount;
+          return map;
+        }
+
+        map.set(key, { ...donation });
+        return map;
+      }, new Map<string, (typeof claimedRefunds)[number]>())
+      .values(),
+  ];
+  const potentialRefundGroups = [
+    ...potentialRefunds
+      .reduce((map, donation) => {
+        if (!map.has(donation.campaignId)) {
+          map.set(donation.campaignId, donation);
+        }
+
+        return map;
+      }, new Map<string, (typeof potentialRefunds)[number]>())
+      .values(),
+  ];
   const totalRefundedEth = claimedRefunds.reduce(
     (total, donation) => total + donation.refundAmountEth,
     0,
@@ -138,7 +166,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     (total, donation) => total + donation.refundAmount,
     0,
   );
-  const latestRefund = claimedRefunds[0];
+  const latestRefund = claimedRefundGroups[0];
   const now = Date.now();
   const rangeDays = activeRange === "30" ? 30 : activeRange === "90" ? 90 : null;
   const earliestDonationTime = donationData.donations.length > 0
@@ -215,18 +243,18 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     {
       label: "Refund status",
       value:
-        potentialRefunds.length > 0
-          ? `${potentialRefunds.length} claimable`
-          : claimedRefunds.length > 0
-            ? `${claimedRefunds.length} claimed`
+        potentialRefundGroups.length > 0
+          ? `${potentialRefundGroups.length} claimable`
+          : claimedRefundGroups.length > 0
+            ? `${claimedRefundGroups.length} claimed`
             : "Clear",
       detail:
-        potentialRefunds.length > 0
+        potentialRefundGroups.length > 0
           ? "Ready to claim"
           : totalRefundedEth > 0
             ? `${formatEth(totalRefundedEth)} received`
             : "No refunds",
-      tone: potentialRefunds.length > 0 ? "amber" : claimedRefunds.length > 0 ? "emerald" : "slate",
+      tone: potentialRefundGroups.length > 0 ? "amber" : claimedRefundGroups.length > 0 ? "emerald" : "slate",
     },
   ];
 
@@ -359,7 +387,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   Refund status
                 </p>
                 <h3 className="mt-1 text-lg font-black text-stone-950">
-                  {potentialRefunds.length > 0
+                  {potentialRefundGroups.length > 0
                     ? "Refund available"
                     : latestRefund
                       ? "Refund received"
@@ -369,14 +397,14 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               <span
                 className={[
                   "w-fit rounded-full border px-3 py-1 text-xs font-black",
-                  potentialRefunds.length > 0
+                  potentialRefundGroups.length > 0
                     ? "border-orange-200 bg-orange-50 text-[var(--color-orange)]"
                     : latestRefund
                       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                       : "border-slate-200 bg-slate-50 text-slate-600",
                 ].join(" ")}
               >
-                {potentialRefunds.length > 0
+                {potentialRefundGroups.length > 0
                   ? "Claimable"
                   : latestRefund
                     ? "Received"
@@ -385,15 +413,15 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             </div>
             <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Available</p>
-                <p className="mt-1 text-lg font-black text-amber-700">{potentialRefunds.length}</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Campaigns</p>
+                <p className="mt-1 text-lg font-black text-amber-700">{potentialRefundGroups.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
                 <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
-                <p className="mt-1 text-lg font-black text-emerald-700">{claimedRefunds.length}</p>
+                <p className="mt-1 text-lg font-black text-emerald-700">{claimedRefundGroups.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Refunded</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
                 <p className="mt-1 text-sm font-black text-emerald-800">{formatEth(totalRefundedEth)}</p>
                 <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
                   {formatAmount(totalRefundedMyr, "MYR")}
@@ -401,8 +429,8 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
               </div>
             </div>
             <div className="mt-3">
-              {potentialRefunds.length > 0 ? (
-                potentialRefunds.slice(0, 1).map((donation) => (
+              {potentialRefundGroups.length > 0 ? (
+                potentialRefundGroups.slice(0, 1).map((donation) => (
                   <article key={donation.id}>
                     <div className="rounded-2xl border border-orange-100 bg-white p-3 shadow-sm">
                       <p className="text-sm font-black text-stone-950">
