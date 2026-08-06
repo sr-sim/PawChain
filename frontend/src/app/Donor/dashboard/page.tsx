@@ -171,6 +171,16 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     0,
   );
   const latestRefund = claimedRefundGroups[0];
+  const activityRefundDisplayRows = donationData.donations.reduce(
+    (map, donation) => {
+      if (donation.refundTxHash && !map.has(donation.campaignId)) {
+        map.set(donation.campaignId, donation.id);
+      }
+
+      return map;
+    },
+    new Map<string, string>(),
+  );
   const now = Date.now();
   const rangeDays = activeRange === "30" ? 30 : activeRange === "90" ? 90 : null;
   const earliestDonationTime = donationData.donations.length > 0
@@ -561,7 +571,21 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
 
           {donationData.donations.length > 0 ? (
             <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-              {donationData.donations.slice(0, 3).map((donation) => (
+              {donationData.donations.slice(0, 3).map((donation) => {
+                const shouldShowRefundTx =
+                  donation.refundTxHash &&
+                  activityRefundDisplayRows.get(donation.campaignId) ===
+                    donation.id;
+                const hasCampaignRefund = claimedRefundCampaignIds.has(
+                  donation.campaignId,
+                );
+                const activityStatus = shouldShowRefundTx
+                  ? "Refunded"
+                  : hasCampaignRefund
+                    ? "Closed"
+                    : donation.status;
+
+                return (
                 <article
                   key={donation.id}
                   className="donor-ledger-row grid gap-3 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-start"
@@ -585,7 +609,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                       >
                         Donation TX {shortHash(donation.txHash)} ↗
                       </a>
-                      {donation.refundTxHash ? (
+                      {shouldShowRefundTx ? (
                         <a
                           href={getTransactionExplorerUrl(donation.refundTxHash)}
                           target="_blank"
@@ -616,10 +640,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                         {formatEth(donation.amountEth)} confirmed
                       </p>
                     ) : null}
-                    <StatusPill status={donation.status} />
+                    <StatusPill status={activityStatus} />
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
