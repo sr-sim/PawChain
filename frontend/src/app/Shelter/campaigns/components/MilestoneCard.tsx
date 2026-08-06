@@ -9,6 +9,7 @@ import {
   type ProofFile,
 } from "@/app/components/campaigns/MilestoneCard";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getMilestoneActions } from "@/lib/milestone-lifecycle";
 import { getPawChainId } from "@/lib/campaign-blockchain";
 import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 
@@ -133,13 +134,14 @@ export function MilestoneCard({
   // (Released), or when the admin rejected an earlier proof submission.
   // Never fall back to the older rule that allowed an Active milestone to
   // upload proof while it was still collecting funds.
-  const proofAllowedOnChain = onChainStatus === 6 || onChainStatus === 3;
+  const milestoneActions = getMilestoneActions(onChainStatus);
+  const proofAllowedOnChain = milestoneActions.canUploadProof;
   const showUploader =
     canUploadProof &&
     showProofUpload &&
     proofAllowedOnChain;
   const canWithdraw =
-    canUploadProof && showWithdrawAction && onChainStatus === 5;
+    canUploadProof && showWithdrawAction && milestoneActions.canWithdraw;
 
   async function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -180,6 +182,11 @@ export function MilestoneCard({
   }
 
   async function handleSubmitProof() {
+    if (!milestoneActions.canUploadProof) {
+      setError("Proof can only be uploaded after funds are withdrawn.");
+      return;
+    }
+
     if (!campaignId || !walletAddress) {
       setError("Connect your shelter wallet before uploading proof.");
       return;
@@ -210,7 +217,14 @@ export function MilestoneCard({
     let submittedTxHash = "";
     let chainConfirmed = false;
     try {
-      const proofCID = keccak256(toBytes(JSON.stringify(selectedFiles)));
+      const canonicalProofFiles = selectedFiles.map((file) => ({
+        name: file.name.trim(),
+        type: file.type.trim(),
+        dataUrl: file.dataUrl.trim(),
+      }));
+      const proofCID = keccak256(
+        toBytes(JSON.stringify(canonicalProofFiles)),
+      );
       const txHash = await writeContractAsync({
         address: validContractAddress,
         abi: campaignContractAbi,
@@ -247,7 +261,7 @@ export function MilestoneCard({
           },
           body: JSON.stringify({
             walletAddress,
-            proofFiles: selectedFiles,
+            proofFiles: canonicalProofFiles,
             proofCID,
             txHash,
           }),
@@ -283,6 +297,11 @@ export function MilestoneCard({
   }
 
   async function handleWithdraw() {
+    if (!milestoneActions.canWithdraw) {
+      setError("This milestone is not withdrawable.");
+      return;
+    }
+
     if (
       !campaignId ||
       !walletAddress ||
@@ -587,7 +606,7 @@ export function MilestoneCard({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Funds (ETH)</p><p className="mt-1 text-sm font-black text-stone-950">{(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH</p></div>
-          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Approx. live MYR</p><p className="mt-1 text-sm font-black text-stone-950">MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(goalEth * Number(milestone.percentage || 0) / 100 * ethMyrRate)}</p></div>
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Approximate value</p><p className="mt-1 text-sm font-black text-stone-950">live MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(goalEth * Number(milestone.percentage || 0) / 100 * ethMyrRate)}</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Required funding</p><p className="mt-1 text-sm font-black text-stone-950">{cumulativePercentage}%</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Proof state</p><p className="mt-1 text-sm font-black capitalize text-stone-950">{milestone.status.replaceAll("_", " ")}</p></div>
         </div>

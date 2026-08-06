@@ -11,6 +11,7 @@ import type {
 } from "@/app/components/campaigns/campaign-types";
 import { MilestoneCard } from "@/app/Shelter/campaigns/components/MilestoneCard";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getMilestoneActions } from "@/lib/milestone-lifecycle";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 type CampaignWithMilestones = Campaign & {
@@ -67,7 +68,7 @@ function formatEth(value: number) {
 }
 
 function formatMyr(value: number) {
-  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", {
+  return `live MYR ${new Intl.NumberFormat("en-MY", {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   }).format(Number.isFinite(value) ? value : 0)}`;
@@ -159,6 +160,7 @@ export default function ShelterWithdrawalsPage() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [focusedMilestoneId, setFocusedMilestoneId] = useState<string | null>(null);
 
   const loadCampaigns = useCallback(async () => {
     if (!address) {
@@ -359,6 +361,25 @@ export default function ShelterWithdrawalsPage() {
 
   const selectedCampaign = items.find((item) => item.id === selectedCampaignId) ?? null;
 
+  useEffect(() => {
+    if (!selectedCampaignId || !focusedMilestoneId) return;
+
+    const timer = window.setTimeout(() => {
+      const milestone = document.getElementById(
+        `milestone-action-${focusedMilestoneId}`,
+      );
+      milestone?.focus({ preventScroll: true });
+      milestone?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, [focusedMilestoneId, selectedCampaignId]);
+
+  function openMilestoneAction(campaignId: string, milestoneId: string) {
+    setFocusedMilestoneId(milestoneId);
+    setSelectedCampaignId(campaignId);
+  }
+
   if (selectedCampaign) {
     const chain = chainStates[selectedCampaign.id];
     const rate = liveEthMyrRate;
@@ -371,7 +392,7 @@ export default function ShelterWithdrawalsPage() {
 
     return (
       <div className="space-y-6 py-6">
-        <button type="button" onClick={() => setSelectedCampaignId(null)} className="inline-flex items-center gap-2 text-sm font-black text-stone-700 hover:text-[var(--color-orange)]">← Back to Withdraw Funds</button>
+        <button type="button" onClick={() => { setSelectedCampaignId(null); setFocusedMilestoneId(null); }} className="inline-flex items-center gap-2 text-sm font-black text-stone-700 hover:text-[var(--color-orange)]">← Back to Withdraw Funds</button>
 
         <section className="rounded-3xl border border-orange-100 bg-white p-5 shadow-[0_18px_48px_rgba(111,69,20,0.07)]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -392,13 +413,13 @@ export default function ShelterWithdrawalsPage() {
           </div>
         </section>
 
-        <section>
+        <section id="proof-upload-section" className="scroll-mt-24">
           <div className="mb-4"><h2 className="text-2xl font-black">Milestone Progress</h2><p className="mt-1 text-sm font-semibold text-stone-500">Withdraw funds only when the smart contract marks a milestone as withdrawable.</p></div>
           <div className="space-y-5">
             {selectedCampaign.milestones.map((milestone, index) => {
               const state = chain?.milestones[milestone.id];
               return (
-                <div key={milestone.id}>
+                <div id={`milestone-action-${milestone.id}`} key={milestone.id} tabIndex={-1} className="scroll-mt-24 rounded-2xl outline-none transition focus:ring-2 focus:ring-orange-300 focus:ring-offset-4">
                   <div className="mb-2 flex items-center gap-3"><span className={`grid h-9 w-9 place-items-center rounded-full text-sm font-black ring-1 ${statusTone(state?.status ?? -1)}`}>{index + 1}</span><span className={`rounded-full border px-3 py-1 text-xs font-black ${statusTone(state?.status ?? -1)}`}>{statusLabel(state?.status ?? -1)}</span>{state ? <span className="text-xs font-bold text-stone-500">{formatEth(state.allocationEth)}</span> : null}</div>
                   <MilestoneCard
                     milestone={milestone}
@@ -410,7 +431,7 @@ export default function ShelterWithdrawalsPage() {
                     ethMyrRate={rate}
                     cumulativePercentage={selectedCampaign.milestones.slice(0, index + 1).reduce((sum, item) => sum + Number(item.percentage || 0), 0)}
                     canUploadProof={selectedCampaign.campaign_status === "active"}
-                    showProofUpload={false}
+                    showProofUpload
                     showWithdrawAction
                     onWithdrawalCompleted={() => void loadCampaigns()}
                   />
@@ -436,9 +457,9 @@ export default function ShelterWithdrawalsPage() {
       {loading || chainLoading ? <div className="rounded-2xl border border-orange-100 bg-white p-4 text-center text-sm font-black text-stone-500">Reading confirmed campaign and milestone status from Sepolia...</div> : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Available to Withdraw" value={formatMyr(metrics.availableMyr)} detail={`≈ ${formatEth(metrics.availableEth)}`} tone="violet" />
-        <StatCard label="Pending Approval" value={formatMyr(metrics.pendingMyr)} detail={`≈ ${formatEth(metrics.pendingEth)}`} tone="orange" />
-        <StatCard label="Total Withdrawn" value={formatMyr(metrics.withdrawnMyr)} detail={`≈ ${formatEth(metrics.withdrawnEth)}`} tone="green" />
+        <StatCard label="Available to Withdraw" value={formatEth(metrics.availableEth)} detail={`≈ ${formatMyr(metrics.availableMyr)}`} tone="violet" />
+        <StatCard label="Pending Approval" value={formatEth(metrics.pendingEth)} detail={`≈ ${formatMyr(metrics.pendingMyr)}`} tone="orange" />
+        <StatCard label="Total Withdrawn" value={formatEth(metrics.withdrawnEth)} detail={`≈ ${formatMyr(metrics.withdrawnMyr)}`} tone="green" />
         <StatCard label="Active Campaigns" value={String(items.filter((item) => item.campaign_status === "active").length)} detail="Deployed campaigns" tone="blue" />
       </section>
 
@@ -458,6 +479,7 @@ export default function ShelterWithdrawalsPage() {
             const safeCurrentIndex = currentIndex < 0 ? Math.max(0, campaign.milestones.length - 1) : currentIndex;
             const currentMilestone = campaign.milestones[safeCurrentIndex];
             const currentStatus = currentMilestone ? chain?.milestones[currentMilestone.id]?.status : undefined;
+            const currentActions = getMilestoneActions(currentStatus);
             const availableEth = campaign.milestones.reduce((sum, milestone) => {
               const state = chain?.milestones[milestone.id];
               return sum + (state?.status === 5 ? state.allocationEth : 0);
@@ -467,8 +489,8 @@ export default function ShelterWithdrawalsPage() {
               <article key={campaign.id} className="rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,#FFFFFF,#FFFDF7)] p-4 transition hover:border-orange-300 sm:p-5">
                 <div className="grid gap-5 lg:grid-cols-[8rem_minmax(0,1fr)_12rem] lg:items-center">
                   <div className="h-36 overflow-hidden rounded-2xl bg-orange-50 lg:h-32">{campaign.image_url ? <img src={campaign.image_url} alt="" className="h-full w-full object-cover" /> : null}</div>
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black text-stone-950">{campaign.title}</h2><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Active</span><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-orange-700">{campaign.urgency_level} priority</span></div><p className="mt-2 text-xs font-bold text-stone-500">{campaign.milestones.length} milestones</p><div className="mt-4 flex items-end justify-between gap-4"><p className="text-sm font-black">{formatEth(raisedEth)} raised of {formatEth(goalEth)}</p><p className="text-sm font-black">{progress}% funded</p></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-3"><div><p className="font-bold text-stone-500">Available</p><p className="mt-1 font-black">{formatEth(availableEth)}</p><p className="text-stone-400">≈ {formatMyr(availableEth * rate)}</p></div><div><p className="font-bold text-stone-500">Current Milestone</p><p className="mt-1 font-black">{safeCurrentIndex + 1} / {campaign.milestones.length}</p><p className="truncate text-stone-400">{currentMilestone?.title}</p></div><div><p className="font-bold text-stone-500">Status</p><p className="mt-1 font-black">{statusLabel(currentStatus ?? -1)}</p></div></div></div>
-                  <div className="space-y-3"><button type="button" onClick={() => setSelectedCampaignId(campaign.id)} className="w-full rounded-xl border border-violet-300 px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50">View Milestones →</button><button type="button" onClick={() => setSelectedCampaignId(campaign.id)} disabled={availableEth <= 0} className="w-full rounded-xl bg-[var(--color-orange)] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500">{availableEth > 0 ? "Withdrawable" : statusLabel(currentStatus ?? -1)}</button></div>
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black text-stone-950">{campaign.title}</h2><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Active</span><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-orange-700">{campaign.urgency_level} priority</span></div><p className="mt-2 text-xs font-bold text-stone-500">{campaign.milestones.length} milestones</p><div className="mt-4 flex items-end justify-between gap-4"><div><p className="text-sm font-black">{formatEth(raisedEth)} raised of {formatEth(goalEth)}</p><p className="mt-1 text-xs font-semibold text-stone-400">≈ {formatMyr(raisedEth * rate)} raised of {formatMyr(goalEth * rate)}</p></div><p className="text-sm font-black">{progress}% funded</p></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-3"><div><p className="font-bold text-stone-500">Available</p><p className="mt-1 font-black">{formatEth(availableEth)}</p><p className="text-stone-400">≈ {formatMyr(availableEth * rate)}</p></div><div><p className="font-bold text-stone-500">Current Milestone</p><p className="mt-1 font-black">{safeCurrentIndex + 1} / {campaign.milestones.length}</p><p className="truncate text-stone-400">{currentMilestone?.title}</p></div><div><p className="font-bold text-stone-500">Status</p><p className="mt-1 font-black">{statusLabel(currentStatus ?? -1)}</p></div></div></div>
+                  <div className="space-y-3"><button type="button" onClick={() => currentMilestone && openMilestoneAction(campaign.id, currentMilestone.id)} disabled={!currentActions.canUploadProof} className="w-full rounded-xl border border-violet-300 px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400">Upload Proof →</button><button type="button" onClick={() => currentMilestone && openMilestoneAction(campaign.id, currentMilestone.id)} disabled={!currentActions.canWithdraw} className="w-full rounded-xl border border-[var(--color-orange)] bg-[var(--color-orange)] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400">Withdrawable</button></div>
                 </div>
               </article>
             );

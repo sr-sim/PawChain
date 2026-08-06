@@ -3,7 +3,7 @@ import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
-import { isAddress, type Address, type Hash } from "viem";
+import { decodeFunctionData, isAddress, type Address, type Hash } from "viem";
 
 async function adminClient(wallet: string) {
   if (!(await isAdminWallet(wallet))) throw new Error("ADMIN_DENIED");
@@ -59,13 +59,42 @@ export async function POST(request: NextRequest) {
     }
 
     const publicClient = getPawChainPublicClient();
-    const receipt = await publicClient.getTransactionReceipt({ hash: txHash as Hash });
+    const [receipt, transaction] = await Promise.all([
+      publicClient.getTransactionReceipt({ hash: txHash as Hash }),
+      publicClient.getTransaction({ hash: txHash as Hash }),
+    ]);
     if (
       receipt.status !== "success" ||
       receipt.from.toLowerCase() !== String(body.walletAddress ?? "").toLowerCase() ||
-      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
+      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase() ||
+      transaction.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
     ) {
       return NextResponse.json({ message: "The milestone review transaction does not match this campaign." }, { status: 409 });
+    }
+
+    try {
+      const decoded = decodeFunctionData({
+        abi: campaignContractAbi,
+        data: transaction.input,
+      });
+      const [reviewedIndex] = decoded.args as readonly [bigint];
+      const expectedFunction = action === "approve"
+        ? "approveMilestone"
+        : "rejectMilestone";
+      if (
+        decoded.functionName !== expectedFunction ||
+        reviewedIndex !== BigInt(milestone.on_chain_index)
+      ) {
+        return NextResponse.json(
+          { message: "The transaction did not review this milestone." },
+          { status: 409 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { message: "Unable to verify the milestone review transaction." },
+        { status: 409 },
+      );
     }
 
     const onChainMilestone = await publicClient.readContract({

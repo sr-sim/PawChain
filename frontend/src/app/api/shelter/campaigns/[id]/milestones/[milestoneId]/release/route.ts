@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAddress, type Address, type Hash } from "viem";
+import { decodeFunctionData, isAddress, type Address, type Hash } from "viem";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
@@ -61,16 +61,40 @@ export async function POST(
     }
 
     const publicClient = getPawChainPublicClient();
-    const receipt = await publicClient.getTransactionReceipt({
-      hash: txHash as Hash,
-    });
+    const [receipt, transaction] = await Promise.all([
+      publicClient.getTransactionReceipt({ hash: txHash as Hash }),
+      publicClient.getTransaction({ hash: txHash as Hash }),
+    ]);
     if (
       receipt.status !== "success" ||
       receipt.from.toLowerCase() !== walletAddress.toLowerCase() ||
-      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
+      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase() ||
+      transaction.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
     ) {
       return NextResponse.json(
         { message: "The release transaction does not match this milestone." },
+        { status: 409 },
+      );
+    }
+
+    try {
+      const decoded = decodeFunctionData({
+        abi: campaignContractAbi,
+        data: transaction.input,
+      });
+      const [submittedIndex] = decoded.args as readonly [bigint];
+      if (
+        decoded.functionName !== "withdrawMilestone" ||
+        submittedIndex !== BigInt(milestone.on_chain_index)
+      ) {
+        return NextResponse.json(
+          { message: "The transaction did not withdraw this milestone." },
+          { status: 409 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { message: "Unable to verify the milestone withdrawal transaction." },
         { status: 409 },
       );
     }

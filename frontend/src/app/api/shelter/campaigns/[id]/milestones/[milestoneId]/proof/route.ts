@@ -3,7 +3,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
-import { isAddress, type Address, type Hash } from "viem";
+import {
+  decodeFunctionData,
+  isAddress,
+  keccak256,
+  toBytes,
+  type Address,
+  type Hash,
+} from "viem";
 
 type ProofFile = {
   name?: unknown;
@@ -91,6 +98,13 @@ export async function PATCH(
       );
     }
 
+    if (keccak256(toBytes(JSON.stringify(proofFiles))) !== proofCID) {
+      return NextResponse.json(
+        { message: "Proof files do not match the submitted proof hash." },
+        { status: 409 },
+      );
+    }
+
     const profile = await requireActiveShelter(walletAddress);
 
     if (!profile) {
@@ -158,6 +172,13 @@ export async function PATCH(
       );
     }
 
+    if (milestone.status === "submitted") {
+      return NextResponse.json(
+        { message: "Proof is already pending admin review." },
+        { status: 409 },
+      );
+    }
+
     if (milestone.status === "approved") {
       return NextResponse.json(
         { message: "Approved milestones cannot be changed." },
@@ -166,16 +187,44 @@ export async function PATCH(
     }
 
     const publicClient = getPawChainPublicClient();
-    const receipt = await publicClient.getTransactionReceipt({
-      hash: txHash as Hash,
-    });
+    const [receipt, transaction] = await Promise.all([
+      publicClient.getTransactionReceipt({ hash: txHash as Hash }),
+      publicClient.getTransaction({ hash: txHash as Hash }),
+    ]);
     if (
       receipt.status !== "success" ||
       receipt.from.toLowerCase() !== walletAddress.toLowerCase() ||
-      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
+      receipt.to?.toLowerCase() !== campaign.contract_address.toLowerCase() ||
+      transaction.to?.toLowerCase() !== campaign.contract_address.toLowerCase()
     ) {
       return NextResponse.json(
         { message: "The proof transaction does not match this campaign." },
+        { status: 409 },
+      );
+    }
+
+    try {
+      const decoded = decodeFunctionData({
+        abi: campaignContractAbi,
+        data: transaction.input,
+      });
+      const [submittedIndex, submittedProofCID] = decoded.args as readonly [
+        bigint,
+        string,
+      ];
+      if (
+        decoded.functionName !== "submitMilestoneProof" ||
+        submittedIndex !== BigInt(milestone.on_chain_index) ||
+        submittedProofCID !== proofCID
+      ) {
+        return NextResponse.json(
+          { message: "The transaction did not submit this milestone proof." },
+          { status: 409 },
+        );
+      }
+    } catch {
+      return NextResponse.json(
+        { message: "Unable to verify the milestone proof transaction." },
         { status: 409 },
       );
     }
