@@ -41,7 +41,6 @@ function formatEth(value: number | undefined | null) {
   }
 
   return `${numeric.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }

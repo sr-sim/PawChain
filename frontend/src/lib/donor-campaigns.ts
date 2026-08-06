@@ -132,7 +132,6 @@ function formatGoal(value: number | string) {
 
 function formatEthGoal(value: number) {
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }

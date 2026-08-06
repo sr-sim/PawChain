@@ -63,7 +63,7 @@ function orderMilestones(items: CampaignMilestone[]) {
 
 function formatEth(value: number) {
   return `${value.toLocaleString("en-MY", {
-    maximumFractionDigits: 8,
+    maximumFractionDigits: 6,
   })} ETH`;
 }
 

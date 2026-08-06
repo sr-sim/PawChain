@@ -101,7 +101,7 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
         <div className="mt-4">
           <div className="flex items-end justify-between gap-3">
             <div><p className="text-2xl font-black text-stone-950">{progress}%</p><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">funded</p></div>
-            <div className="text-right"><p className="text-xs font-black text-stone-950">{raisedEth.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH raised</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatCurrency(raisedEth * rate)}</p><p className="mt-1 text-[10px] font-black text-stone-500">{goalEth.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH goal</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatCurrency(goalEth * rate)}</p></div>
+            <div className="text-right"><p className="text-xs font-black text-stone-950">{raisedEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH raised</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatCurrency(raisedEth * rate)}</p><p className="mt-1 text-[10px] font-black text-stone-500">{goalEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH goal</p><p className="mt-1 text-[10px] font-bold text-stone-400">about {formatCurrency(goalEth * rate)}</p></div>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-orange-100">
             <div
@@ -116,7 +116,7 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
               </p>
               <p className="mt-1 text-sm font-black text-stone-950">
                 {onChainRefundPool !== undefined
-                  ? `${refundPoolEth.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH`
+                  ? `${refundPoolEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH`
                   : "Reading on-chain..."}
               </p>
               {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">about {formatCurrency(refundPoolEth * rate)} · claimed proportionally by donors</p> : null}

@@ -579,7 +579,7 @@ export function MilestoneCard({
                     Milestone allocation
                   </p>
                   <p className="mt-1 text-sm font-black text-stone-950">
-                    {(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH
+                    {(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH
                   </p>
                   {walletAddress ? (
                     <p className="mt-1 font-mono text-[10px] font-bold text-stone-400">
@@ -605,7 +605,7 @@ export function MilestoneCard({
         ) : null}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Funds (ETH)</p><p className="mt-1 text-sm font-black text-stone-950">{(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH</p></div>
+          <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Funds (ETH)</p><p className="mt-1 text-sm font-black text-stone-950">{(goalEth * Number(milestone.percentage || 0) / 100).toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Approximate value</p><p className="mt-1 text-sm font-black text-stone-950">live MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(goalEth * Number(milestone.percentage || 0) / 100 * ethMyrRate)}</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Required funding</p><p className="mt-1 text-sm font-black text-stone-950">{cumulativePercentage}%</p></div>
           <div className="rounded-xl border border-orange-100 bg-white p-3"><p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Proof state</p><p className="mt-1 text-sm font-black capitalize text-stone-950">{milestone.status.replaceAll("_", " ")}</p></div>

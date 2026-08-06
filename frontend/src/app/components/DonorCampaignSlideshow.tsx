@@ -15,7 +15,6 @@ function formatEth(value?: number) {
   const amount = Number(value ?? 0);
 
   return `${amount.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }

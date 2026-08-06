@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
       donorId: donor.id,
       campaignId,
       title: "Refund claimed",
-      message: `Your ${refundEth.toFixed(6)} ETH refund from ${campaign.title} was confirmed. Approx. MYR ${refundMyr.toLocaleString("en-MY", {
+      message: `Your ${refundEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH refund from ${campaign.title} was confirmed. Approx. MYR ${refundMyr.toLocaleString("en-MY", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}.`,

@@ -21,7 +21,7 @@ import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { formatEther, isAddress } from "viem";
 
 function formatETH(value: number) {
-  return `${value.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH`;
+  return `${value.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH`;
 }
 
 function BackIcon() {
