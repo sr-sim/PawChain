@@ -8,6 +8,7 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { formatPercentage } from "@/lib/format-percentage";
 
 export const dynamic = "force-dynamic";
 
@@ -184,10 +185,18 @@ export default async function DonorCampaignDetailPage({
   );
   const currentMilestone =
     currentMilestoneIndex >= 0 ? milestoneItems[currentMilestoneIndex] : null;
+  const currentMilestoneFundingState =
+    currentMilestoneIndex >= 0
+      ? getMilestoneFundingState(
+          milestoneItems,
+          currentMilestoneIndex,
+          campaign.raised,
+        )
+      : null;
   const raisedDisplay =
     typeof campaign.onChainTotalRaisedEth === "number"
       ? formatEth(campaign.onChainTotalRaisedEth)
-      : `${campaign.raised}% funded`;
+      : `${formatPercentage(campaign.raised)}% funded`;
   const goalDisplay =
     typeof campaign.onChainGoalEth === "number"
       ? formatEth(campaign.onChainGoalEth)
@@ -331,7 +340,7 @@ export default async function DonorCampaignDetailPage({
                   Progress
                 </p>
                 <p className="mt-1 text-lg font-black text-stone-950">
-                  {campaign.raised}%
+                  {formatPercentage(campaign.raised)}%
                 </p>
               </div>
             </div>
@@ -347,7 +356,7 @@ export default async function DonorCampaignDetailPage({
                     Funding progress
                   </p>
                   <h2 className="mt-1 text-xl font-black text-stone-950">
-                    {campaign.raised}% funded
+                    {formatPercentage(campaign.raised)}% funded
                   </h2>
                 </div>
                 <span className="w-fit rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-stone-700">
@@ -368,11 +377,44 @@ export default async function DonorCampaignDetailPage({
                       : "Current milestone"}
                   </p>
                   <p className="mt-1 text-sm font-black text-stone-950">
-                    {currentMilestone.title} ({currentMilestone.percentage}% release)
+                    {currentMilestone.title} ({formatPercentage(currentMilestone.percentage)}% release)
                   </p>
                   <p className="mt-1 text-xs font-semibold text-stone-500">
                     Stage amount: {getStageAmount(currentMilestone.percentage)}
                   </p>
+                  {currentMilestoneFundingState ? (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between gap-3 text-[11px] font-black uppercase tracking-[0.12em]">
+                        <span className="text-stone-500">Current stage</span>
+                        <span
+                          className={
+                            currentMilestoneFundingState.tone === "complete"
+                              ? "text-emerald-700"
+                              : currentMilestoneFundingState.tone === "active"
+                                ? "text-[var(--color-orange)]"
+                                : "text-slate-500"
+                          }
+                        >
+                          {formatPercentage(currentMilestoneFundingState.progress)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                        <div
+                          className={[
+                            "h-full rounded-full transition-all",
+                            currentMilestoneFundingState.tone === "complete"
+                              ? "bg-emerald-500"
+                              : currentMilestoneFundingState.tone === "active"
+                                ? "bg-[var(--color-orange)]"
+                                : "bg-slate-300",
+                          ].join(" ")}
+                          style={{
+                            width: `${currentMilestoneFundingState.progress}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
@@ -586,7 +628,7 @@ export default async function DonorCampaignDetailPage({
                               : "border-orange-200 text-[var(--color-orange)]",
                           ].join(" ")}
                         >
-                          {milestone.percentage}% release
+                          {formatPercentage(milestone.percentage)}% release
                         </span>
                         <span
                           className={[
@@ -615,7 +657,7 @@ export default async function DonorCampaignDetailPage({
                         />
                       </div>
                       <p className="mt-1 text-[11px] font-semibold text-stone-400">
-                        {Number(fundingState.progress.toFixed(2))}% of this stage funded
+                        {formatPercentage(fundingState.progress)}% of this stage funded
                       </p>
                   {milestone.description ? (
                     <p className="mt-3 text-xs leading-5 text-stone-600">

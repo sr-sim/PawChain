@@ -8,6 +8,7 @@ import { TransactionLinks } from "@/app/components/TransactionLinks";
 import { RefundClaimButton } from "./RefundClaimButton";
 import { getLatestEthMyrRate } from "@/lib/currency";
 import { AnimatedEthTotal } from "./AnimatedEthTotal";
+import { formatPercentage } from "@/lib/format-percentage";
 
 type TrackingPageProps = {
   searchParams?: Promise<{
@@ -404,13 +405,16 @@ export default async function DonorTrackingPage({
                         <p className="mt-1 text-xs font-medium text-stone-500">
                           {donation.shelterName}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="mt-2 flex items-center justify-between gap-3">
                           <StatusPill status={donation.campaignStatus} />
-                          <span className="text-xs font-semibold text-stone-500">
-                            Campaign progress {donation.campaignProgress}%
+                          <span className="shrink-0 text-right text-xs font-black text-stone-500">
+                            {formatPercentage(donation.campaignProgress)}%
                           </span>
                         </div>
-                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100">
+                        <div
+                          className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100"
+                          title={`Campaign progress ${formatPercentage(donation.campaignProgress)}%`}
+                        >
                           <div
                             className="donor-ledger-progress h-full rounded-full bg-[linear-gradient(90deg,#f97316,#f59e0b,#facc15)]"
                             style={{
@@ -670,7 +674,7 @@ export default async function DonorTrackingPage({
                       </h3>
                       <div className="mt-3 pl-2">
                         <div className="flex items-center justify-between gap-4 text-xs font-black text-stone-600">
-                          <span>Total campaign funding: {campaign.raised}%</span>
+                          <span>Total campaign funding: {formatPercentage(campaign.raised)}%</span>
                           <span>{campaign.goal}</span>
                         </div>
                         <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-white shadow-inner">
@@ -724,7 +728,7 @@ export default async function DonorTrackingPage({
                               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-700">This stage unlocks</p>
                               <p className="mt-1 text-left text-xs font-black text-stone-900">
                                 {formatMilestoneValue(campaign.onChainGoalEth, campaign.goalAmount, milestone.percentage, ethMyrRate)}
-                                <span className="mt-0.5 block text-left font-semibold text-stone-500">({milestone.percentage}% of campaign)</span>
+                                <span className="mt-0.5 block text-left font-semibold text-stone-500">({formatPercentage(milestone.percentage)}% of campaign)</span>
                               </p>
                             </div>
                             <div className="rounded-xl border border-violet-100 bg-violet-50/45 px-3 py-2 text-left">

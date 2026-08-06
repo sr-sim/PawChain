@@ -99,7 +99,9 @@ export function ShelterRecentCampaignCarousel({
                 <div className="min-w-0">
                   <div className="flex items-start justify-between gap-3">
                     <p className="line-clamp-2 text-sm font-black leading-5 text-stone-950">{campaign.title}</p>
-                    <span className="shrink-0 text-lg font-black text-[var(--color-orange)]">{progress.toFixed(1)}%</span>
+                    <span className="shrink-0 text-lg font-black text-[var(--color-orange)]">
+                      {progress.toLocaleString("en-MY", { maximumFractionDigits: 2 })}%
+                    </span>
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-orange-100">
                     <div className="h-full rounded-full bg-[var(--color-orange)] transition-[width] duration-700" style={{ width: `${progress}%` }} />
