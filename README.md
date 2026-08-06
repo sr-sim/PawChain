@@ -40,7 +40,7 @@ PawChain addresses these problems by integrating:
 - ⚙️ **Smart contracts** to hold campaign funds and enforce campaign, milestone, withdrawal, and refund rules.
 - 🎯 **Milestone-based distribution** so shelters receive funding incrementally instead of receiving the entire campaign amount at once.
 - 📄 **Evidence and administrator review** so a shelter must account for a released milestone before the next milestone is activated.
-- ↩️ **Proportional refunds** that let donors claim their share of the remaining contract balance when refunds are enabled.
+- ↩️ **Milestone-specific refunds** that let donors reclaim contributions assigned to milestones whose funds were not released when refunds are enabled.
 - 📊 **Role-based dashboards** for campaign discovery, donation tracking, shelter management, verification, and platform analytics.
 
 > **Current milestone logic:** after an active milestone reaches its funding threshold, the shelter withdraws that milestone's allocation and submits evidence of its use. An administrator must approve the evidence before the next milestone opens. This provides sequential accountability, although evidence approval occurs after the corresponding milestone release.
@@ -93,7 +93,7 @@ The campaign contract rejects zero-value donations, expired campaigns, inactive 
 - Detect when a cancelled or expired campaign has made a refund available.
 - Read the wallet's refundable amount directly from the campaign contract.
 - Submit `claimRefund()` using the contributing wallet.
-- Receive a proportional share of the contract's remaining refund pool.
+- Receive the wallet's recorded contributions to milestones whose funds have not been released.
 - Track the successful refund and view its internal transfer evidence on the blockchain explorer.
 
 A wallet cannot claim twice, claim without a contribution, or claim before refunds are enabled. Funds already released to the shelter are excluded from the refund pool.
@@ -268,6 +268,15 @@ The contract's `finalizeExpired()` function is publicly callable after the deadl
 - Receive notifications for new shelter applications, campaign proposals, evidence, and donor concerns.
 - Investigate donor reports and related campaign, shelter, or transaction references.
 
+#### Donor report review
+
+- Open donor-submitted campaign, shelter, donation, misuse-of-funds, milestone, and general reports from **Help & Support**.
+- View the reporting donor's name and email, submission timestamps, report reference, message, and any linked campaign or shelter.
+- Follow a linked report into campaign management for further investigation.
+- Dismiss a report card from the current browser. Dismissal is stored per administrator wallet in browser storage and does not delete or resolve the database record.
+
+The current admin report page is read-only: it displays an existing `admin_response` when present, but it does not yet provide an action to write a response or change a report's status.
+
 ## 🔄 Campaign lifecycle
 
 ```text
@@ -290,7 +299,7 @@ Administrator approves or rejects the evidence
 Approval opens the next milestone; final approval completes the campaign
 ```
 
-If an active campaign is cancelled, or expires while underfunded, its remaining smart-contract balance becomes a refund pool. Each donor claims a proportional refund using their own wallet. Amounts already released to the shelter are not part of the refund pool.
+If an active campaign is cancelled, or expires while underfunded, its remaining smart-contract balance becomes a refund pool. Each donor claims the sum of their contributions to milestones that have not released funds, using the wallet that donated. Contributions assigned to released milestones are not refundable.
 
 ## 🔗 Smart contracts
 
@@ -317,7 +326,7 @@ If an active campaign is cancelled, or expires while underfunded, its remaining 
 - Restricts evidence approval and rejection to administrators.
 - Emits auditable donation, proof, release, completion, and refund events.
 - Protects withdrawals and refund claims against reentrancy.
-- Supports campaign cancellation, underfunded expiry, and proportional donor refunds.
+- Supports campaign cancellation, underfunded expiry, and refunds based on unreleased milestone contributions.
 
 ## 🛠️ Technology stack
 
@@ -328,5 +337,61 @@ If an active campaign is cancelled, or expires while underfunded, its remaining 
 - **Database and storage:** Supabase
 - **Email and documents:** Nodemailer and PDF-Lib
 - **External storage:** Pinata/IPFS-compatible metadata and proof references
+
+## 💡 System assumptions
+
+The current PawChain design and implementation are based on the following assumptions.
+
+### Administrator assumptions
+
+- Administrators are trusted internal PawChain staff, not public users who can register for the role.
+- Administrator wallets are approved in advance and recognized by the RoleNFT contract. The contract owner and the two configured administrator addresses have administrative authority.
+- An administrator uses their own authorized wallet to approve shelters, deploy campaigns, review milestone evidence, cancel campaigns, and perform other protected blockchain operations.
+- PawChain has an internal process for securing administrator wallets, replacing compromised access, and confirming sensitive actions before signing transactions.
+- Donor reports are an internal investigation aid. Dismissing a report from the admin page only hides it for that administrator wallet and browser; it does not resolve or delete the report in Supabase.
+- The current admin report interface is for review and investigation. Any response or status already stored in Supabase may be displayed, but creating responses and changing report status are future administrative functions.
+
+### Donor and badge assumptions
+
+- One wallet represents one PawChain user and can hold only one RoleNFT at a time.
+- A donor must register through the application and receive a Donor RoleNFT to use protected donor pages.
+- The RoleNFT is a non-transferable platform identity badge. The current contract implements the ownership and metadata functions PawChain needs, but it is not intended to behave as a freely tradable NFT.
+- Donor badge progress is based on cumulative ETH recorded by authorized campaign contracts, not on the MYR estimate shown by the interface.
+- Badge thresholds are global across PawChain campaigns: Normal below 0.05 ETH, Bronze from 0.05 ETH, Silver from 0.2 ETH, Gold from 0.5 ETH, and Hero from 1 ETH.
+- Badge levels only move upward automatically. A later refund does not reduce `donorTotalContributed` or downgrade the donor's badge.
+- Automatic badge recording assumes every deployed Campaign contract is successfully authorized as a donation recorder. Campaign donations deliberately continue if badge recording fails, so donation success and badge progression are separate outcomes.
+- A wallet can call `Campaign.donate()` directly without a Donor RoleNFT. PawChain assumes normal donors use the protected application interface, while the smart contract remains open to any wallet that satisfies the campaign rules.
+
+### Shelter assumptions
+
+- Shelter approval is performed manually by an internal administrator after reviewing the organization's submitted identity and registration documents.
+- A Shelter RoleNFT represents the platform's current approval of that wallet; it is not, by itself, a government certification or guarantee that every campaign claim is accurate.
+- The wallet registered to a shelter remains under the shelter's control and is used for campaign withdrawals and milestone-proof submissions.
+- Revoking a Shelter RoleNFT prevents new donations, withdrawals, and proof submissions for its campaigns. Operationally, PawChain should also cancel affected active campaigns so donors can reclaim eligible funds.
+
+### Campaign and milestone assumptions
+
+- Campaign descriptions, images, evidence requirements, and other presentation data are stored off-chain, while fund custody and milestone state transitions are enforced on-chain.
+- Every approved campaign has one dedicated Campaign contract and one unique Supabase campaign key.
+- A campaign contains two to five milestones whose percentages total 100%, and the first emergency milestone is always 5%.
+- Donors fund only the active milestone. A transaction that would exceed that milestone's cumulative threshold is rejected rather than partially accepted.
+- A shelter withdraws a funded milestone before submitting evidence of how that allocation was used.
+- Administrator approval of the evidence completes the milestone and activates the next one. Rejection keeps the next milestone locked and permits corrected evidence to be submitted.
+- Blockchain state is the source of truth for donations, withdrawals, milestone transitions, cancellations, and refunds. Supabase records support the interface, indexing, notifications, and reporting.
+
+### Refund assumptions
+
+- Refunds become available only after an administrator cancels an active campaign or someone finalizes an expired campaign that did not reach its goal.
+- Each donor must claim with the same wallet that made the contribution; administrators and shelters cannot claim on the donor's behalf.
+- A donor's refund is the sum of their contributions assigned to milestones whose funds were not released. Contributions belonging to released milestones are not refundable.
+- Donors pay the network gas fee for their refund transaction, and unclaimed funds remain in the Campaign contract until the eligible donors claim them.
+
+### Platform and infrastructure assumptions
+
+- Users connect to the blockchain network configured by `NEXT_PUBLIC_CHAIN_ID` and `NEXT_PUBLIC_RPC_URL`, and the configured contract addresses belong to that same network and deployment version.
+- ETH-to-MYR values are estimates for display and reporting. Smart contracts accept, account for, release, and refund ETH only.
+- Supabase, IPFS gateways, RPC providers, Reown services, and email delivery are external dependencies and may be temporarily unavailable without changing confirmed blockchain state.
+- Wallet ownership is established through a signed wallet session. PawChain does not custody user private keys and cannot reverse a confirmed blockchain transaction.
+- Uploaded evidence and shelter documents are reviewed by authorized people; storing a file or CID does not automatically prove that its contents are authentic.
 
 
