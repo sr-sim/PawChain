@@ -615,7 +615,7 @@ export default async function DonorCampaignDetailPage({
                         />
                       </div>
                       <p className="mt-1 text-[11px] font-semibold text-stone-400">
-                        {Math.round(fundingState.progress)}% of this stage funded
+                        {Number(fundingState.progress.toFixed(2))}% of this stage funded
                       </p>
                   {milestone.description ? (
                     <p className="mt-3 text-xs leading-5 text-stone-600">

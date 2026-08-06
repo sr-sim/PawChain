@@ -131,7 +131,7 @@ const campaignProgress = (campaign: Campaign) => {
   if (campaign.on_chain_status === 1) return 100;
   const raised = Number(campaign.on_chain_total_raised_wei ?? 0);
   const goal = Number(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? 0);
-  return goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+  return goal > 0 ? Math.min(100, (raised / goal) * 100) : 0;
 };
 const campaignDaysLeft = (campaign: Campaign) => {
   const deadline = campaign.blockchain_deadline
@@ -1805,7 +1805,7 @@ export default function CampaignManagementPage() {
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
                   <div className={`h-full rounded-full transition-all ${fundingState.tone === "complete" ? "bg-emerald-500" : fundingState.tone === "active" ? "bg-[var(--color-orange)]" : "bg-slate-300"}`} style={{ width: `${fundingState.progress}%` }} />
                 </div>
-                <p className="mt-1 text-[11px] font-semibold text-stone-400">{Math.round(fundingState.progress)}% of this stage funded</p>
+                <p className="mt-1 text-[11px] font-semibold text-stone-400">{Number(fundingState.progress.toFixed(2))}% of this stage funded</p>
                 <p className="mt-2 text-sm text-stone-600">
                   {item.description}
                 </p>
