@@ -5,6 +5,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { DonorSidebar } from "@/app/components/DonorSidebar";
+import {
+  isNotificationAllowedByPreferences,
+  loadDonorPreferences,
+} from "@/lib/donor-preferences";
 
 type NotificationPreview = {
   id: string;
@@ -65,12 +69,17 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
         const result = await response.json();
 
         if (isMounted && response.ok) {
-          setUnreadCount(Number(result.unreadCount) || 0);
-          setNotificationPreview(
-            Array.isArray(result.notifications)
-              ? result.notifications.slice(0, 4)
-              : [],
+          const preferences = loadDonorPreferences(address);
+          const visibleNotifications = (
+            Array.isArray(result.notifications) ? result.notifications : []
+          ).filter((item: NotificationPreview) =>
+            isNotificationAllowedByPreferences(item, preferences),
           );
+          setUnreadCount(
+            visibleNotifications.filter((item: NotificationPreview) => !item.is_read)
+              .length,
+          );
+          setNotificationPreview(visibleNotifications.slice(0, 4));
         }
       } catch {
         if (isMounted) {
@@ -81,9 +90,14 @@ export function DonorShell({ children }: { children: React.ReactNode }) {
     }
 
     loadUnreadCount();
+    window.addEventListener("pawchain:donor-settings-changed", loadUnreadCount);
 
     return () => {
       isMounted = false;
+      window.removeEventListener(
+        "pawchain:donor-settings-changed",
+        loadUnreadCount,
+      );
     };
   }, [address, isConnected, pathname]);
 

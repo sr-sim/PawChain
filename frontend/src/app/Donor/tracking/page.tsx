@@ -456,6 +456,11 @@ export default async function DonorTrackingPage({
                                     ? formatEth(donation.refundAmountEth)
                                     : "Confirmed"}
                                 </p>
+                                {donation.refundAmountEth > 0 ? (
+                                  <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
+                                    {formatMyr(donation.refundAmount)}
+                                  </p>
+                                ) : null}
                               </div>
                               <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-red-700 ring-1 ring-red-100 transition group-open:bg-red-50">
                                 View proof

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { decodeEventLog, isAddress, type Address, type Hash } from "viem";
+import { decodeEventLog, formatEther, isAddress, type Address, type Hash } from "viem";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
 import { createDonorNotification } from "@/lib/donor-notifications";
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     const { data: existingDonation, error: existingDonationError } =
       await supabase
         .from("donations")
-        .select("id, refund_tx_hash")
+        .select("id, amount, amount_wei, refund_tx_hash")
         .eq("donor_id", donor.id)
         .eq("campaign_id", campaignId)
         .maybeSingle();
@@ -142,11 +142,24 @@ export async function POST(request: NextRequest) {
       .eq("id", existingDonation.id);
     if (updateError) throw updateError;
 
+    const refundEth = Number(formatEther(refundAmount));
+    const donationEth = existingDonation.amount_wei
+      ? Number(formatEther(BigInt(existingDonation.amount_wei)))
+      : 0;
+    const donationMyr = Number(existingDonation.amount ?? 0);
+    const refundMyr =
+      donationEth > 0 && donationMyr > 0
+        ? (donationMyr / donationEth) * refundEth
+        : refundEth * Number(campaign.eth_myr_rate ?? 0);
+
     await createDonorNotification({
       donorId: donor.id,
       campaignId,
       title: "Refund claimed",
-      message: `Your refund from ${campaign.title} was confirmed on-chain and recorded in your donation ledger.`,
+      message: `Your ${refundEth.toFixed(6)} ETH refund from ${campaign.title} was confirmed. Approx. MYR ${refundMyr.toLocaleString("en-MY", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}.`,
       status: "success",
     });
 

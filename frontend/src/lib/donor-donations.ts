@@ -40,6 +40,13 @@ type CampaignRow = {
   contract_address?: string | null;
 };
 
+function formatNotificationMyr(value: number) {
+  return value.toLocaleString("en-MY", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 type OnChainCampaignSnapshot = {
   progress: number;
   status: string;
@@ -64,6 +71,7 @@ export type DonorDonation = {
   refundTxHash: string | null;
   refundedAt: string | null;
   refundAmountEth: number;
+  refundAmount: number;
   contractAddress: string | null;
   status: string;
   createdAt: string;
@@ -299,6 +307,18 @@ async function syncClaimedRefunds(
         const refundedAt = new Date(Number(block.timestamp) * 1000).toISOString();
         const updatedAt = new Date().toISOString();
         const refundTxHash = latestRefundLog.transactionHash;
+        const refundAmountEth =
+          typeof latestRefundLog.args.amount === "bigint"
+            ? Number(formatEther(latestRefundLog.args.amount))
+            : 0;
+        const donationAmountEth = donation.amount_wei
+          ? Number(formatEther(BigInt(donation.amount_wei)))
+          : 0;
+        const donationAmountMyr = Number(donation.amount ?? 0);
+        const refundAmountMyr =
+          donationAmountEth > 0 && donationAmountMyr > 0
+            ? (donationAmountMyr / donationAmountEth) * refundAmountEth
+            : 0;
 
         const { error: updateError } = await supabase
           .from("donations")
@@ -318,7 +338,7 @@ async function syncClaimedRefunds(
           donorId: donation.donor_id,
           campaignId: donation.campaign_id,
           title: "Refund recorded",
-          message: `Your refund from ${campaign?.title ?? "this campaign"} was verified and added to your donation history.`,
+          message: `Your ${refundAmountEth.toFixed(6)} ETH refund from ${campaign?.title ?? "this campaign"} was verified. Approx. MYR ${formatNotificationMyr(refundAmountMyr)}.`,
           status: "success",
         });
 
@@ -449,6 +469,11 @@ export async function getDonorDonations(walletAddress?: string) {
     const amountEth = donation.amount_wei
       ? Number(formatEther(BigInt(donation.amount_wei)))
       : 0;
+    const refundAmountEth = refundAmounts.get(donation.id) ?? 0;
+    const refundAmount =
+      amountEth > 0 && refundAmountEth > 0
+        ? (amount / amountEth) * refundAmountEth
+        : 0;
 
     return {
       id: donation.id,
@@ -465,7 +490,8 @@ export async function getDonorDonations(walletAddress?: string) {
       txHash: donation.tx_hash,
       refundTxHash: donation.refund_tx_hash ?? null,
       refundedAt: donation.refunded_at ?? null,
-      refundAmountEth: refundAmounts.get(donation.id) ?? 0,
+      refundAmountEth,
+      refundAmount,
       contractAddress: donation.contract_address ?? null,
       status: donation.refund_tx_hash
         ? "Refunded"
