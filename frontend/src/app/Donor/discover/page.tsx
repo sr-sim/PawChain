@@ -52,9 +52,9 @@ type MilestoneDisplay = {
 
 const urgencies = ["All", "Critical", "High", "Medium"];
 const sortOptions = ["Most urgent", "Deadline soon", "Most progress", "Most donors"];
-const tabs = ["Campaigns", "Completed", "Closed", "Shelters", "Saved"] as const;
+const tabs = ["Active", "Completed", "Closed", "Shelters", "Saved"] as const;
 const tabDesign: Record<(typeof tabs)[number], { icon: string; active: string; inactive: string }> = {
-  Campaigns: { icon: "M4 19V9l8-5 8 5v10H4Zm5 0v-6h6v6", active: "border-orange-400 bg-orange-100 text-orange-800 shadow-orange-100", inactive: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" },
+  Active: { icon: "M4 19V9l8-5 8 5v10H4Zm5 0v-6h6v6", active: "border-orange-400 bg-orange-100 text-orange-800 shadow-orange-100", inactive: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100" },
   Completed: { icon: "M5 12.5 10 17l9-10", active: "border-emerald-400 bg-emerald-100 text-emerald-800 shadow-emerald-100", inactive: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" },
   Closed: { icon: "M7 11V8a5 5 0 0 1 10 0v3M6 11h12v10H6z", active: "border-stone-500 bg-stone-200 text-stone-800 shadow-stone-100", inactive: "border-stone-300 bg-stone-100 text-stone-700 hover:bg-stone-200" },
   Shelters: { icon: "M3 11 12 4l9 7M5 10v10h14V10M9 20v-6h6v6", active: "border-violet-400 bg-violet-100 text-violet-800 shadow-violet-100", inactive: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100" },
@@ -94,8 +94,8 @@ function getCampaignDisplayStatus(campaign: { status: string; raised: number }) 
   return campaign.status;
 }
 
-function canCampaignReceiveDonation(campaign: { status: string; raised: number }) {
-  return getCampaignDisplayStatus(campaign) === "Active";
+function canCampaignReceiveDonation(campaign: DonorCampaign) {
+  return getCampaignActionState(campaign).canDonate;
 }
 
 function formatMyr(value: number) {
@@ -229,6 +229,93 @@ function getMilestoneFundingState(
   };
 }
 
+function getCampaignActionState(campaign: DonorCampaign) {
+  const displayStatus = getCampaignDisplayStatus(campaign);
+
+  if (displayStatus === "Completed") {
+    return {
+      canDonate: false,
+      label: "Completed",
+      helper: "Campaign funding is complete.",
+      tone: "complete" as const,
+    };
+  }
+
+  if (displayStatus === "Closed") {
+    return {
+      canDonate: false,
+      label: "Closed",
+      helper: "This campaign is no longer accepting donations.",
+      tone: "closed" as const,
+    };
+  }
+
+  const milestones = getCampaignMilestoneItems(campaign);
+  const currentIndex = getCurrentMilestoneIndex(
+    milestones,
+    campaign.raised,
+    displayStatus,
+    campaign.currentMilestoneIndex,
+  );
+  const currentMilestone =
+    currentIndex >= 0 ? milestones[currentIndex] : null;
+  const fundingState =
+    currentIndex >= 0
+      ? getMilestoneFundingState(milestones, currentIndex, campaign.raised)
+      : null;
+  const milestoneStatus = String(currentMilestone?.status ?? "").toLowerCase();
+
+  if (fundingState?.tone === "complete" && campaign.raised < 100) {
+    if (milestoneStatus.includes("review")) {
+      return {
+        canDonate: false,
+        label: "Proof review",
+        helper: "The current milestone proof is under review.",
+        tone: "waiting" as const,
+      };
+    }
+
+    if (milestoneStatus.includes("reject")) {
+      return {
+        canDonate: false,
+        label: "Proof revision",
+        helper: "The shelter is revising milestone proof.",
+        tone: "waiting" as const,
+      };
+    }
+
+    return {
+      canDonate: false,
+      label: "Milestone funded",
+      helper: "This milestone is funded and waiting for the shelter action.",
+      tone: "waiting" as const,
+    };
+  }
+
+  return {
+    canDonate: true,
+    label: "Open for donation",
+    helper: "This campaign can accept donations.",
+    tone: "active" as const,
+  };
+}
+
+function getActionStateStyle(tone: ReturnType<typeof getCampaignActionState>["tone"]) {
+  if (tone === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (tone === "complete") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (tone === "waiting") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-stone-200 bg-stone-50 text-stone-600";
+}
+
 function shortHash(value: string) {
   return `${value.slice(0, 10)}...${value.slice(-8)}`;
 }
@@ -324,7 +411,7 @@ export default function DonorDiscoverPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [urgency, setUrgency] = useState("All");
   const [sortBy, setSortBy] = useState(sortOptions[0]);
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Campaigns");
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Active");
   const [isModalMounted, setIsModalMounted] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     searchParams.get("campaign"),
@@ -639,7 +726,10 @@ export default function DonorDiscoverPage() {
     };
   }, [selectedCampaign]);
   const activeCampaigns = useMemo(
-    () => sortedCampaigns.filter((campaign) => canCampaignReceiveDonation(campaign)),
+    () =>
+      sortedCampaigns.filter(
+        (campaign) => getCampaignDisplayStatus(campaign) === "Active",
+      ),
     [sortedCampaigns],
   );
   const completedCampaigns = useMemo(
@@ -708,7 +798,7 @@ export default function DonorDiscoverPage() {
   }, [filteredShelters, sortBy]);
 
   const tabCounts: Record<(typeof tabs)[number], number> = {
-    Campaigns: activeCampaigns.length,
+    Active: activeCampaigns.length,
     Completed: completedCampaigns.length,
     Closed: closedCampaigns.length,
     Shelters: sortedShelters.length,
@@ -1025,14 +1115,24 @@ export default function DonorDiscoverPage() {
                         <span className="truncate">{campaign.shelter}</span>
                       </Link>
                     </div>
-                    <span
-                      className={[
-                        "shrink-0 rounded-full px-2.5 py-1 text-[0.68rem] font-semibold",
-                        getUrgencyStyle(campaign.urgency),
-                      ].join(" ")}
-                    >
-                      {campaign.urgency}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span
+                        className={[
+                          "rounded-full px-2.5 py-1 text-[0.68rem] font-semibold",
+                          getUrgencyStyle(campaign.urgency),
+                        ].join(" ")}
+                      >
+                        {campaign.urgency}
+                      </span>
+                      <span
+                        className={[
+                          "max-w-[8.5rem] rounded-full border px-2.5 py-1 text-right text-[0.62rem] font-black leading-3",
+                          getActionStateStyle(getCampaignActionState(campaign).tone),
+                        ].join(" ")}
+                      >
+                        {getCampaignActionState(campaign).label}
+                      </span>
+                    </div>
                   </div>
 
                   <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">
@@ -1106,12 +1206,18 @@ export default function DonorDiscoverPage() {
                     </div>
                     <div className="rounded-xl bg-orange-50/45 px-3 py-2">
                       <p className="font-black text-stone-950">
-                        {getCampaignDisplayStatus(campaign) === "Completed"
+                        {getCampaignDisplayStatus(campaign) === "Active" &&
+                        !canCampaignReceiveDonation(campaign)
+                          ? getCampaignActionState(campaign).label
+                          : getCampaignDisplayStatus(campaign) === "Completed"
                           ? "Completed"
                           : `${campaign.daysLeft} days`}
                       </p>
                       <p className="text-xs font-medium text-stone-500">
-                        Remaining
+                        {getCampaignDisplayStatus(campaign) === "Active" &&
+                        !canCampaignReceiveDonation(campaign)
+                          ? "Current stage"
+                          : "Remaining"}
                       </p>
                     </div>
                   </div>
@@ -1172,6 +1278,10 @@ export default function DonorDiscoverPage() {
                       > 
                         Donate Now
                       </Link>
+                    ) : getCampaignDisplayStatus(campaign) === "Active" ? (
+                      <div className="inline-flex w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700">
+                        {getCampaignActionState(campaign).label}
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -1185,10 +1295,10 @@ export default function DonorDiscoverPage() {
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
                 {emptyCampaignMessage}
               </p>
-              {campaigns.length > 0 && activeTab !== "Campaigns" ? (
+              {campaigns.length > 0 && activeTab !== "Active" ? (
                 <button
                   type="button"
-                  onClick={() => setActiveTab("Campaigns")}
+                  onClick={() => setActiveTab("Active")}
                   suppressHydrationWarning
                   className="mt-4 inline-flex items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
                 >
@@ -1299,7 +1409,7 @@ export default function DonorDiscoverPage() {
                             type="button"
                             onClick={() => {
                               setSelectedId(campaign.id);
-                              setActiveTab("Campaigns");
+                              setActiveTab("Active");
                             }}
                             suppressHydrationWarning
                             className="w-full rounded-xl bg-orange-50/60 p-2 text-left transition hover:bg-orange-100/70"
