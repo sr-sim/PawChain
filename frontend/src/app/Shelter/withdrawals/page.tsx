@@ -37,7 +37,7 @@ type FilterKey =
   | "pending-proof"
   | "pending-review"
   | "completed"
-  | "locked";
+  | "cancelled";
 
 const filterLabels: Record<FilterKey, string> = {
   all: "All Campaigns",
@@ -45,7 +45,7 @@ const filterLabels: Record<FilterKey, string> = {
   "pending-proof": "Pending Proof",
   "pending-review": "Pending Review",
   completed: "Completed",
-  locked: "Locked",
+  cancelled: "Cancelled",
 };
 
 function orderMilestones(items: CampaignMilestone[]) {
@@ -76,7 +76,7 @@ function formatMyr(value: number) {
 
 function preciseProgress(raised: number, goal: number) {
   if (!Number.isFinite(raised) || !Number.isFinite(goal) || goal <= 0) return 0;
-  return Math.min(100, Math.floor((raised / goal) * 10000) / 100);
+  return Math.min(100, Math.round((raised / goal) * 10000) / 100);
 }
 
 function shortAddress(value?: string | null) {
@@ -112,8 +112,7 @@ function matchesFilter(status: number, _index: number, filter: FilterKey) {
   if (filter === "withdrawable") return status === 5;
   if (filter === "pending-proof") return status === 6 || status === 3;
   if (filter === "pending-review") return status === 2;
-  if (filter === "completed") return status === 7;
-  return status === 0 || status === 1;
+  return false;
 }
 
 function StatCard({
@@ -331,16 +330,27 @@ export default function ShelterWithdrawalsPage() {
       "pending-proof": 0,
       "pending-review": 0,
       completed: 0,
-      locked: 0,
+      cancelled: 0,
     };
 
     items.forEach((campaign) => {
-      campaign.milestones.forEach((milestone, index) => {
-        const status = chainStates[campaign.id]?.milestones[milestone.id]?.status;
-        if (status == null) return;
-        (Object.keys(counts) as FilterKey[]).forEach((key) => {
-          if (key !== "all" && matchesFilter(status, index, key)) counts[key] += 1;
-        });
+      const statuses = campaign.milestones.map(
+        (milestone) => chainStates[campaign.id]?.milestones[milestone.id]?.status,
+      );
+      const allFundsWithdrawn = statuses.length > 0 && statuses.every(
+        (status) => status === 6 || status === 7,
+      );
+
+      (Object.keys(counts) as FilterKey[]).forEach((key) => {
+        if (key === "all") return;
+        const matches = key === "completed"
+          ? allFundsWithdrawn
+          : key === "cancelled"
+            ? campaign.campaign_status === "closed"
+            : statuses.some(
+                (status, index) => status != null && matchesFilter(status, index, key),
+              );
+        if (matches) counts[key] += 1;
       });
     });
     return counts;
@@ -350,12 +360,22 @@ export default function ShelterWithdrawalsPage() {
     () =>
       filter === "all"
         ? items
-        : items.filter((campaign) =>
-            campaign.milestones.some((milestone, index) => {
-              const status = chainStates[campaign.id]?.milestones[milestone.id]?.status;
-              return status != null && matchesFilter(status, index, filter);
-            }),
-          ),
+        : items.filter((campaign) => {
+            const statuses = campaign.milestones.map(
+              (milestone) => chainStates[campaign.id]?.milestones[milestone.id]?.status,
+            );
+            if (filter === "completed") {
+              return statuses.length > 0 && statuses.every(
+                (status) => status === 6 || status === 7,
+              );
+            }
+            if (filter === "cancelled") {
+              return campaign.campaign_status === "closed";
+            }
+            return statuses.some(
+              (status, index) => status != null && matchesFilter(status, index, filter),
+            );
+          }),
     [chainStates, filter, items],
   );
 
@@ -480,17 +500,23 @@ export default function ShelterWithdrawalsPage() {
             const currentMilestone = campaign.milestones[safeCurrentIndex];
             const currentStatus = currentMilestone ? chain?.milestones[currentMilestone.id]?.status : undefined;
             const currentActions = getMilestoneActions(currentStatus);
+            const campaignUnavailable = ["closed", "rejected", "completed"].includes(
+              campaign.campaign_status,
+            );
+            const campaignStatusLabel = campaign.campaign_status === "closed"
+              ? "Cancelled"
+              : campaign.campaign_status.replaceAll("_", " ");
             const availableEth = campaign.milestones.reduce((sum, milestone) => {
               const state = chain?.milestones[milestone.id];
               return sum + (state?.status === 5 ? state.allocationEth : 0);
             }, 0);
 
             return (
-              <article key={campaign.id} className="rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,#FFFFFF,#FFFDF7)] p-4 transition hover:border-orange-300 sm:p-5">
+              <article key={campaign.id} className={`rounded-2xl border p-4 transition sm:p-5 ${campaignUnavailable ? "border-stone-300 bg-stone-100 grayscale" : "border-orange-100 bg-[linear-gradient(135deg,#FFFFFF,#FFFDF7)] hover:border-orange-300"}`}>
                 <div className="grid gap-5 lg:grid-cols-[8rem_minmax(0,1fr)_12rem] lg:items-center">
                   <div className="h-36 overflow-hidden rounded-2xl bg-orange-50 lg:h-32">{campaign.image_url ? <img src={campaign.image_url} alt="" className="h-full w-full object-cover" /> : null}</div>
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black text-stone-950">{campaign.title}</h2><span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Active</span><span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black capitalize text-orange-700">{campaign.urgency_level} priority</span></div><p className="mt-2 text-xs font-bold text-stone-500">{campaign.milestones.length} milestones</p><div className="mt-4 flex items-end justify-between gap-4"><div><p className="text-sm font-black">{formatEth(raisedEth)} raised of {formatEth(goalEth)}</p><p className="mt-1 text-xs font-semibold text-stone-400">≈ {formatMyr(raisedEth * rate)} raised of {formatMyr(goalEth * rate)}</p></div><p className="text-sm font-black">{progress}% funded</p></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-3"><div><p className="font-bold text-stone-500">Available</p><p className="mt-1 font-black">{formatEth(availableEth)}</p><p className="text-stone-400">≈ {formatMyr(availableEth * rate)}</p></div><div><p className="font-bold text-stone-500">Current Milestone</p><p className="mt-1 font-black">{safeCurrentIndex + 1} / {campaign.milestones.length}</p><p className="truncate text-stone-400">{currentMilestone?.title}</p></div><div><p className="font-bold text-stone-500">Status</p><p className="mt-1 font-black">{statusLabel(currentStatus ?? -1)}</p></div></div></div>
-                  <div className="space-y-3"><button type="button" onClick={() => currentMilestone && openMilestoneAction(campaign.id, currentMilestone.id)} disabled={!currentActions.canUploadProof} className="w-full rounded-xl border border-violet-300 px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400">Upload Proof →</button><button type="button" onClick={() => currentMilestone && openMilestoneAction(campaign.id, currentMilestone.id)} disabled={!currentActions.canWithdraw} className="w-full rounded-xl border border-[var(--color-orange)] bg-[var(--color-orange)] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:border-stone-200 disabled:bg-stone-100 disabled:text-stone-400">Withdrawable</button></div>
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-black text-stone-950">{campaign.title}</h2><span className={`rounded-full px-3 py-1 text-xs font-black capitalize ${campaignUnavailable ? "bg-stone-200 text-stone-600" : "bg-emerald-50 text-emerald-700"}`}>{campaignStatusLabel}</span><span className={`rounded-full px-3 py-1 text-xs font-black capitalize ${campaignUnavailable ? "bg-stone-200 text-stone-600" : "bg-orange-50 text-orange-700"}`}>{campaign.urgency_level} priority</span></div><p className="mt-2 text-xs font-bold text-stone-500">{campaign.milestones.length} milestones</p><div className="mt-4 flex items-end justify-between gap-4"><div><p className="text-sm font-black">{formatEth(raisedEth)} raised of {formatEth(goalEth)}</p><p className="mt-1 text-xs font-semibold text-stone-400">≈ {formatMyr(raisedEth * rate)} raised of {formatMyr(goalEth * rate)}</p></div><p className="text-sm font-black">{progress}% funded</p></div><div className={`mt-2 h-2 overflow-hidden rounded-full ${campaignUnavailable ? "bg-stone-300" : "bg-orange-100"}`}><div className={`h-full rounded-full ${campaignUnavailable ? "bg-stone-500" : "bg-[var(--color-orange)]"}`} style={{ width: `${progress}%` }} /></div><div className="mt-4 grid gap-3 text-xs sm:grid-cols-3"><div><p className="font-bold text-stone-500">Available</p><p className="mt-1 font-black">{formatEth(campaignUnavailable ? 0 : availableEth)}</p><p className="text-stone-400">≈ {formatMyr((campaignUnavailable ? 0 : availableEth) * rate)}</p></div><div><p className="font-bold text-stone-500">Current Milestone</p><p className="mt-1 font-black">{safeCurrentIndex + 1} / {campaign.milestones.length}</p><p className="truncate text-stone-400">{currentMilestone?.title}</p></div><div><p className="font-bold text-stone-500">Status</p><p className="mt-1 font-black capitalize">{campaignUnavailable ? campaignStatusLabel : statusLabel(currentStatus ?? -1)}</p></div></div></div>
+                  <div className="space-y-3"><button type="button" onClick={() => currentMilestone && openMilestoneAction(campaign.id, currentMilestone.id)} disabled={campaignUnavailable || !currentActions.canUploadProof} className="w-full rounded-xl border border-violet-300 px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500">Upload Proof →</button><button type="button" onClick={() => currentMilestone && openMilestoneAction(campaign.id, currentMilestone.id)} disabled={campaignUnavailable || !currentActions.canWithdraw} className="w-full rounded-xl border border-[var(--color-orange)] bg-[var(--color-orange)] px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:border-stone-300 disabled:bg-stone-200 disabled:text-stone-500">Withdrawable</button></div>
                 </div>
               </article>
             );

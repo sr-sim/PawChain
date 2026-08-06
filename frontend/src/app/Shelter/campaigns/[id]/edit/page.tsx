@@ -219,8 +219,8 @@ export default function EditCampaignPage() {
       return false;
     }
 
-    if (milestones.length < 2 || milestones.length > 5) {
-      setError("Add between 2 and 5 milestones.");
+    if (milestones.length < 3 || milestones.length > 5) {
+      setError("Add at least 3 milestones. Campaigns must have between 3 and 5 milestones.");
       return false;
     }
 
@@ -484,7 +484,7 @@ export default function EditCampaignPage() {
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">Fund release plan</p>
                 <h2 className="mt-1 text-2xl font-black text-stone-950">Set Milestones</h2>
                 <p className="text-sm font-bold text-stone-600">
-                  Milestones unlock one by one. Milestone 2 cannot start until Milestone 1 is completed. Milestone 1 always receives 5% of the campaign goal.
+                  Add between 3 and 5 milestones. They unlock one by one, and Milestone 1 always receives 5% of the campaign goal.
                 </p>
               </div>
               <span
@@ -523,7 +523,7 @@ export default function EditCampaignPage() {
                           ),
                         )
                       }
-                      disabled={index === 0 || milestones.length <= 2}
+                      disabled={index === 0 || milestones.length <= 3}
                       className="rounded-full border border-red-100 bg-white px-3 py-1.5 text-xs font-black text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {index === 0 ? "Fixed" : "Remove"}

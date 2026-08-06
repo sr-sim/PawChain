@@ -45,9 +45,7 @@ export function getProgress(
 
   const exactPercentage = (current / goal) * 100;
 
-  // Keep two decimal places and never round funding upward: a value just
-  // below 5% must not look like the on-chain threshold has been reached.
-  return Math.min(100, Math.floor(exactPercentage * 100) / 100);
+  return Math.min(100, Math.round(exactPercentage * 100) / 100);
 }
 
 export function readableStatus(status: CampaignStatus | MilestoneStatus) {

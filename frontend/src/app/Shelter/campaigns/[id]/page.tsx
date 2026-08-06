@@ -85,13 +85,13 @@ export default function CampaignDetailPage() {
     address: contractAddress,
     abi: campaignContractAbi,
     functionName: "goal",
-    query: { enabled: Boolean(contractAddress) },
+    query: { enabled: Boolean(contractAddress), refetchInterval: 5_000 },
   });
   const { data: onChainRaised } = useReadContract({
     address: contractAddress,
     abi: campaignContractAbi,
     functionName: "totalRaised",
-    query: { enabled: Boolean(contractAddress) },
+    query: { enabled: Boolean(contractAddress), refetchInterval: 5_000 },
   });
   const { data: onChainRefundPool } = useReadContract({
     address: contractAddress,
@@ -346,6 +346,7 @@ export default function CampaignDetailPage() {
                   walletAddress={address}
                   contractAddress={campaign.contract_address}
                   goalEth={goalEth}
+                  raisedEth={raisedEth}
                   ethMyrRate={ethMyrRate}
                   cumulativePercentage={orderedMilestones.slice(0, index + 1).reduce((sum, item) => sum + Number(item.percentage || 0), 0)}
                   canUploadProof={campaign.campaign_status === "active"}
