@@ -125,7 +125,6 @@ export function RefundClaimButton({
           {
             label: "Refund amount",
             value: `${refundableEth.toLocaleString("en-MY", {
-              minimumFractionDigits: 4,
               maximumFractionDigits: 6,
             })} ETH`,
           },
@@ -188,7 +187,6 @@ export function RefundClaimButton({
           {
             label: "Refund amount",
             value: `${refundedAmount.toLocaleString("en-MY", {
-              minimumFractionDigits: 4,
               maximumFractionDigits: 6,
             })} ETH`,
           },
@@ -244,7 +242,6 @@ export function RefundClaimButton({
           <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <p className="text-sm font-black text-stone-950">
               {refundableEth.toLocaleString("en-MY", {
-                minimumFractionDigits: 4,
                 maximumFractionDigits: 6,
               })}{" "}
               ETH
@@ -273,7 +270,6 @@ export function RefundClaimButton({
               </p>
               <p className="mt-0.5 text-xs font-black text-stone-950">
                 +{confirmedRefundEth.toLocaleString("en-MY", {
-                  minimumFractionDigits: 4,
                   maximumFractionDigits: 6,
                 })}{" "}
                 ETH

@@ -36,7 +36,6 @@ function formatAmount(amount: number, currency: string) {
 
 function formatEth(value: number) {
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }

@@ -29,8 +29,7 @@ function donationAmountEth(
 
 function formatEth(value: number) {
   return `${new Intl.NumberFormat("en-MY", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8,
+    maximumFractionDigits: 6,
   }).format(value)} ETH`;
 }
 

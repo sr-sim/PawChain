@@ -53,8 +53,7 @@ export const donorBadgeTiers: DonorBadgeTier[] = [
 
 export function formatBadgeEth(value: number) {
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: value < 0.01 && value > 0 ? 4 : 2,
-    maximumFractionDigits: 4,
+    maximumFractionDigits: 6,
   })} ETH`;
 }
 

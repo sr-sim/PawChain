@@ -44,7 +44,6 @@ export function AnimatedEthTotal({ value, className = "" }: AnimatedEthTotalProp
   return (
     <p className={className}>
       {displayValue.toLocaleString("en-MY", {
-        minimumFractionDigits: 6,
         maximumFractionDigits: 6,
       })}{" "}
       ETH

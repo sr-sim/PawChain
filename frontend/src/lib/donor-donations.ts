@@ -338,7 +338,7 @@ async function syncClaimedRefunds(
           donorId: donation.donor_id,
           campaignId: donation.campaign_id,
           title: "Refund recorded",
-          message: `Your ${refundAmountEth.toFixed(6)} ETH refund from ${campaign?.title ?? "this campaign"} was verified. Approx. MYR ${formatNotificationMyr(refundAmountMyr)}.`,
+          message: `Your ${refundAmountEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH refund from ${campaign?.title ?? "this campaign"} was verified. Approx. MYR ${formatNotificationMyr(refundAmountMyr)}.`,
           status: "success",
         });
 

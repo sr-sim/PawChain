@@ -78,8 +78,7 @@ function formatEthText(value: number) {
   }
 
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: value < 0.0001 ? 8 : 4,
-    maximumFractionDigits: value < 0.0001 ? 8 : 6,
+    maximumFractionDigits: 6,
   })} ETH`;
 }
 
