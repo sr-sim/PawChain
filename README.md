@@ -338,14 +338,14 @@ Open [http://localhost:3000](http://localhost:3000), connect MetaMask to Sepolia
 
 Administrators are internal users and cannot register through the public form. PawChain grants access only when `RoleNFT.isAdmin(walletAddress)` recognizes the connected wallet.
 
-#### Prepare lecturer access
+#### Authorize an administrator
 
-1. Ask the lecturer to create a dedicated MetaMask test account.
-2. Ask for the account's **public wallet address only**. The lecturer must never share their private key or recovery phrase.
-3. Before deployment, replace either `ADMIN_ONE` or `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the lecturer's public address:
+1. Create a dedicated MetaMask test account for the administrator.
+2. Use only the account's **public wallet address**. Never share its private key or recovery phrase.
+3. Before deployment, replace either `ADMIN_ONE` or `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the administrator's public address:
 
 ```solidity
-address public constant ADMIN_ONE = 0x...; // Lecturer wallet
+address public constant ADMIN_ONE = 0x...; // Administrator wallet
 ```
 
 4. Deploy the new RoleNFT and CampaignFactory contracts.
@@ -353,15 +353,15 @@ address public constant ADMIN_ONE = 0x...; // Lecturer wallet
 
 Administrator constants cannot be changed after RoleNFT is deployed. A new deployment is required when replacing one of these predefined administrator addresses.
 
-#### Lecturer sign-in
+#### Administrator sign-in
 
 1. Open MetaMask using the authorized account.
 2. Switch to Ethereum Sepolia (`11155111`).
 3. Open PawChain and connect the wallet.
 4. Sign the authentication message.
-5. PawChain verifies the public address on-chain and redirects the lecturer to `/Admin/dashboard`.
+5. PawChain verifies the public address on-chain and redirects the administrator to `/Admin/dashboard`.
 
-The lecturer does not need to register, create a Supabase profile, receive a RoleNFT, or access the project owner's wallet.
+The administrator does not need to register, create a Supabase profile, or receive a RoleNFT.
 
 ## 🔧 Troubleshooting
 
