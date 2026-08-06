@@ -1078,11 +1078,11 @@ export default function DonorDonatePage() {
               Donation
             </p>
             <h1 className="mt-2 text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">
-              Donate with MYR.
+              Support a campaign.
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-              Enter a local amount, review the ETH estimate, and confirm the
-              transaction in your wallet.
+              Enter your donation in MYR, review the ETH amount, and confirm
+              the payment in your wallet.
             </p>
           </div>
           <EthMyrMarketCard
@@ -1245,11 +1245,11 @@ export default function DonorDonatePage() {
                       {selectorStage ? (
                         <div className="mt-1.5 rounded-lg border border-orange-100 bg-white/78 px-2 py-1.5">
                           <div className="flex items-center justify-between gap-2 text-xs font-semibold">
-                            <span className="min-w-0 truncate text-stone-950">
-                              {selectorMilestone.title}
+                            <span className="min-w-0 truncate text-stone-500">
+                              Campaign funded
                             </span>
                             <span className="shrink-0 text-[var(--color-orange)]">
-                              {Math.round(selectorDisplayProgress)}%
+                              {Math.round(campaign.raised)}%
                             </span>
                           </div>
                           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
@@ -1258,26 +1258,36 @@ export default function DonorDonatePage() {
                               style={{
                                 width: `${Math.max(
                                   0,
-                                  Math.min(100, selectorDisplayProgress),
+                                  Math.min(100, campaign.raised),
                                 )}%`,
                               }}
                             />
                           </div>
-                          <div className="mt-1 flex items-center justify-between gap-2 text-[0.7rem] font-medium text-stone-500">
-                            <span>
-                              {selectorCanAccept
-                                ? `Need ${formatEthText(selectorDisplayRemainingEth)}`
-                                : selectorDisplayStatus === "Withdrawable"
-                                  ? "Funded"
-                                  : "Not open"}
-                            </span>
-                            <span className="shrink-0 text-stone-400">
-                              {selectorCanAccept
-                                ? formatApproxMyr(selectorDisplayRemainingMyr)
-                                : selectorDisplayStatus === "Withdrawable"
-                                  ? "Awaiting withdrawal"
-                                  : selectorDisplayStatus}
-                            </span>
+                          <div className="mt-2 rounded-md bg-orange-50/55 px-2 py-1.5">
+                            <div className="flex items-center justify-between gap-2 text-[0.7rem] font-black">
+                              <span className="min-w-0 truncate text-stone-950">
+                                {selectorMilestone.title}
+                              </span>
+                              <span className="shrink-0 text-stone-500">
+                                Current stage
+                              </span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between gap-2 text-[0.7rem] font-medium text-stone-500">
+                              <span>
+                                {selectorCanAccept
+                                  ? `Need ${formatEthText(selectorDisplayRemainingEth)}`
+                                  : selectorDisplayStatus === "Withdrawable"
+                                    ? "Funded"
+                                    : "Not open"}
+                              </span>
+                              <span className="shrink-0 text-stone-400">
+                                {selectorCanAccept
+                                  ? formatApproxMyr(selectorDisplayRemainingMyr)
+                                  : selectorDisplayStatus === "Withdrawable"
+                                    ? "Awaiting withdrawal"
+                                    : selectorDisplayStatus}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -1330,20 +1340,20 @@ export default function DonorDonatePage() {
               </div>
             </div>
 
-            <div className="donor-gradient-card mt-4 rounded-2xl border border-orange-100 bg-white p-3 shadow-sm">
+            <div className="donor-gradient-card mt-4 rounded-xl border border-orange-100 bg-white p-3 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-orange)]">
-                    Current stage
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-stone-400">
+                    Stage limit
                   </p>
-                  <h3 className="mt-1 truncate text-base font-black text-stone-950">
+                  <p className="mt-1 truncate text-sm font-black text-stone-950">
                     {currentStage
                       ? `Stage ${currentStage.index + 1}: ${nextMilestone?.title}`
                       : "All milestones funded"}
-                  </h3>
+                  </p>
                 </div>
                 <div className="text-left sm:text-right">
-                  <p className="text-sm font-black text-stone-950">
+                  <p className="text-sm font-black text-[var(--color-orange)]">
                     {currentStageEthDisplay}
                   </p>
                   <p className="text-xs font-semibold text-stone-500">
@@ -1351,26 +1361,18 @@ export default function DonorDonatePage() {
                   </p>
                 </div>
               </div>
-
               {currentStage ? (
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">
                   <div
                     className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]"
                     style={{
-                      width: `${Math.max(
-                        0,
-                        Math.min(
-                          100,
-                          currentStage.progress,
-                        ),
-                      )}%`,
+                      width: `${clampPercentage(currentStage.progress)}%`,
                     }}
                   />
                 </div>
               ) : null}
-
               {!isOpenForFunding ? (
-                <p className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
                   {milestoneGateMessage}
                 </p>
               ) : null}
@@ -1602,7 +1604,7 @@ export default function DonorDonatePage() {
 
               <details className="group mt-4 overflow-hidden rounded-xl border border-orange-100 bg-white">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-stone-500 [&::-webkit-details-marker]:hidden">
-                  <span>Gas and rate</span>
+                  <span>Payment details</span>
                   <span className="text-[var(--color-orange)] transition group-open:rotate-45">
                     +
                   </span>
