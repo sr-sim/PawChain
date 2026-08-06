@@ -107,6 +107,14 @@ export function AdminSidebar({
             <span>⌁</span>
             <span>Analytics &amp; Insights</span>
           </Link>
+          <Link
+            href="/Admin/notifications"
+            onClick={onNavigate}
+            className={`${row} ${pathname === "/Admin/notifications" ? "border-orange-200 bg-orange-50/55 text-[var(--color-orange)] shadow-[inset_3px_0_0_var(--color-orange)]" : "border-transparent text-slate-700 hover:bg-orange-50"}`}
+          >
+            <span>●</span>
+            <span>Notifications</span>
+          </Link>
           {items.slice(2).filter(([, href]) => !href).map(([label]) => (
             <div
               key={label}

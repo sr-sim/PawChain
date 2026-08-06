@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoleNFTStatus } from "@/lib/role-nft";
 import { createShelterDocumentUrl } from "@/lib/shelter-document-storage";
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient();
     const walletAddress = request.nextUrl.searchParams.get("walletAddress");
+    requireWalletSession(request, walletAddress);
 
     if (!walletAddress) {
       return NextResponse.json(

@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { walletSessionMatches } from "@/lib/wallet-session";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
 import { decodeFunctionData, isAddress, type Address, type Hash } from "viem";
 
-async function adminClient(wallet: string) {
+async function adminClient(request: NextRequest, wallet: string) {
+  if (!walletSessionMatches(request, wallet)) throw new Error("WALLET_SESSION_REQUIRED");
   if (!(await isAdminWallet(wallet))) throw new Error("ADMIN_DENIED");
   return createAdminClient();
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await adminClient(request.nextUrl.searchParams.get("walletAddress") ?? "");
+    const supabase = await adminClient(request, request.nextUrl.searchParams.get("walletAddress") ?? "");
     const { data, error } = await supabase
       .from("campaign_milestones")
       .select("id, campaign_id, title, description, requirement, percentage, status, proof_url, rejection_reason, on_chain_index, proof_cid, proof_tx_hash, review_tx_hash, release_tx_hash, created_at, updated_at, campaigns!inner(id, shelter_id, title, campaign_status, goal_amount, current_amount, contract_address, created_at, updated_at)")
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const supabase = await adminClient(String(body.walletAddress ?? ""));
+    const supabase = await adminClient(request, String(body.walletAddress ?? ""));
     const milestoneId = String(body.milestoneId ?? "");
     const action = String(body.action ?? "");
     const reason = String(body.rejectionReason ?? "").trim();

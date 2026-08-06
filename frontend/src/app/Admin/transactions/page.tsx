@@ -238,10 +238,6 @@ export default function AdminTransactionsPage() {
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">Financial ledger</p>
               <h1 className="mt-1 text-3xl font-bold tracking-tight text-stone-950">Transactions</h1>
               <p className="mt-1 text-sm text-stone-500">Verified donations, refunds, and milestone fund releases on Sepolia.</p>
-              <div className="mt-3 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-bold text-emerald-700 shadow-sm">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" />
-                Live · updates every 3 seconds
-              </div>
             </div>
             <div className="w-full shrink-0 md:w-[26rem] lg:w-[32rem]">
               <EthMyrMarketCard
@@ -328,7 +324,7 @@ export default function AdminTransactionsPage() {
             ) : null}
             {sidebarOpen ? (
               <p className="hidden border-b border-orange-100 bg-orange-50/40 px-5 py-2 text-[11px] font-semibold text-stone-500 lg:block">
-                Scroll horizontally to view all transaction fields and evidence →
+                Scroll horizontally to view all transaction fields and evidence ↗
               </p>
             ) : null}
             <div className="overflow-x-auto">

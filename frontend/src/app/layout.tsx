@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import Web3ContextProvider from "@/context/web3";
 import { DisconnectOverlayHost } from "./components/DisconnectOverlayHost";
+import { WalletSessionGuard } from "./components/WalletSessionGuard";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,7 +42,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Web3ContextProvider cookies={cookies}>
-          {children}
+          <WalletSessionGuard>{children}</WalletSessionGuard>
           <DisconnectOverlayHost />
         </Web3ContextProvider>
       </body>

@@ -617,10 +617,10 @@ function DeactivatedShelterCard({
         <p className="rounded-2xl border border-orange-200 bg-amber-50 px-4 py-3 text-sm font-bold text-stone-700">
           If you believe this is a mistake, contact{" "}
           <a
-            href="mailto:admin@gmail.com"
+            href="mailto:pawchain.admin@gmail.com"
             className="text-[var(--color-orange)] underline decoration-2 underline-offset-2"
           >
-            admin@gmail.com
+            pawchain.admin@gmail.com
           </a>
           .
         </p>

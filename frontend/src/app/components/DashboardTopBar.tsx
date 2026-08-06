@@ -44,7 +44,7 @@ export function DashboardTopBar({
   const { address, isConnected } = useAppKitAccount();
   const isAdmin = role.toLowerCase() === "admin";
   const resolvedNotificationHref =
-    notificationHref ?? (isAdmin ? "/Admin/dashboard" : undefined);
+    notificationHref ?? (isAdmin ? "/Admin/notifications" : undefined);
   const resolvedNotificationPreview = isAdmin
     ? adminNotifications.slice(0, 6)
     : notificationPreview;
@@ -54,6 +54,9 @@ export function DashboardTopBar({
   const hasUnread = unreadCount > 0;
   const adminReadStorageKey = address
     ? `pawchain:admin-notifications-read:${address.toLowerCase()}`
+    : "";
+  const adminClearedStorageKey = address
+    ? `pawchain:admin-notifications-cleared:${address.toLowerCase()}`
     : "";
 
   const markAdminNotificationsRead = () => {
@@ -93,9 +96,14 @@ export function DashboardTopBar({
             window.localStorage.getItem(adminReadStorageKey) || "[]",
           ) as string[],
         );
+        const clearedIds = new Set<string>(
+          JSON.parse(
+            window.localStorage.getItem(adminClearedStorageKey) || "[]",
+          ) as string[],
+        );
         const notifications = (
           Array.isArray(result.notifications) ? result.notifications : []
-        ).map((item: NotificationPreview) => ({
+        ).filter((item: NotificationPreview) => !clearedIds.has(item.id)).map((item: NotificationPreview) => ({
           ...item,
           is_read: storedReadIds.has(item.id),
         }));
@@ -110,15 +118,17 @@ export function DashboardTopBar({
     };
 
     void loadAdminNotifications();
+    window.addEventListener("pawchain:admin-notifications-updated", loadAdminNotifications);
     const interval = window.setInterval(
       () => void loadAdminNotifications(),
       30_000,
     );
     return () => {
       active = false;
+      window.removeEventListener("pawchain:admin-notifications-updated", loadAdminNotifications);
       window.clearInterval(interval);
     };
-  }, [address, adminReadStorageKey, isAdmin, isConnected]);
+  }, [address, adminClearedStorageKey, adminReadStorageKey, isAdmin, isConnected]);
 
   useEffect(() => {
     if (!isNotificationOpen) {
@@ -252,7 +262,7 @@ export function DashboardTopBar({
                       <p className="text-sm font-black text-stone-950">
                         {hasUnread
                           ? isAdmin
-                            ? `${unreadCount} pending request${unreadCount === 1 ? "" : "s"}`
+                            ? `${unreadCount} pending reminder${unreadCount === 1 ? "" : "s"}`
                             : `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`
                           : "All caught up"}
                       </p>
@@ -309,22 +319,20 @@ export function DashboardTopBar({
                         </p>
                         <p className="mt-1 text-xs font-semibold text-stone-500">
                           {isAdmin
-                            ? "Shelter, campaign, and milestone proof requests will appear here."
+                            ? "Review requests and Hero Donor certificate reminders will appear here."
                             : "Donation, refund, and milestone updates will appear here."}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {!isAdmin ? (
-                    <Link
-                      href={resolvedNotificationHref}
-                      onClick={() => setIsNotificationOpen(false)}
-                      className="block border-t border-orange-100 px-4 py-3 text-center text-sm font-black text-[var(--color-orange)] transition hover:bg-orange-50"
-                    >
-                      View all notifications
-                    </Link>
-                  ) : null}
+                  <Link
+                    href={resolvedNotificationHref}
+                    onClick={() => setIsNotificationOpen(false)}
+                    className="block border-t border-orange-100 px-4 py-3 text-center text-sm font-black text-[var(--color-orange)] transition hover:bg-orange-50"
+                  >
+                    View all notifications
+                  </Link>
                 </div>
               ) : null}
             </div>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { decodeEventLog, formatEther, isAddress, type Address, type Hash } from "viem";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
@@ -9,6 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const walletAddress = String(body.walletAddress ?? "").trim();
+    requireWalletSession(request, walletAddress);
     const campaignId = String(body.campaignId ?? "").trim();
     const txHash = String(body.txHash ?? "").trim();
 

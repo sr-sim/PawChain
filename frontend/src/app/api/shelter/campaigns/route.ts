@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveShelter, ShelterAccessError } from "@/lib/active-shelter";
 import { withLiveCampaignStatuses } from "@/lib/shelter-campaign-status";
@@ -43,6 +44,7 @@ async function getShelterProfile(walletAddress: string) {
 export async function GET(request: NextRequest) {
   try {
     const walletAddress = request.nextUrl.searchParams.get("walletAddress");
+    requireWalletSession(request, walletAddress);
 
     if (!walletAddress) {
       return NextResponse.json(
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const walletAddress = String(body.walletAddress ?? "").trim();
+    requireWalletSession(request, walletAddress);
     const title = String(body.title ?? "").trim();
     const description = String(body.description ?? "").trim();
     const imageUrl = String(body.imageUrl ?? "").trim();
