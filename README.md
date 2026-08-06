@@ -125,6 +125,20 @@ PawChain combines:
 - Supports underfunded expiry, cancellation, and donor refund claims.
 - Uses state changes and reentrancy protection to prevent repeated withdrawals or claims.
 
+## 📜 Contracts deployed
+
+The current PawChain contracts are deployed on Ethereum Sepolia:
+
+- **RoleNFT:** [`0x2F2bFC356D87a901CDe862B5D0DFc20017838C43`](https://sepolia.etherscan.io/address/0x2F2bFC356D87a901CDe862B5D0DFc20017838C43#code)
+- **CampaignFactory:** [`0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa`](https://sepolia.etherscan.io/address/0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa#code)
+
+Use these addresses in `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_ROLE_NFT_ADDRESS=0x2F2bFC356D87a901CDe862B5D0DFc20017838C43
+NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
+```
+
 ## 💡 Core assumptions
 
 ### Internal administrators
@@ -372,25 +386,7 @@ Configure the user's wallet with:
 
 Fund administrator, shelter, and donor test wallets with Sepolia ETH before testing blockchain actions.
 
-### 7. Seed demo RoleNFTs (optional)
-
-The included seed script mints roles for the demo wallet addresses declared in `frontend/scripts/seed-role-nfts.mjs`:
-
-```powershell
-npm.cmd run seed:role-nfts
-```
-
-Before running it, confirm that:
-
-- `frontend/.env.local` exists.
-- `ROLE_NFT_MINTER_PRIVATE_KEY` controls an authorized administrator wallet.
-- The RoleNFT address, RPC URL, and chain ID all refer to Sepolia.
-- The administrator wallet has Sepolia ETH.
-- The hard-coded demo wallet addresses in the seed script are the intended recipients.
-
-The script skips a wallet that already owns a RoleNFT.
-
-### 8. Start the application
+### 7. Start the application
 
 From the repository root:
 
@@ -401,15 +397,6 @@ npm.cmd run frontend
 Open [http://localhost:3000](http://localhost:3000), connect a wallet on Sepolia, and complete the wallet-signature authentication flow.
 
 For local Hardhat development instead of Sepolia, use `npm.cmd run dev:all`. That workflow deploys fresh local contracts, so use chain ID `31337`, the local RPC URL `http://127.0.0.1:8545`, and the newly emitted local contract addresses.
-
-### 9. Production build
-
-```powershell
-npm.cmd run build:frontend
-npm.cmd --prefix frontend run start
-```
-
-The build downloads Geist fonts through `next/font`, so the first production build requires internet access to Google Fonts unless the fonts are bundled locally.
 
 ### Setup checklist
 
