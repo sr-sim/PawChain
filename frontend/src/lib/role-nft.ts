@@ -363,6 +363,58 @@ export async function getRoleNFTStatus(walletAddress: string) {
   };
 }
 
+export async function getRoleBadgeSummary(walletAddress: string): Promise<{
+  hasBadge: boolean;
+  role: ContractRole | null;
+  donorLevel: DonorBadgeLevel | null;
+}> {
+  const config = getRoleNFTConfig();
+  const wallet = normalizeWallet(walletAddress);
+  const publicClient = createPublicClient({
+    chain: config.chain,
+    transport: http(config.rpcUrl),
+  });
+
+  const hasNFT = await publicClient.readContract({
+    address: config.address,
+    abi: roleNFTAbi,
+    functionName: "hasRoleNFT",
+    args: [wallet],
+  });
+  if (!hasNFT) {
+    return { hasBadge: false, role: null, donorLevel: null };
+  }
+
+  const role = await publicClient.readContract({
+    address: config.address,
+    abi: roleNFTAbi,
+    functionName: "getUserRole",
+    args: [wallet],
+  });
+  if (role === "Shelter") {
+    return { hasBadge: true, role, donorLevel: null };
+  }
+
+  const tokenId = await publicClient.readContract({
+    address: config.address,
+    abi: roleNFTAbi,
+    functionName: "userTokenId",
+    args: [wallet],
+  });
+  const levelId = await publicClient.readContract({
+    address: config.address,
+    abi: roleNFTAbi,
+    functionName: "donorLevelOf",
+    args: [tokenId],
+  });
+
+  return {
+    hasBadge: true,
+    role: role === "Donor" ? role : null,
+    donorLevel: donorLevelsById[Number(levelId)] ?? null,
+  };
+}
+
 export async function mintRoleNFT(walletAddress: string, role: DbRole) {
   const config = getRoleNFTConfig();
   const wallet = normalizeWallet(walletAddress);

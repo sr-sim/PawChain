@@ -285,6 +285,92 @@ html {
     rgba(255, 255, 255, 0.72);
 }
 
+.donor-thin-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 180ms ease;
+}
+
+.donor-thin-scroll:hover,
+.donor-thin-scroll:focus-within {
+  scrollbar-color: rgba(var(--color-orange-rgb), 0.28) transparent;
+}
+
+.donor-thin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.donor-thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.donor-thin-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.donor-thin-scroll:hover::-webkit-scrollbar-thumb,
+.donor-thin-scroll:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(var(--color-orange-rgb), 0.24);
+  background-clip: padding-box;
+}
+
+.donor-thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--color-orange-rgb), 0.38);
+  background-clip: padding-box;
+}
+
+.donor-ledger-progress {
+  position: relative;
+  overflow: hidden;
+  background-size: 180% 100%;
+  animation: donor-ledger-flow 3.2s ease-in-out infinite;
+}
+
+.donor-ledger-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: donor-ledger-scan 2.4s ease-in-out infinite;
+}
+
+@keyframes donor-ledger-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes donor-ledger-scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .donor-ledger-progress,
+  .donor-ledger-progress::after {
+    animation: none;
+  }
+}
+
 .donor-step-dot {
   animation: donor-step-pulse 2.6s ease-in-out infinite;
 }

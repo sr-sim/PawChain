@@ -59,7 +59,7 @@ const navigation = [
   "Dashboard",
   "Shelter Verification",
   "Campaign Management",
-  "User Management",
+  "Donor Management",
   "Milestone Verification",
   "Transactions",
   "Analytics",
@@ -116,7 +116,7 @@ function Icon({ name }: { name: string }) {
     "Campaign Management": <path d="M5 19V7l12-3v18L5 19Zm12-10h2a3 3 0 0 1 0 6h-2" />,
     "Milestone Verification": <path d="m5 12 4 4L19 6M5 5h6M5 19h14" />,
     Transactions: <path d="M4 7h16M4 12h16M4 17h10M17 15l3 2-3 2" />,
-    "User Management": <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 10c1-5 3-7 7-7s6 2 7 7m1-10a3 3 0 1 0 0-6m1 9c2 .7 3.3 3 4 6" />,
+    "Donor Management": <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 10c1-5 3-7 7-7s6 2 7 7m1-10a3 3 0 1 0 0-6m1 9c2 .7 3.3 3 4 6" />,
     Analytics: <path d="M4 20V10m6 10V4m6 16v-7m5 7H2" />,
   };
   return (

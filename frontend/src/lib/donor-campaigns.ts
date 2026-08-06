@@ -58,6 +58,11 @@ type ShelterVisualRow = {
   shelter_image_url?: string | null;
 };
 
+type CampaignDonorRow = {
+  campaign_id: string;
+  donor_id: string;
+};
+
 type OnChainCampaignSnapshot = {
   totalRaisedEth: number;
   goalEth: number;
@@ -148,7 +153,7 @@ function getOnChainStatusLabel(status: number) {
   if (status === 1) return "Completed";
   if (status === 2) return "Refunding";
   if (status === 3) return "Closed";
-  return "Blockchain";
+  return "Unknown";
 }
 
 function getCampaignStatusLabel(status: string) {
@@ -294,6 +299,12 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
     .order("on_chain_index", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true });
 
+  const { data: campaignDonorRows } = await supabase
+    .from("donations")
+    .select("campaign_id, donor_id")
+    .in("campaign_id", campaignIds)
+    .eq("status", "confirmed");
+
   const { data: profileRows } =
     shelterIds.length > 0
       ? await supabase
@@ -368,6 +379,12 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       visual.shelter_image_url ?? null,
     ]),
   );
+  const donorIdsByCampaign = new Map<string, Set<string>>();
+  ((campaignDonorRows ?? []) as CampaignDonorRow[]).forEach((donation) => {
+    const donorIds = donorIdsByCampaign.get(donation.campaign_id) ?? new Set<string>();
+    donorIds.add(donation.donor_id);
+    donorIdsByCampaign.set(donation.campaign_id, donorIds);
+  });
   const onChainSnapshots = await getOnChainCampaignSnapshots(campaigns);
 
   return campaigns.map((campaign) => {
@@ -405,7 +422,7 @@ async function mapCampaignRows(campaigns: CampaignRow[]): Promise<DonorCampaign[
       onChainGoalEth: onChainSnapshot?.goalEth,
       onChainTotalRaisedEth: onChainSnapshot?.totalRaisedEth,
       currentMilestoneIndex: onChainSnapshot?.currentMilestoneIndex,
-      donors: 0,
+      donors: donorIdsByCampaign.get(campaign.id)?.size ?? 0,
       daysLeft: getDaysLeft(campaign.created_at, campaign.duration_days),
       verifiedSince: campaign.created_at
         ? String(new Date(campaign.created_at).getFullYear())

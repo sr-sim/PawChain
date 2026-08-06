@@ -85,6 +85,13 @@ export function EthMyrMarketCard({
   history,
   className = "",
 }: EthMyrMarketCardProps) {
+  const updatedTime = updatedAt
+    ? new Intl.DateTimeFormat(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(updatedAt))
+    : null;
+
   return (
     <section
       className={`w-full rounded-2xl border border-orange-100 bg-white/80 p-4 shadow-sm backdrop-blur ${className}`}
@@ -99,15 +106,11 @@ export function EthMyrMarketCard({
             {loading ? "Loading rate…" : `1 ETH ≈ ${formatRate(rate)}`}
           </p>
           <p className="mt-1 text-[10px] font-bold text-stone-400">
-            {source === "coingecko"
-              ? "Live market estimate"
-              : "Configured fallback estimate"}
-            {updatedAt
-              ? ` · Updated ${new Intl.DateTimeFormat("en-MY", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date(updatedAt))}`
-              : ""}
+            {source === "coingecko" && updatedTime !== null
+              ? `Last updated ${updatedTime}`
+              : source === "fallback"
+                ? "Using configured fallback rate"
+                : ""}
           </p>
         </div>
         <a
@@ -128,7 +131,7 @@ export function EthMyrMarketCard({
 }
 
 export function LiveEthMyrMarketCard({ className = "" }: { className?: string }) {
-  const { rate, source, updatedAt, loading, history } = useEthMyrRate();
+  const { rate, source, updatedAt, loading, history } = useEthMyrRate(30_000);
 
   return (
     <EthMyrMarketCard

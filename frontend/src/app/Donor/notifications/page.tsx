@@ -238,12 +238,13 @@ export default function DonorNotificationsPage() {
               type="button"
               onClick={() => setActiveTab(tab)}
               className={[
-                "rounded-full border px-4 py-2 text-sm font-black transition",
+                "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black transition",
                 activeTab === tab
-                  ? "border-[var(--color-orange)] bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200/70"
+                  ? "relative z-10 scale-110 border-[var(--color-orange)] bg-[var(--color-orange)] text-white shadow-lg shadow-orange-200/70 ring-2 ring-orange-100"
                   : "border-orange-100 bg-orange-50/60 text-stone-700 hover:bg-orange-100",
               ].join(" ")}
             >
+              <span className={`${activeTab === tab ? "h-2.5 w-2.5 bg-white ring-2 ring-white/30" : "h-1.5 w-1.5 bg-current"} rounded-full opacity-90 transition-all`} />
               {tab}
             </button>
           ))}

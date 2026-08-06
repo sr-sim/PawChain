@@ -4,9 +4,6 @@ import { isAdminWallet } from "@/lib/admin-wallets";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getVerifiedFinancialEvents } from "@/lib/verified-financial-events";
 
-const validHash = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value);
-
 const weiToEth = (value: bigint) => Number(formatEther(value));
 const safeWei = (value: unknown) => {
   try {
@@ -49,18 +46,12 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     const [
-      { data: donations, error: donationError },
       { data: campaigns, error: campaignError },
       { data: milestones, error: milestoneError },
       { data: applications, error: applicationError },
       { data: profiles, error: profileError },
       verifiedFinancialEvents,
     ] = await Promise.all([
-      supabase
-        .from("donations")
-        .select(
-          "id, donor_id, campaign_id, amount, amount_wei, tx_hash, refund_tx_hash, refunded_at, status, created_at",
-        ),
       supabase
         .from("campaigns")
         .select(
@@ -77,7 +68,6 @@ export async function GET(request: NextRequest) {
       supabase.from("profiles").select("id, wallet_address, account_status"),
       getVerifiedFinancialEvents(),
     ]);
-    if (donationError) throw donationError;
     if (campaignError) throw campaignError;
     if (milestoneError) throw milestoneError;
     if (applicationError) throw applicationError;
@@ -85,7 +75,6 @@ export async function GET(request: NextRequest) {
 
     const campaignRows = campaigns ?? [];
     const milestoneRows = milestones ?? [];
-    const donationRows = donations ?? [];
     const scopedCampaigns =
       campaignFilter === "all"
         ? campaignRows
@@ -93,9 +82,6 @@ export async function GET(request: NextRequest) {
     const campaignIds = new Set(scopedCampaigns.map((item) => item.id));
     const scopedEvents = verifiedFinancialEvents.filter((item) =>
       campaignIds.has(item.campaignId),
-    );
-    const scopedDonations = donationRows.filter((item) =>
-      campaignIds.has(item.campaign_id),
     );
     const scopedMilestones = milestoneRows.filter((item) =>
       campaignIds.has(item.campaign_id),
@@ -175,15 +161,46 @@ export async function GET(request: NextRequest) {
       bucket.donors.add(item.walletAddress.toLowerCase());
       trendMap.set(key, bucket);
     }
-    const trend = [...trendMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, value]) => ({
-        date,
-        amountEth: weiToEth(value.amountWei),
-        amountMyr: value.amountMyr,
-        count: value.count,
-        uniqueDonors: value.donors.size,
-      }));
+    const trendStart =
+      period === "all" && confirmed.length
+        ? new Date(
+            Math.min(...confirmed.map((item) => new Date(item.occurredAt).getTime())),
+          )
+        : from;
+    const trend = confirmed.length
+      ? Array.from(
+          {
+            length:
+              Math.floor(
+                (Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()) -
+                  Date.UTC(
+                    trendStart.getUTCFullYear(),
+                    trendStart.getUTCMonth(),
+                    trendStart.getUTCDate(),
+                  )) /
+                  86_400_000,
+              ) + 1,
+          },
+          (_, index) => {
+            const day = new Date(
+              Date.UTC(
+                trendStart.getUTCFullYear(),
+                trendStart.getUTCMonth(),
+                trendStart.getUTCDate() + index,
+              ),
+            );
+            const date = day.toISOString().slice(0, 10);
+            const value = trendMap.get(date);
+            return {
+              date,
+              amountEth: value ? weiToEth(value.amountWei) : 0,
+              amountMyr: value?.amountMyr ?? 0,
+              count: value?.count ?? 0,
+              uniqueDonors: value?.donors.size ?? 0,
+            };
+          },
+        )
+      : [];
 
     const campaignPerformance = scopedCampaigns
       .map((campaign) => {
@@ -316,89 +333,21 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => b.raisedEth - a.raisedEth);
 
-    const verifiedDonationHashes = new Set(
-      scopedEvents
-        .filter((item) => item.transactionType === "donation")
-        .map((item) => item.txHash.toLowerCase()),
+    const verifiedTransactions = scopedEvents.filter((item) =>
+      inRange(item.occurredAt),
     );
-    const verifiedRefundHashes = new Set(
-      scopedEvents
-        .filter((item) => item.transactionType === "refund")
-        .map((item) => item.txHash.toLowerCase()),
-    );
-    const actions = [
-      ...scopedDonations.map((item) => ({
-        type: "Donation",
-        status: !validHash(item.tx_hash)
-          ? "pending"
-          : verifiedDonationHashes.has(item.tx_hash.toLowerCase())
-            ? "confirmed"
-            : "failed",
-      })),
-      ...scopedDonations
-        .filter((item) => item.refund_tx_hash)
-        .map((item) => ({
-          type: "Refund",
-          status:
-            validHash(item.refund_tx_hash) &&
-            verifiedRefundHashes.has(item.refund_tx_hash.toLowerCase())
-              ? "confirmed"
-              : "failed",
-        })),
-      ...scopedCampaigns
-        .filter((item) => item.deployment_tx_hash)
-        .map((item) => ({
-          type: "Campaign deployment",
-          status: validHash(item.deployment_tx_hash) ? "confirmed" : "failed",
-        })),
-      ...scopedCampaigns
-        .filter((item) => item.cancellation_tx_hash)
-        .map((item) => ({
-          type: "Campaign cancellation",
-          status: validHash(item.cancellation_tx_hash)
-            ? "confirmed"
-            : "failed",
-        })),
-      ...scopedMilestones.flatMap((item) => [
-        ...(item.proof_tx_hash
-          ? [
-              {
-                type: "Proof submission",
-                status: validHash(item.proof_tx_hash) ? "confirmed" : "failed",
-              },
-            ]
-          : []),
-        ...(item.review_tx_hash
-          ? [
-              {
-                type: "Milestone review",
-                status: validHash(item.review_tx_hash) ? "confirmed" : "failed",
-              },
-            ]
-          : []),
-        ...(item.release_tx_hash
-          ? [
-              {
-                type: "Fund release",
-                status: verifiedReleasedMilestoneIds.has(item.id)
-                  ? "confirmed"
-                  : "failed",
-              },
-            ]
-          : []),
-      ]),
-    ];
-    const actionTypes = [
-      "Donation",
-      "Campaign deployment",
-      "Campaign cancellation",
-      "Proof submission",
-      "Milestone review",
-      "Fund release",
-      "Refund",
-    ].map((type) => ({
-      type,
-      count: actions.filter((item) => item.type === type).length,
+    const transactionLabels = {
+      donation: "Donation",
+      fund_release: "Fund release",
+      refund: "Refund",
+    } as const;
+    const actionTypes = (
+      ["donation", "fund_release", "refund"] as const
+    ).map((transactionType) => ({
+      type: transactionLabels[transactionType],
+      count: verifiedTransactions.filter(
+        (item) => item.transactionType === transactionType,
+      ).length,
     }));
 
     return NextResponse.json({
@@ -470,9 +419,9 @@ export async function GET(request: NextRequest) {
         shelters: shelterInsights.slice(0, 10),
       },
       blockchainHealth: {
-        confirmed: actions.filter((item) => item.status === "confirmed").length,
-        pending: actions.filter((item) => item.status === "pending").length,
-        failed: actions.filter((item) => item.status === "failed").length,
+        confirmed: verifiedTransactions.length,
+        pending: 0,
+        failed: 0,
         actionTypes,
       },
     });

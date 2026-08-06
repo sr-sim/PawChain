@@ -346,7 +346,6 @@ export default function AdminTransactionsPage() {
                     <span className="font-mono text-xs text-stone-600">{shortWallet(item.walletAddress)}</span>
                     <div>
                       <p className="text-sm font-bold text-stone-900">{eth(item.amountWei)}</p>
-                      <p className="mt-0.5 text-[11px] font-medium text-stone-400">≈ {money(weiToMyr(item.amountWei))} <span className="whitespace-nowrap">(current rate)</span></p>
                       <p className={`mt-0.5 text-[10px] font-bold uppercase ${item.verifiedOnChain ? "text-emerald-600" : "text-stone-400"}`}>{item.verifiedOnChain ? "Verified on-chain" : item.status}</p>
                     </div>
                     <span className="text-xs font-medium text-stone-500">{dateTime(item.occurredAt)}</span>
@@ -380,7 +379,6 @@ export default function AdminTransactionsPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-3"><p className="text-xs font-bold uppercase tracking-wider text-emerald-700">New donation confirmed</p><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" /></div>
               <p className="mt-1 text-lg font-bold text-stone-950">{eth(activeDonation.amountWei)}</p>
-              <p className="text-xs font-medium text-stone-400">≈ {money(weiToMyr(activeDonation.amountWei))} <span className="whitespace-nowrap">(current rate)</span></p>
               <p className="mt-1 truncate text-sm font-medium text-stone-600">{activeDonation.campaignTitle}</p>
               <p className="mt-1 font-mono text-xs text-stone-400">{shortWallet(activeDonation.walletAddress)}</p>
               <div className="mt-3"><TransactionLinks transactions={[{ label: "View donation tx", hash: activeDonation.txHash }]} emptyMessage={false} /></div>
