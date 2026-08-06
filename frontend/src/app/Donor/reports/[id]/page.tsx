@@ -109,7 +109,7 @@ export default async function DonorReportDetailPage({
               {report.subject}
             </h1>
             <p className="mt-2 text-sm font-semibold text-stone-500">
-              {report.id} - Updated {formatDate(report.updated_at)}
+              Updated {formatDate(report.updated_at)}
             </p>
           </div>
           <span
@@ -123,15 +123,13 @@ export default async function DonorReportDetailPage({
         </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+      <section>
         <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
           <h2 className="text-xl font-black text-stone-950">Report summary</h2>
           <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
             {[
               ["Target campaign", campaign?.title ?? "Not linked"],
               ["Target shelter", shelterApplication?.shelter_name ?? "Not linked"],
-              ["Request type", report.request_type.replaceAll("_", " ")],
-              ["Status", report.status],
               ["Submitted", formatDate(report.created_at)],
               ["Latest update", formatDate(report.updated_at)],
             ].map(([label, value]) => (
@@ -162,44 +160,6 @@ export default async function DonorReportDetailPage({
               </p>
             </div>
           ) : null}
-        </div>
-
-        <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-black text-stone-950">Review timeline</h2>
-          <div className="mt-4 space-y-3">
-            {[
-              ["Submitted", "Donor submitted report to admin queue."],
-              [
-                "Admin review",
-                report.status === "pending"
-                  ? "Waiting for admin to review this request."
-                  : "Admin has started reviewing this request.",
-              ],
-              [
-                "Resolution",
-                report.admin_response
-                  ? "Admin response is available above."
-                  : "Admin response or enforcement action will appear here.",
-              ],
-            ].map(([title, description], index) => (
-              <div
-                key={title}
-                className="grid gap-3 rounded-xl border border-orange-100 bg-orange-50/25 p-3 sm:grid-cols-[2rem_1fr]"
-              >
-                <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">
-                  {index + 1}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-stone-950">
-                    {title}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-stone-600">
-                    {description}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
     </div>
