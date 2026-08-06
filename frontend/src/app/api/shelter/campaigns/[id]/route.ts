@@ -42,8 +42,8 @@ async function getShelterProfile(walletAddress: string) {
 }
 
 function validateMilestones(milestones: MilestonePayload[]) {
-  if (milestones.length < 2 || milestones.length > 5) {
-    return { message: "Add between 2 and 5 milestones." };
+  if (milestones.length < 3 || milestones.length > 5) {
+    return { message: "Add at least 3 milestones. Campaigns must have between 3 and 5 milestones." };
   }
 
   const parsedMilestones = milestones.map((milestone) => ({

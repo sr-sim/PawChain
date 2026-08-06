@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { parseProofFiles } from "@/lib/proof-files";
 
 type DonorProofEvidenceProps = {
@@ -18,6 +21,10 @@ function isPdfProof(type: string, dataUrl: string) {
 
 export function DonorProofEvidence({ proofUrl }: DonorProofEvidenceProps) {
   const proofFiles = parseProofFiles(proofUrl);
+  const [previewImage, setPreviewImage] = useState<{
+    name: string;
+    src: string;
+  } | null>(null);
 
   if (proofFiles.length === 0) {
     return null;
@@ -40,12 +47,13 @@ export function DonorProofEvidence({ proofUrl }: DonorProofEvidenceProps) {
 
           if (isImageProof(file.type, file.dataUrl)) {
             return (
-              <a
+              <button
                 key={key}
-                href={file.dataUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="group overflow-hidden rounded-xl border border-orange-100 bg-orange-50/35 transition hover:-translate-y-0.5 hover:border-[var(--color-orange)]"
+                type="button"
+                onClick={() =>
+                  setPreviewImage({ name: file.name, src: file.dataUrl })
+                }
+                className="group overflow-hidden rounded-xl border border-orange-100 bg-orange-50/35 text-left transition hover:-translate-y-0.5 hover:border-[var(--color-orange)]"
               >
                 <img
                   src={file.dataUrl}
@@ -55,7 +63,7 @@ export function DonorProofEvidence({ proofUrl }: DonorProofEvidenceProps) {
                 <p className="truncate px-3 py-2 text-xs font-black text-stone-700">
                   {file.name}
                 </p>
-              </a>
+              </button>
             );
           }
 
@@ -98,6 +106,42 @@ export function DonorProofEvidence({ proofUrl }: DonorProofEvidenceProps) {
           );
         })}
       </div>
+
+      {previewImage ? (
+        <div
+          className="fixed inset-0 z-[9999] grid place-items-center bg-stone-950/70 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Preview ${previewImage.name}`}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="max-h-[92vh] w-[min(60rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-[0_30px_100px_rgba(0,0,0,0.35)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-orange-100 px-4 py-3">
+              <p className="truncate text-sm font-black text-stone-950">
+                {previewImage.name}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-orange-100 bg-orange-50 text-lg font-black text-[var(--color-orange)] transition hover:bg-orange-100"
+                aria-label="Close proof preview"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid max-h-[calc(92vh-4rem)] place-items-center overflow-auto bg-orange-50/25 p-3">
+              <img
+                src={previewImage.src}
+                alt={previewImage.name}
+                className="max-h-[calc(92vh-6rem)] max-w-full rounded-2xl object-contain shadow-sm"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -145,9 +145,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (milestones.length < 2 || milestones.length > 5) {
+    if (milestones.length < 3 || milestones.length > 5) {
       return NextResponse.json(
-        { message: "Add between 2 and 5 milestones." },
+        { message: "Add at least 3 milestones. Campaigns must have between 3 and 5 milestones." },
         { status: 400 },
       );
     }
