@@ -9,6 +9,7 @@ import {
 import { getLatestEthMyrRate } from "@/lib/currency";
 import { getDashboardProfile } from "@/lib/dashboard-access";
 import { getDonorDonations } from "@/lib/donor-donations";
+import { formatPercentage } from "@/lib/format-percentage";
 
 type DonorBadgesPageProps = {
   searchParams?: Promise<{
@@ -157,7 +158,7 @@ export default async function DonorBadgesPage({
             <span>{progress.currentTier.name}</span>
             <span>
               {progress.nextTier
-                ? `${Math.round(progress.progress)}% to next`
+                ? `${formatPercentage(progress.progress)}% to next`
                 : "100%"}
             </span>
           </div>

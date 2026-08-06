@@ -5,9 +5,11 @@ import {
 import { getDonorDonations } from "@/lib/donor-donations";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { DonorProofEvidence } from "@/app/components/DonorProofEvidence";
 import { RefundClaimButton } from "./RefundClaimButton";
 import { getLatestEthMyrRate } from "@/lib/currency";
 import { AnimatedEthTotal } from "./AnimatedEthTotal";
+import { formatPercentage } from "@/lib/format-percentage";
 
 type TrackingPageProps = {
   searchParams?: Promise<{
@@ -91,7 +93,6 @@ function formatMyr(value: number) {
 
 function formatEth(value: number) {
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }
@@ -283,6 +284,16 @@ export default async function DonorTrackingPage({
 
     return true;
   });
+  const campaignDonationTotals = donationData.donations.reduce(
+    (map, donation) => {
+      map.set(
+        donation.campaignId,
+        (map.get(donation.campaignId) ?? 0) + donation.amountEth,
+      );
+      return map;
+    },
+    new Map<string, number>(),
+  );
   const filteredReleaseCampaigns = campaigns.filter((campaign) => {
     if (activeReleaseFilter === "all") return true;
     const campaignStatus = campaign.status.toLowerCase();
@@ -404,13 +415,16 @@ export default async function DonorTrackingPage({
                         <p className="mt-1 text-xs font-medium text-stone-500">
                           {donation.shelterName}
                         </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="mt-2 flex items-center justify-between gap-3">
                           <StatusPill status={donation.campaignStatus} />
-                          <span className="text-xs font-semibold text-stone-500">
-                            Campaign progress {donation.campaignProgress}%
+                          <span className="shrink-0 text-right text-xs font-black text-stone-500">
+                            {formatPercentage(donation.campaignProgress)}%
                           </span>
                         </div>
-                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100">
+                        <div
+                          className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-100"
+                          title={`Campaign progress ${formatPercentage(donation.campaignProgress)}%`}
+                        >
                           <div
                             className="donor-ledger-progress h-full rounded-full bg-[linear-gradient(90deg,#f97316,#f59e0b,#facc15)]"
                             style={{
@@ -458,7 +472,9 @@ export default async function DonorTrackingPage({
                                 </p>
                                 {donation.refundAmountEth > 0 ? (
                                   <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
-                                    {formatMyr(donation.refundAmount)}
+                                    {formatMyr(
+                                      donation.refundAmountEth * ethMyrRate,
+                                    )}
                                   </p>
                                 ) : null}
                               </div>
@@ -502,6 +518,11 @@ export default async function DonorTrackingPage({
                         <RefundClaimButton
                           campaignId={donation.campaignId}
                           contractAddress={donation.contractAddress}
+                          donationAmountEth={donation.amountEth}
+                          campaignDonationTotalEth={
+                            campaignDonationTotals.get(donation.campaignId) ??
+                            donation.amountEth
+                          }
                         />
                       </div>
                       <div className="text-left lg:text-center">
@@ -670,7 +691,7 @@ export default async function DonorTrackingPage({
                       </h3>
                       <div className="mt-3 pl-2">
                         <div className="flex items-center justify-between gap-4 text-xs font-black text-stone-600">
-                          <span>Total campaign funding: {campaign.raised}%</span>
+                          <span>Total campaign funding: {formatPercentage(campaign.raised)}%</span>
                           <span>{campaign.goal}</span>
                         </div>
                         <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-white shadow-inner">
@@ -696,6 +717,7 @@ export default async function DonorTrackingPage({
                       campaign.milestoneDetails ??
                       campaign.milestones.map((milestone) => ({
                         ...milestone,
+                        description: "",
                         requirement: "",
                         status: "Pending",
                         proofUrl: null,
@@ -719,12 +741,17 @@ export default async function DonorTrackingPage({
                           <p className="text-sm font-black text-stone-950">
                             {milestone.title}
                           </p>
+                          {milestone.description ? (
+                            <p className="mt-2 text-xs leading-5 text-stone-600">
+                              {milestone.description}
+                            </p>
+                          ) : null}
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             <div className="rounded-xl border border-orange-100 bg-orange-50/45 px-3 py-2 text-left">
                               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-700">This stage unlocks</p>
                               <p className="mt-1 text-left text-xs font-black text-stone-900">
                                 {formatMilestoneValue(campaign.onChainGoalEth, campaign.goalAmount, milestone.percentage, ethMyrRate)}
-                                <span className="mt-0.5 block text-left font-semibold text-stone-500">({milestone.percentage}% of campaign)</span>
+                                <span className="mt-0.5 block text-left font-semibold text-stone-500">({formatPercentage(milestone.percentage)}% of campaign)</span>
                               </p>
                             </div>
                             <div className="rounded-xl border border-violet-100 bg-violet-50/45 px-3 py-2 text-left">
@@ -752,11 +779,7 @@ export default async function DonorTrackingPage({
                               </p>
                             </div>
                           </div>
-                          {milestone.requirement ? (
-                            <p className="mt-1 text-xs font-medium text-stone-500">
-                              Proof required: {milestone.requirement}
-                            </p>
-                          ) : null}
+                          <DonorProofEvidence proofUrl={milestone.proofUrl} />
                           <div className="mt-2 flex gap-2 rounded-xl border border-slate-200 bg-slate-50/75 px-3 py-2.5">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden="true">
                               <path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" />

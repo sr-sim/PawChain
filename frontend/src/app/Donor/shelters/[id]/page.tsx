@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDonorShelterById } from "@/lib/donor-campaigns";
+import { formatPercentage } from "@/lib/format-percentage";
 
 export const dynamic = "force-dynamic";
 
@@ -174,7 +175,7 @@ export default async function DonorShelterProfilePage({
                 <div className="flex items-center justify-between text-xs font-semibold text-stone-500">
                   <span>Raised</span>
                   <span>
-                    {campaign.raised}% of {campaign.goal}
+                    {formatPercentage(campaign.raised)}% of {campaign.goal}
                   </span>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100">

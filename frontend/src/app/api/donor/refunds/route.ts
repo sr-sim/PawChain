@@ -115,21 +115,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: existingDonation, error: existingDonationError } =
+    const { data: existingDonations, error: existingDonationError } =
       await supabase
         .from("donations")
         .select("id, amount, amount_wei, refund_tx_hash")
         .eq("donor_id", donor.id)
-        .eq("campaign_id", campaignId)
-        .maybeSingle();
+        .eq("campaign_id", campaignId);
     if (existingDonationError) throw existingDonationError;
-    if (!existingDonation) {
+    if (!existingDonations?.length) {
       return NextResponse.json(
         { message: "Donation record was not found for this donor." },
         { status: 404 },
       );
     }
-    if (existingDonation.refund_tx_hash === txHash) {
+
+    const donationRows = existingDonations as {
+      id: string;
+      amount: number | string;
+      amount_wei?: string | null;
+      refund_tx_hash?: string | null;
+    }[];
+
+    if (donationRows.every((donation) => donation.refund_tx_hash === txHash)) {
       return NextResponse.json({ refunded: true, alreadyRecorded: true });
     }
 
@@ -141,14 +148,23 @@ export async function POST(request: NextRequest) {
         status: "refunded",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", existingDonation.id);
+      .eq("donor_id", donor.id)
+      .eq("campaign_id", campaignId);
     if (updateError) throw updateError;
 
     const refundEth = Number(formatEther(refundAmount));
-    const donationEth = existingDonation.amount_wei
-      ? Number(formatEther(BigInt(existingDonation.amount_wei)))
-      : 0;
-    const donationMyr = Number(existingDonation.amount ?? 0);
+    const donationEth = donationRows.reduce(
+      (total, donation) =>
+        total +
+        (donation.amount_wei
+          ? Number(formatEther(BigInt(donation.amount_wei)))
+          : 0),
+      0,
+    );
+    const donationMyr = donationRows.reduce(
+      (total, donation) => total + Number(donation.amount ?? 0),
+      0,
+    );
     const refundMyr =
       donationEth > 0 && donationMyr > 0
         ? (donationMyr / donationEth) * refundEth
@@ -158,14 +174,19 @@ export async function POST(request: NextRequest) {
       donorId: donor.id,
       campaignId,
       title: "Refund claimed",
-      message: `Your ${refundEth.toFixed(6)} ETH refund from ${campaign.title} was confirmed. Approx. MYR ${refundMyr.toLocaleString("en-MY", {
+      message: `Your ${refundEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH refund from ${campaign.title} was confirmed. Approx. MYR ${refundMyr.toLocaleString("en-MY", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}.`,
       status: "success",
     });
 
-    return NextResponse.json({ refunded: true });
+    return NextResponse.json({
+      refunded: true,
+      refundEth,
+      refundMyr,
+      updatedDonations: donationRows.length,
+    });
   } catch (error) {
     return NextResponse.json(
       {

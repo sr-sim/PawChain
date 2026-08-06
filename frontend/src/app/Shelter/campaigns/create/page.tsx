@@ -247,7 +247,7 @@ function formatMYR(value: number | string) {
 
 function formatETH(value: number | string) {
   const amount = Number(value || 0);
-  return `${Number.isFinite(amount) ? amount.toLocaleString("en-MY", { maximumFractionDigits: 8 }) : "0"} ETH`;
+  return `${Number.isFinite(amount) ? amount.toLocaleString("en-MY", { maximumFractionDigits: 6 }) : "0"} ETH`;
 }
 
 function myrToEth(value: string, rate: number) {

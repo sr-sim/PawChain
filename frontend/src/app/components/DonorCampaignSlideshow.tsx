@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { DonorCampaign } from "@/lib/donor-campaigns";
+import { formatPercentage } from "@/lib/format-percentage";
 
 type DonorCampaignSlideshowProps = {
   campaigns: DonorCampaign[];
@@ -14,7 +15,6 @@ function formatEth(value?: number) {
   const amount = Number(value ?? 0);
 
   return `${amount.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }
@@ -121,7 +121,7 @@ export function DonorCampaignSlideshow({
                     <div className="flex justify-between gap-3 text-xs font-bold text-stone-300">
                       <span>{formatEth(raisedEth)} raised</span>
                       <span>
-                        {progress}% of{" "}
+                        {formatPercentage(progress)}% of{" "}
                         {goalEth > 0 ? formatEth(goalEth) : campaign.goal}
                       </span>
                     </div>

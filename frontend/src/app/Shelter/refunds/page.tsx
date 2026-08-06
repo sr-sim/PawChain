@@ -131,7 +131,7 @@ export default async function ShelterRefundsPage({ searchParams }: PageProps) {
                 </p>
                 <h2 className="mt-1 text-4xl font-black tracking-tight text-stone-950">
                   {totalRefundedEth.toLocaleString("en-MY", {
-                    maximumFractionDigits: 8,
+                    maximumFractionDigits: 6,
                   })} ETH
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-stone-500">
@@ -274,7 +274,7 @@ export default async function ShelterRefundsPage({ searchParams }: PageProps) {
                     <div>
                       <p className="font-black text-stone-950">
                         {row.refundEth.toLocaleString("en-MY", {
-                          maximumFractionDigits: 8,
+                          maximumFractionDigits: 6,
                         })} ETH
                       </p>
                       <p className="mt-1 text-xs font-bold text-stone-400">

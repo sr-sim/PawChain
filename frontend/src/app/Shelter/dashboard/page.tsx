@@ -21,7 +21,7 @@ type CampaignChainState = {
 
 function formatETH(value: string | number) {
   return `${Number(value).toLocaleString("en-MY", {
-    maximumFractionDigits: 8,
+    maximumFractionDigits: 6,
   })} ETH`;
 }
 

@@ -19,7 +19,7 @@ function readableAmount(amountWei: string | null, fallback: number | string) {
   if (amountWei) {
     try {
       return `${Number(formatEther(BigInt(amountWei))).toLocaleString("en-MY", {
-        maximumFractionDigits: 8,
+        maximumFractionDigits: 6,
       })} ETH`;
     } catch {
       // Use the stored amount when legacy data does not contain valid wei.
@@ -27,7 +27,7 @@ function readableAmount(amountWei: string | null, fallback: number | string) {
   }
 
   return `${Number(fallback || 0).toLocaleString("en-MY", {
-    maximumFractionDigits: 8,
+    maximumFractionDigits: 6,
   })} ETH`;
 }
 

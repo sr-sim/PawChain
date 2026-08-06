@@ -12,7 +12,9 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { DonorProofEvidence } from "@/app/components/DonorProofEvidence";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
+import { formatPercentage } from "@/lib/format-percentage";
 
 type DonorCampaign = Campaign & {
   imageUrl?: string | null;
@@ -25,7 +27,11 @@ type DonorCampaign = Campaign & {
   deploymentTxHash?: string | null;
   milestoneDetails?: {
     title: string;
+    description?: string;
+    requirement?: string;
     percentage: number;
+    status?: string;
+    proofUrl?: string | null;
     proofTxHash?: string | null;
     reviewTxHash?: string | null;
     releaseTxHash?: string | null;
@@ -34,7 +40,11 @@ type DonorCampaign = Campaign & {
 
 type MilestoneDisplay = {
   title: string;
+  description?: string;
+  requirement?: string;
   percentage: number;
+  status?: string;
+  proofUrl?: string | null;
   proofTxHash?: string | null;
   reviewTxHash?: string | null;
   releaseTxHash?: string | null;
@@ -99,7 +109,6 @@ function formatMyr(value: number) {
 
 function formatEth(value: number) {
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }
@@ -1018,7 +1027,7 @@ export default function DonorDiscoverPage() {
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-400">Campaign funding</p>
                       <p className="text-sm font-black text-[var(--color-orange)]">
-                        {campaign.raised}%
+                        {formatPercentage(campaign.raised)}%
                       </p>
                     </div>
                     <div className="relative mt-3 h-2 rounded-full bg-orange-100">
@@ -1030,7 +1039,7 @@ export default function DonorDiscoverPage() {
                         <span
                           className="absolute top-1/2 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-[var(--color-orange)] text-white shadow-[0_3px_10px_rgba(249,115,22,0.35)] transition-[left] duration-700"
                           style={{ left: `${Math.min(98, Math.max(2, campaign.raised))}%` }}
-                          title={`${campaign.raised}% of the campaign goal reached`}
+                          title={`${formatPercentage(campaign.raised)}% of the campaign goal reached`}
                         >
                           <svg viewBox="0 0 24 24" fill="currentColor" className="h-3.5 w-3.5" aria-hidden="true">
                             <circle cx="7.5" cy="7" r="2.2" />
@@ -1253,7 +1262,7 @@ export default function DonorDiscoverPage() {
                               {campaign.title}
                             </p>
                             <p className="mt-1 text-xs font-medium text-stone-500">
-                              {campaign.raised}% raised - {getCampaignDisplayStatus(campaign)}
+                              {formatPercentage(campaign.raised)}% raised - {getCampaignDisplayStatus(campaign)}
                             </p>
                           </button>
                         ))}
@@ -1417,7 +1426,7 @@ export default function DonorDiscoverPage() {
                       Funding progress
                     </span>
                     <span>
-                      {selectedCampaign.raised}% of {selectedCampaign.goal}
+                      {formatPercentage(selectedCampaign.raised)}% of {selectedCampaign.goal}
                     </span>
                   </div>
                   <div className="mt-3 h-3 overflow-hidden rounded-full bg-orange-100">
@@ -1433,7 +1442,7 @@ export default function DonorDiscoverPage() {
                           ? "Final milestone"
                           : "Current milestone"}
                         : {selectedCurrentMilestone.title} (
-                        {selectedCurrentMilestone.percentage}% release)
+                        {formatPercentage(selectedCurrentMilestone.percentage)}% release)
                       </p>
                       <p className="mt-1 text-xs font-semibold text-stone-500">
                         Stage amount:{" "}
@@ -1483,7 +1492,6 @@ export default function DonorDiscoverPage() {
                     selectedCampaign.raised,
                   );
                   const isLocked = fundingState.tone === "locked";
-
                   return (
                   <div
                     key={milestone.title}
@@ -1538,7 +1546,7 @@ export default function DonorDiscoverPage() {
                               : "text-[var(--color-orange)]",
                           ].join(" ")}
                         >
-                          {milestone.percentage}% release
+                          {formatPercentage(milestone.percentage)}% release
                         </p>
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
                           <div
@@ -1554,8 +1562,13 @@ export default function DonorDiscoverPage() {
                           />
                         </div>
                         <p className="mt-1 text-[11px] font-semibold text-stone-400">
-                          {Number(fundingState.progress.toFixed(2))}% of this stage funded
+                          {formatPercentage(fundingState.progress)}% of this stage funded
                         </p>
+                        {milestone.description ? (
+                          <p className="mt-2 text-xs leading-5 text-stone-600">
+                            {milestone.description}
+                          </p>
+                        ) : null}
                         <p className="text-xs font-semibold text-stone-500">
                           Stage:{" "}
                           {getMilestoneDisplayAmount(
@@ -1573,6 +1586,12 @@ export default function DonorDiscoverPage() {
                             ),
                           )}
                         </p>
+                        {milestone.status ? (
+                          <p className="text-xs font-semibold text-stone-500">
+                            Proof status: {milestone.status}
+                          </p>
+                        ) : null}
+                        <DonorProofEvidence proofUrl={milestone.proofUrl} />
                       </div>
                     </div>
                     <div className="mt-3">
@@ -1606,7 +1625,7 @@ export default function DonorDiscoverPage() {
                         {campaign.title}
                       </p>
                       <p className="mt-1 text-xs font-medium text-stone-500">
-                        {campaign.raised}% raised
+                        {formatPercentage(campaign.raised)}% raised
                       </p>
                     </button>
                   ))}

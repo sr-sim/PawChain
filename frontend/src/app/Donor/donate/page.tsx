@@ -23,6 +23,7 @@ import type { Campaign } from "../campaignData";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
 import { getTransactionExplorerUrl } from "@/lib/block-explorer";
 import { demoEthMyrRate, getPawChainId } from "@/lib/campaign-blockchain";
+import { formatPercentage } from "@/lib/format-percentage";
 import { isWalletRejection } from "@/lib/wallet-errors";
 
 type DonorCampaign = Campaign & {
@@ -77,8 +78,7 @@ function formatEthText(value: number) {
   }
 
   return `${value.toLocaleString("en-MY", {
-    minimumFractionDigits: value < 0.0001 ? 8 : 4,
-    maximumFractionDigits: value < 0.0001 ? 8 : 6,
+    maximumFractionDigits: 6,
   })} ETH`;
 }
 
@@ -338,6 +338,8 @@ export default function DonorDonatePage() {
   const initialCampaign = searchParams.get("campaign");
   const walletAddress = searchParams.get("walletAddress") ?? "";
   const [campaigns, setCampaigns] = useState<DonorCampaign[]>([]);
+  const [optimisticRaisedWeiByCampaign, setOptimisticRaisedWeiByCampaign] =
+    useState<Record<string, string>>({});
   const [campaignLoadError, setCampaignLoadError] = useState("");
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(true);
   const [selectedId, setSelectedId] = useState(initialCampaign ?? "");
@@ -595,7 +597,15 @@ export default function DonorDonatePage() {
     const contractStatus = getContractCampaignStatusLabel(
       Number(statusResult.result),
     );
-    const totalRaisedWei = totalRaisedResult.result as bigint;
+    const chainTotalRaisedWei = totalRaisedResult.result as bigint;
+    const optimisticRaisedWei = optimisticRaisedWeiByCampaign[campaign.id]
+      ? BigInt(optimisticRaisedWeiByCampaign[campaign.id])
+      : null;
+    const totalRaisedWei =
+      optimisticRaisedWei !== null &&
+      optimisticRaisedWei > chainTotalRaisedWei
+        ? optimisticRaisedWei
+        : chainTotalRaisedWei;
     const milestone = normalizeOnChainMilestone(milestoneResult.result);
 
     if (!milestone) {
@@ -684,10 +694,20 @@ export default function DonorDonatePage() {
     onChainBaseReads?.[0]?.status === "success"
       ? (onChainBaseReads[0].result as bigint)
       : null;
-  const onChainTotalRaisedWei =
+  const rawOnChainTotalRaisedWei =
     onChainBaseReads?.[1]?.status === "success"
       ? (onChainBaseReads[1].result as bigint)
       : null;
+  const selectedOptimisticRaisedWei =
+    selectedCampaign && optimisticRaisedWeiByCampaign[selectedCampaign.id]
+      ? BigInt(optimisticRaisedWeiByCampaign[selectedCampaign.id])
+      : null;
+  const onChainTotalRaisedWei =
+    rawOnChainTotalRaisedWei !== null &&
+    selectedOptimisticRaisedWei !== null &&
+    selectedOptimisticRaisedWei > rawOnChainTotalRaisedWei
+      ? selectedOptimisticRaisedWei
+      : (rawOnChainTotalRaisedWei ?? selectedOptimisticRaisedWei);
   const onChainCurrentMilestoneIndex =
     onChainBaseReads?.[2]?.status === "success"
       ? Number(onChainBaseReads[2].result)
@@ -1030,6 +1050,24 @@ export default function DonorDonatePage() {
         throw new Error("Donation transaction failed.");
       }
 
+      setOptimisticRaisedWeiByCampaign((current) => {
+        const currentOptimistic = current[selectedCampaign.id]
+          ? BigInt(current[selectedCampaign.id])
+          : null;
+        const baseRaisedWei =
+          currentOptimistic !== null &&
+          (rawOnChainTotalRaisedWei === null ||
+            currentOptimistic > rawOnChainTotalRaisedWei)
+            ? currentOptimistic
+            : (rawOnChainTotalRaisedWei ?? BigInt(0));
+        const nextRaisedWei = baseRaisedWei + donationValue;
+
+        return {
+          ...current,
+          [selectedCampaign.id]: nextRaisedWei.toString(),
+        };
+      });
+
       const response = await fetch("/api/donor/donations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1249,7 +1287,7 @@ export default function DonorDonatePage() {
                               Campaign funded
                             </span>
                             <span className="shrink-0 text-[var(--color-orange)]">
-                              {Math.round(campaign.raised)}%
+                              {formatPercentage(campaign.raised)}%
                             </span>
                           </div>
                           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-orange-100">

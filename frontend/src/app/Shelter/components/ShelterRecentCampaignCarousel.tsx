@@ -14,7 +14,7 @@ export type ShelterRecentCampaignItem = {
 };
 
 function formatEth(value: number) {
-  return `${value.toLocaleString("en-MY", { maximumFractionDigits: 8 })} ETH`;
+  return `${value.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH`;
 }
 
 function formatLiveMyr(value: number) {

@@ -125,7 +125,7 @@ function getCampaignProgress(campaign?: CampaignRow) {
     return 0;
   }
 
-  return Math.min(100, Math.round((current / goal) * 100));
+  return Math.min(100, Math.round((current / goal) * 10_000) / 100);
 }
 
 async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
@@ -167,7 +167,7 @@ async function getOnChainCampaignSnapshots(campaigns: CampaignRow[]) {
           status === "Completed"
             ? 100
             : goalEth > 0
-              ? Math.min(100, Math.round((totalRaisedEth / goalEth) * 100))
+              ? Math.min(100, Math.round((totalRaisedEth / goalEth) * 10_000) / 100)
               : 0;
 
         return [campaign.id, { progress, status }] as const;
@@ -194,18 +194,27 @@ async function getRefundAmounts(donations: DonationRow[]) {
   }
 
   const publicClient = getPawChainPublicClient();
+  const refundGroups = refundRows.reduce((map, donation) => {
+    const key = `${donation.campaign_id}:${donation.refund_tx_hash}`;
+    const group = map.get(key) ?? [];
+    group.push(donation);
+    map.set(key, group);
+    return map;
+  }, new Map<string, DonationRow[]>());
+
   const entries = await Promise.all(
-    refundRows.map(async (donation) => {
+    [...refundGroups.values()].map(async (group) => {
+      const firstDonation = group[0];
       try {
         const receipt = await publicClient.getTransactionReceipt({
-          hash: donation.refund_tx_hash as Hash,
+          hash: firstDonation.refund_tx_hash as Hash,
         });
         const refundLog = receipt.logs
           .map((log) => {
             try {
               if (
                 log.address.toLowerCase() !==
-                donation.contract_address?.toLowerCase()
+                firstDonation.contract_address?.toLowerCase()
               ) {
                 return null;
               }
@@ -222,17 +231,37 @@ async function getRefundAmounts(donations: DonationRow[]) {
           .find((log) => log?.eventName === "RefundClaimed");
 
         if (refundLog?.eventName !== "RefundClaimed") {
-          return [donation.id, 0] as const;
+          return group.map((donation) => [donation.id, 0] as const);
         }
 
-        return [donation.id, Number(formatEther(refundLog.args.amount))] as const;
+        const totalRefundEth = Number(formatEther(refundLog.args.amount));
+        const totalDonatedEth = group.reduce(
+          (total, donation) =>
+            total +
+            (donation.amount_wei
+              ? Number(formatEther(BigInt(donation.amount_wei)))
+              : 0),
+          0,
+        );
+
+        return group.map((donation) => {
+          const donationEth = donation.amount_wei
+            ? Number(formatEther(BigInt(donation.amount_wei)))
+            : 0;
+          const refundShare =
+            totalDonatedEth > 0
+              ? totalRefundEth * (donationEth / totalDonatedEth)
+              : 0;
+
+          return [donation.id, refundShare] as const;
+        });
       } catch {
-        return [donation.id, 0] as const;
+        return group.map((donation) => [donation.id, 0] as const);
       }
     }),
   );
 
-  return new Map(entries);
+  return new Map(entries.flat());
 }
 
 async function syncClaimedRefunds(
@@ -338,7 +367,7 @@ async function syncClaimedRefunds(
           donorId: donation.donor_id,
           campaignId: donation.campaign_id,
           title: "Refund recorded",
-          message: `Your ${refundAmountEth.toFixed(6)} ETH refund from ${campaign?.title ?? "this campaign"} was verified. Approx. MYR ${formatNotificationMyr(refundAmountMyr)}.`,
+          message: `Your ${refundAmountEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH refund from ${campaign?.title ?? "this campaign"} was verified. Approx. MYR ${formatNotificationMyr(refundAmountMyr)}.`,
           status: "success",
         });
 

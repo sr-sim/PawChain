@@ -8,6 +8,8 @@ import {
   shortAddress,
 } from "@/lib/block-explorer";
 import { TransactionLinks } from "@/app/components/TransactionLinks";
+import { DonorProofEvidence } from "@/app/components/DonorProofEvidence";
+import { formatPercentage } from "@/lib/format-percentage";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,6 @@ function formatEth(value: number | undefined | null) {
   }
 
   return `${numeric.toLocaleString("en-MY", {
-    minimumFractionDigits: 4,
     maximumFractionDigits: 6,
   })} ETH`;
 }
@@ -195,7 +196,7 @@ export default async function DonorCampaignDetailPage({
   const raisedDisplay =
     typeof campaign.onChainTotalRaisedEth === "number"
       ? formatEth(campaign.onChainTotalRaisedEth)
-      : `${campaign.raised}% funded`;
+      : `${formatPercentage(campaign.raised)}% funded`;
   const goalDisplay =
     typeof campaign.onChainGoalEth === "number"
       ? formatEth(campaign.onChainGoalEth)
@@ -339,7 +340,7 @@ export default async function DonorCampaignDetailPage({
                   Progress
                 </p>
                 <p className="mt-1 text-lg font-black text-stone-950">
-                  {campaign.raised}%
+                  {formatPercentage(campaign.raised)}%
                 </p>
               </div>
             </div>
@@ -355,7 +356,7 @@ export default async function DonorCampaignDetailPage({
                     Funding progress
                   </p>
                   <h2 className="mt-1 text-xl font-black text-stone-950">
-                    {campaign.raised}% funded
+                    {formatPercentage(campaign.raised)}% funded
                   </h2>
                 </div>
                 <span className="w-fit rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-stone-700">
@@ -376,7 +377,7 @@ export default async function DonorCampaignDetailPage({
                       : "Current milestone"}
                   </p>
                   <p className="mt-1 text-sm font-black text-stone-950">
-                    {currentMilestone.title} ({currentMilestone.percentage}% release)
+                    {currentMilestone.title} ({formatPercentage(currentMilestone.percentage)}% release)
                   </p>
                   <p className="mt-1 text-xs font-semibold text-stone-500">
                     Stage amount: {getStageAmount(currentMilestone.percentage)}
@@ -394,7 +395,7 @@ export default async function DonorCampaignDetailPage({
                                 : "text-slate-500"
                           }
                         >
-                          {Math.round(currentMilestoneFundingState.progress)}%
+                          {formatPercentage(currentMilestoneFundingState.progress)}%
                         </span>
                       </div>
                       <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
@@ -585,7 +586,6 @@ export default async function DonorCampaignDetailPage({
                   campaign.raised,
                 );
                 const isLocked = fundingState.tone === "locked";
-
                 return (
                 <div
                   key={milestone.title}
@@ -627,7 +627,7 @@ export default async function DonorCampaignDetailPage({
                               : "border-orange-200 text-[var(--color-orange)]",
                           ].join(" ")}
                         >
-                          {milestone.percentage}% release
+                          {formatPercentage(milestone.percentage)}% release
                         </span>
                         <span
                           className={[
@@ -656,18 +656,14 @@ export default async function DonorCampaignDetailPage({
                         />
                       </div>
                       <p className="mt-1 text-[11px] font-semibold text-stone-400">
-                        {Number(fundingState.progress.toFixed(2))}% of this stage funded
+                        {formatPercentage(fundingState.progress)}% of this stage funded
                       </p>
                   {milestone.description ? (
                     <p className="mt-3 text-xs leading-5 text-stone-600">
                       {milestone.description}
                     </p>
                   ) : null}
-                  {milestone.requirement ? (
-                    <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-stone-600 ring-1 ring-orange-100">
-                      Release condition: {milestone.requirement}
-                    </p>
-                  ) : null}
+                  <DonorProofEvidence proofUrl={milestone.proofUrl} />
                     </div>
                     <div className="grid shrink-0 gap-2 sm:grid-cols-3 lg:w-[28rem]">
                       <div className="rounded-xl bg-white p-3 ring-1 ring-orange-100">
