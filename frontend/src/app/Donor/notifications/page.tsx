@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  isNotificationAllowedByPreferences,
+  loadDonorPreferences,
+} from "@/lib/donor-preferences";
 
 type DonorNotification = {
   id: string;
@@ -52,6 +56,9 @@ export default function DonorNotificationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [activeTab, setActiveTab] = useState<"All" | "Unread" | "Read">("All");
+  const [preferenceVersion, setPreferenceVersion] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isClearingAll, setIsClearingAll] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +111,27 @@ export default function DonorNotificationsPage() {
       isMounted = false;
     };
   }, [walletAddress]);
+
+  useEffect(() => {
+    function handleStorage(event: Event) {
+      if (
+        !(event instanceof StorageEvent) ||
+        event.key?.startsWith("pawchain:donor-settings")
+      ) {
+        setPreferenceVersion((current) => current + 1);
+      }
+    }
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("pawchain:donor-settings-changed", handleStorage);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(
+        "pawchain:donor-settings-changed",
+        handleStorage,
+      );
+    };
+  }, []);
 
   async function markAsRead(notificationId: string) {
     try {
@@ -182,14 +210,99 @@ export default function DonorNotificationsPage() {
     }
   }
 
-  const unreadCount = notifications.filter((item) => !item.is_read).length;
-  const readCount = notifications.length - unreadCount;
+  async function deleteNotification(notificationId: string) {
+    if (!walletAddress || deletingId || isClearingAll) {
+      return;
+    }
+
+    setDeletingId(notificationId);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/donor/notifications", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          notificationId,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to delete notification.");
+      }
+
+      setNotifications((current) =>
+        current.filter((item) => item.id !== notificationId),
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete notification.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function clearAllNotifications() {
+    if (!walletAddress || notifications.length === 0 || isClearingAll) {
+      return;
+    }
+
+    setIsClearingAll(true);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/donor/notifications", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          clearAll: true,
+        }),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to clear notifications.");
+      }
+
+      setNotifications([]);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to clear notifications.",
+      );
+    } finally {
+      setIsClearingAll(false);
+    }
+  }
+
+  const preferences = loadDonorPreferences(walletAddress);
+  const preferenceVisibleNotifications = notifications.filter((item) =>
+    isNotificationAllowedByPreferences(item, preferences),
+  );
+  const hiddenByPreferences =
+    notifications.length - preferenceVisibleNotifications.length;
+  const unreadCount = preferenceVisibleNotifications.filter(
+    (item) => !item.is_read,
+  ).length;
+  const readCount = preferenceVisibleNotifications.length - unreadCount;
   const filteredNotifications =
     activeTab === "Unread"
-      ? notifications.filter((item) => !item.is_read)
+      ? preferenceVisibleNotifications.filter((item) => !item.is_read)
       : activeTab === "Read"
-        ? notifications.filter((item) => item.is_read)
-        : notifications;
+        ? preferenceVisibleNotifications.filter((item) => item.is_read)
+        : preferenceVisibleNotifications;
+  void preferenceVersion;
 
   return (
     <div className="space-y-5">
@@ -248,19 +361,35 @@ export default function DonorNotificationsPage() {
               {tab}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={markAllAsRead}
-            disabled={!walletAddress || unreadCount === 0}
-            className="ml-auto rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            Mark all as read
-          </button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={markAllAsRead}
+              disabled={!walletAddress || unreadCount === 0}
+              className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Mark all as read
+            </button>
+            <button
+              type="button"
+              onClick={clearAllNotifications}
+              disabled={!walletAddress || notifications.length === 0 || isClearingAll}
+              className="rounded-full border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-700 transition hover:border-red-200 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isClearingAll ? "Clearing..." : "Clear all"}
+            </button>
+          </div>
         </div>
 
         {errorMessage ? (
           <p className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
             {errorMessage}
+          </p>
+        ) : null}
+
+        {hiddenByPreferences > 0 ? (
+          <p className="mt-4 rounded-xl border border-orange-100 bg-orange-50/40 px-3 py-2 text-sm font-semibold text-stone-600">
+            {hiddenByPreferences} update{hiddenByPreferences === 1 ? "" : "s"} hidden by your notification settings.
           </p>
         ) : null}
 
@@ -316,7 +445,31 @@ export default function DonorNotificationsPage() {
                     ) : null}
                   </div>
                 </div>
-                <StatusPill status={item.status} />
+                <div className="flex items-center justify-between gap-2 sm:justify-end">
+                  <StatusPill status={item.status} />
+                  <button
+                    type="button"
+                    onClick={() => deleteNotification(item.id)}
+                    disabled={deletingId === item.id || isClearingAll}
+                    aria-label={`Delete ${item.title}`}
+                    title="Delete notification"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-orange-100 bg-white text-stone-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M18 6 6 18" />
+                      <path d="m6 6 12 12" />
+                    </svg>
+                  </button>
+                </div>
               </article>
             ))
           ) : (
@@ -325,9 +478,7 @@ export default function DonorNotificationsPage() {
                 No donor notifications yet
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-600">
-                Admin replies, report updates, refund confirmations, and
-                milestone notices will appear here when there is activity on
-                your supported campaigns.
+                Updates that match your notification settings will appear here.
               </p>
             </div>
           )}

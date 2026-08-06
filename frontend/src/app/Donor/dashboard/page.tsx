@@ -134,6 +134,10 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
     (total, donation) => total + donation.refundAmountEth,
     0,
   );
+  const totalRefundedMyr = claimedRefunds.reduce(
+    (total, donation) => total + donation.refundAmount,
+    0,
+  );
   const latestRefund = claimedRefunds[0];
   const now = Date.now();
   const rangeDays = activeRange === "30" ? 30 : activeRange === "90" ? 90 : null;
@@ -218,11 +222,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             : "Clear",
       detail:
         potentialRefunds.length > 0
-          ? "Action needed in tracking"
+          ? "Ready to claim"
           : totalRefundedEth > 0
             ? `${formatEth(totalRefundedEth)} received`
-            : "No pending refunds",
-      tone: potentialRefunds.length > 0 ? "amber" : claimedRefunds.length > 0 ? "violet" : "slate",
+            : "No refunds",
+      tone: potentialRefunds.length > 0 ? "amber" : claimedRefunds.length > 0 ? "emerald" : "slate",
     },
   ];
 
@@ -246,7 +250,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                     {formatAmount(donationData.summary.totalAmount, "MYR")}
                   </p>
                   <p className="mt-2 text-sm font-semibold text-stone-500">
-                    Historical value saved when each donation was confirmed
+                    Saved donation value
                   </p>
                 </div>
                 <DonorDashboardMetrics
@@ -323,11 +327,13 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                     ? "border-violet-100 bg-violet-50/45"
                     : stat.tone === "amber"
                       ? "border-amber-200 bg-amber-50/55"
-                      : stat.tone === "red"
-                        ? "border-red-200 bg-red-50/55"
-                        : stat.tone === "slate"
-                          ? "border-slate-200 bg-slate-50/70"
-                          : "border-orange-100 bg-orange-50/45",
+                      : stat.tone === "emerald"
+                        ? "border-emerald-200 bg-emerald-50/55"
+                        : stat.tone === "red"
+                          ? "border-red-200 bg-red-50/55"
+                          : stat.tone === "slate"
+                            ? "border-slate-200 bg-slate-50/70"
+                            : "border-orange-100 bg-orange-50/45",
                 ].join(" ")}
               >
                 <p className="text-[11px] font-black uppercase tracking-[0.12em] text-stone-400">
@@ -354,10 +360,10 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 </p>
                 <h3 className="mt-1 text-lg font-black text-stone-950">
                   {potentialRefunds.length > 0
-                    ? "Refund ready to review"
+                    ? "Refund available"
                     : latestRefund
-                      ? "Latest refund received"
-                      : "No refund action needed"}
+                      ? "Refund received"
+                      : "No refund available"}
                 </h3>
               </div>
               <span
@@ -371,7 +377,7 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 ].join(" ")}
               >
                 {potentialRefunds.length > 0
-                  ? "Claim check"
+                  ? "Claimable"
                   : latestRefund
                     ? "Received"
                     : "Clear"}
@@ -379,16 +385,19 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
             </div>
             <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Needs check</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Available</p>
                 <p className="mt-1 text-lg font-black text-amber-700">{potentialRefunds.length}</p>
               </div>
-              <div className="border-l border-slate-100 bg-violet-50/30 p-2.5">
+              <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
                 <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
-                <p className="mt-1 text-lg font-black text-violet-700">{claimedRefunds.length}</p>
+                <p className="mt-1 text-lg font-black text-emerald-700">{claimedRefunds.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Returned</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Refunded</p>
                 <p className="mt-1 text-sm font-black text-emerald-800">{formatEth(totalRefundedEth)}</p>
+                <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
+                  {formatAmount(totalRefundedMyr, "MYR")}
+                </p>
               </div>
             </div>
             <div className="mt-3">
@@ -401,7 +410,6 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                       </p>
                       <p className="mt-1 text-xs font-semibold text-stone-500">
                         Campaign is {donation.campaignStatus.toLowerCase()}.
-                        The contract will show a claim button if ETH is refundable.
                       </p>
                     </div>
                     <RefundClaimButton
@@ -411,15 +419,20 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                   </article>
                 ))
               ) : latestRefund ? (
-                <article className="rounded-xl border border-violet-100 bg-white p-3 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
-                    Most recent return
+                <article className="rounded-xl border border-emerald-100 bg-white p-3 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                    Latest refund
                   </p>
                   <p className="mt-1 text-xl font-black text-stone-950">
                     +{latestRefund.refundAmountEth > 0
                       ? formatEth(latestRefund.refundAmountEth)
                       : "Confirmed"}
                   </p>
+                  {latestRefund.refundAmountEth > 0 ? (
+                    <p className="mt-1 text-xs font-semibold text-stone-500">
+                      {formatAmount(latestRefund.refundAmount, "MYR")}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-sm font-semibold text-stone-600">
                     {latestRefund.campaignTitle}
                   </p>
@@ -431,14 +444,14 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                         rel="noreferrer"
                         className="rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-1.5 text-orange-700 transition hover:bg-orange-100"
                       >
-                        Etherscan proof
+                        View proof
                       </a>
                     ) : null}
                     <Link
                       href="/Donor/tracking"
-                      className="rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-violet-700 transition hover:bg-violet-100"
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-emerald-700 transition hover:bg-emerald-100"
                     >
-                      View ledger
+                      View history
                     </Link>
                   </div>
                 </article>

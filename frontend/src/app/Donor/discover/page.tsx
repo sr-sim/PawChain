@@ -76,6 +76,18 @@ function getStatusStyle(status: string) {
   return "bg-slate-100 text-slate-700";
 }
 
+function getCampaignDisplayStatus(campaign: { status: string; raised: number }) {
+  if (campaign.status === "Completed" || campaign.raised >= 100) {
+    return "Completed";
+  }
+
+  return campaign.status;
+}
+
+function canCampaignReceiveDonation(campaign: { status: string; raised: number }) {
+  return getCampaignDisplayStatus(campaign) === "Active";
+}
+
 function formatMyr(value: number) {
   return new Intl.NumberFormat("en-MY", {
     style: "currency",
@@ -503,6 +515,9 @@ export default function DonorDiscoverPage() {
   }, [filteredCampaigns, sortBy]);
 
   const selectedCampaign = campaigns.find((campaign) => campaign.id === selectedId);
+  const selectedCampaignStatus = selectedCampaign
+    ? getCampaignDisplayStatus(selectedCampaign)
+    : "";
   const shelterCampaigns = campaigns.filter(
     (campaign) => campaign.shelter === selectedCampaign?.shelter,
   );
@@ -577,11 +592,14 @@ export default function DonorDiscoverPage() {
     };
   }, [selectedCampaign]);
   const activeCampaigns = useMemo(
-    () => sortedCampaigns.filter((campaign) => campaign.status === "Active"),
+    () => sortedCampaigns.filter((campaign) => canCampaignReceiveDonation(campaign)),
     [sortedCampaigns],
   );
   const completedCampaigns = useMemo(
-    () => sortedCampaigns.filter((campaign) => campaign.status === "Completed"),
+    () =>
+      sortedCampaigns.filter(
+        (campaign) => getCampaignDisplayStatus(campaign) === "Completed",
+      ),
     [sortedCampaigns],
   );
   const closedCampaigns = useMemo(
@@ -596,13 +614,13 @@ export default function DonorDiscoverPage() {
         : activeTab === "Closed"
           ? closedCampaigns
           : activeCampaigns.length === 0 && campaigns.length > 0
-            ? campaigns.filter((campaign) => campaign.status === "Active")
+            ? campaigns.filter((campaign) => canCampaignReceiveDonation(campaign))
             : activeCampaigns;
   const selectedMilestones = getCampaignMilestoneItems(selectedCampaign);
   const selectedCurrentMilestoneIndex = getCurrentMilestoneIndex(
     selectedMilestones,
     selectedCampaign?.raised ?? 0,
-    selectedCampaign?.status ?? "",
+    selectedCampaignStatus,
     selectedCampaign?.currentMilestoneIndex,
   );
   const selectedCurrentMilestone =
@@ -645,8 +663,8 @@ export default function DonorDiscoverPage() {
   }, [filteredShelters, sortBy]);
 
   const tabCounts: Record<(typeof tabs)[number], number> = {
-    Campaigns: campaigns.filter((campaign) => campaign.status === "Active").length,
-    Completed: campaigns.filter((campaign) => campaign.status === "Completed").length,
+    Campaigns: campaigns.filter((campaign) => canCampaignReceiveDonation(campaign)).length,
+    Completed: campaigns.filter((campaign) => getCampaignDisplayStatus(campaign) === "Completed").length,
     Closed: campaigns.filter((campaign) => campaign.status === "Closed").length,
     Shelters: shelters.length,
     Saved: savedIds.length,
@@ -1033,7 +1051,7 @@ export default function DonorDiscoverPage() {
                     </div>
                     <div className="rounded-xl bg-orange-50/45 px-3 py-2">
                       <p className="font-black text-stone-950">
-                        {campaign.status === "Completed"
+                        {getCampaignDisplayStatus(campaign) === "Completed"
                           ? "Completed"
                           : `${campaign.daysLeft} days`}
                       </p>
@@ -1091,7 +1109,7 @@ export default function DonorDiscoverPage() {
                   </div>
 
                   <div className="mt-auto h-0 overflow-hidden pt-0 opacity-0 transition-[height,padding,opacity] duration-500 ease-in-out group-hover/card:h-[52px] group-hover/card:pt-3 group-hover/card:opacity-100 group-focus-within/card:h-[52px] group-focus-within/card:pt-3 group-focus-within/card:opacity-100 motion-reduce:transition-none">
-                    {campaign.status === "Active" ? (
+                    {canCampaignReceiveDonation(campaign) ? (
                       <Link
                         href={`/Donor/donate?campaign=${campaign.id}`}
                         onClick={(event) => event.stopPropagation()}
@@ -1235,7 +1253,7 @@ export default function DonorDiscoverPage() {
                               {campaign.title}
                             </p>
                             <p className="mt-1 text-xs font-medium text-stone-500">
-                              {campaign.raised}% raised - {campaign.status}
+                              {campaign.raised}% raised - {getCampaignDisplayStatus(campaign)}
                             </p>
                           </button>
                         ))}
@@ -1339,10 +1357,10 @@ export default function DonorDiscoverPage() {
                   <span
                     className={[
                       "rounded-full px-3 py-1 text-xs font-semibold",
-                      getStatusStyle(selectedCampaign.status),
+                      getStatusStyle(selectedCampaignStatus),
                     ].join(" ")}
                   >
-                    {selectedCampaign.status}
+                    {selectedCampaignStatus}
                   </span>
                 </div>
                 <p className="mt-4 text-sm leading-7 text-stone-600">
@@ -1411,7 +1429,7 @@ export default function DonorDiscoverPage() {
                   {selectedCurrentMilestone ? (
                     <>
                       <p className="mt-3 text-xs font-bold text-stone-600">
-                        {selectedCampaign.status === "Completed"
+                        {selectedCampaignStatus === "Completed"
                           ? "Final milestone"
                           : "Current milestone"}
                         : {selectedCurrentMilestone.title} (
@@ -1605,7 +1623,7 @@ export default function DonorDiscoverPage() {
               >
                 Report concern
               </Link>
-              {selectedCampaign.status === "Active" ? (
+              {canCampaignReceiveDonation(selectedCampaign) ? (
                 <Link
                   href={`/Donor/donate?campaign=${selectedCampaign.id}`}
                   className="inline-flex items-center justify-center rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
