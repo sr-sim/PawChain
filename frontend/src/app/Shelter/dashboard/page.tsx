@@ -92,7 +92,7 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
           }),
         ]);
         const progress = goalWei > BigInt(0)
-          ? Number((raisedWei * BigInt(100_000)) / goalWei) / 1_000
+          ? Number((raisedWei * BigInt(10_000)) / goalWei) / 100
           : 0;
 
         return [
@@ -151,7 +151,9 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
       ),
     0,
   );
-  const progress = totalGoal > 0 ? Math.round((totalRaised / totalGoal) * 100) : 0;
+  const progress = totalGoal > 0
+    ? Math.min(100, Math.floor((totalRaised / totalGoal) * 10_000) / 100)
+    : 0;
   const contractConnectedCampaigns = displayedCampaigns.filter(
     (campaign) => Boolean(campaign.contract_address),
   );
@@ -165,7 +167,13 @@ export default async function ShelterDashboard({ searchParams }: DashboardProps)
   const recentCampaigns = displayedCampaigns.map((campaign) => {
     const itemProgress = campaign.chainState?.progress ?? (
       Number(campaign.goal_amount) > 0
-        ? Math.round(Number(campaign.current_amount || 0) / Number(campaign.goal_amount) * 100)
+        ? Math.min(
+            100,
+            Math.floor(
+              (Number(campaign.current_amount || 0) / Number(campaign.goal_amount)) *
+                10_000,
+            ) / 100,
+          )
         : 0
     );
     const raisedEth = Number(campaign.chainState?.raisedEth ?? campaign.current_amount ?? 0);
