@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminWallet } from "@/lib/admin-wallets";
+import { requireWalletSession } from "@/lib/wallet-session";
 
 export async function GET(request: NextRequest) {
   try {
     const walletAddress = request.nextUrl.searchParams.get("walletAddress");
+    requireWalletSession(request, walletAddress);
 
     if (!walletAddress) {
       return NextResponse.json(

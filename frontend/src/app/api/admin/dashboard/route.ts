@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminWallet } from "@/lib/admin-wallets";
+import { walletSessionMatches } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: NextRequest) {
   const walletAddress = request.nextUrl.searchParams.get("walletAddress");
 
   try {
+    if (!walletSessionMatches(request, walletAddress)) {
+      return NextResponse.json({ message: "Wallet authentication is required." }, { status: 401 });
+    }
     if (!(await isAdminWallet(walletAddress))) {
       return NextResponse.json(
         { message: "Access denied. This wallet is not an admin." },

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar } from "@/app/Admin/components/AdminSidebar";
+import { BlockchainSuccessPopup } from "@/app/components/BlockchainSuccessPopup";
 import type { DonorBadgeLevel } from "@/lib/role-nft";
 
 type User = {
@@ -19,6 +20,17 @@ type User = {
   created_at: string;
   updated_at: string;
   donor_badge_level: DonorBadgeLevel | null;
+  hero_certificate: HeroCertificate | null;
+};
+
+type HeroCertificate = {
+  id: string;
+  certificate_number: string;
+  issued_at: string;
+  sent_at: string | null;
+  delivery_status: "draft" | "sending" | "sent" | "failed";
+  emailed_to: string | null;
+  delivery_error: string | null;
 };
 
 const date = (value: string | null) =>
@@ -27,23 +39,6 @@ const date = (value: string | null) =>
     : "—";
 const shortWallet = (value: string | null) =>
   value ? `${value.slice(0, 7)}…${value.slice(-5)}` : "No wallet";
-
-function certificateEmailHref(user: User) {
-  const subject = "Your PawChain Hero Donor Certificate";
-  const greetingName = user.full_name?.trim() || "Hero Donor";
-  const body = [
-    `Dear ${greetingName},`,
-    "",
-    "Congratulations on achieving Hero Donor status with PawChain!",
-    "",
-    "Please find your Hero Donor certificate attached to this email. Thank you for your exceptional generosity and continued support for animal shelters.",
-    "",
-    "Warm regards,",
-    "PawChain Administration",
-  ].join("\n");
-
-  return `mailto:${encodeURIComponent(user.email ?? "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
 
 function Badge({ children, className }: { children: React.ReactNode; className: string }) {
   return <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black capitalize ${className}`}>{children}</span>;
@@ -92,6 +87,73 @@ function Modal({ user, close }: { user: User; close: () => void }) {
   );
 }
 
+function CertificateModal({
+  user,
+  adminWallet,
+  close,
+  sent,
+}: {
+  user: User;
+  adminWallet: string;
+  close: () => void;
+  sent: (message: string) => Promise<void> | void;
+}) {
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const certificate = user.hero_certificate;
+  const alreadySent = certificate?.delivery_status === "sent" && Boolean(certificate.sent_at);
+  const issuedDate = certificate?.issued_at ?? new Date().toISOString();
+
+  const sendCertificate = async () => {
+    setIsSending(true);
+    setSendError("");
+    try {
+      const response = await fetch("/api/admin/hero-certificates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress: adminWallet, donorId: user.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Unable to send certificate.");
+      await sent(result.message || `Certificate sent to ${user.email}.`);
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "Unable to send certificate.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center overflow-hidden bg-stone-950/60 p-2 backdrop-blur-sm sm:p-4" role="dialog" aria-modal="true" aria-labelledby="certificate-preview-title">
+      <div className="max-h-[calc(100vh-1rem)] w-full max-w-5xl overflow-hidden rounded-[1.5rem] border border-violet-200 bg-white p-3 shadow-[0_28px_90px_rgba(0,0,0,0.3)] sm:max-h-[calc(100vh-2rem)] sm:p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-600 sm:text-xs">{alreadySent ? "Issued certificate" : "Review before sending"}</p><h2 id="certificate-preview-title" className="text-lg font-black sm:mt-0.5 sm:text-2xl">Hero Donor certificate</h2><p className="hidden text-xs font-semibold text-stone-500 sm:block">{alreadySent ? `Successfully sent ${date(certificate?.sent_at ?? null)}.` : "A personalized PDF will be sent from the configured admin mailbox."}</p></div>
+          <button type="button" onClick={close} disabled={isSending} aria-label="Close certificate preview" className="grid h-9 w-9 place-items-center rounded-xl text-xl hover:bg-stone-100 disabled:opacity-40">×</button>
+        </div>
+
+        <div className="relative mx-auto mt-2 aspect-[842/595] max-h-[58vh] overflow-hidden rounded-xl border-[3px] border-orange-400 bg-[#fffaf0] p-1 shadow-inner sm:mt-3 sm:rounded-2xl sm:p-2" style={{ width: "min(100%, calc(58vh * 842 / 595))" }}>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 grid place-items-center overflow-hidden"><span className="-rotate-[28deg] whitespace-nowrap text-4xl font-black tracking-[0.12em] text-violet-700/[0.07] sm:text-7xl">PAWCHAIN VERIFIED</span></div>
+          <div className="relative z-10 flex h-full flex-col border border-orange-200 px-3 py-3 text-center sm:px-10 sm:py-5">
+            <div className="flex items-center justify-center gap-1.5"><img src="/images/logo.png" alt="PawChain logo" className="h-8 w-8 object-contain sm:h-11 sm:w-11" /><p className="text-[9px] font-black tracking-[0.24em] text-[var(--color-orange)] sm:text-xs">PAWCHAIN</p></div>
+            <h3 className="mt-1 text-base font-black tracking-wide text-stone-950 sm:mt-2 sm:text-3xl">CERTIFICATE OF RECOGNITION</h3>
+            <p className="mt-1 text-[9px] font-medium text-stone-600 sm:mt-2 sm:text-xs">This certificate is proudly presented to</p>
+            <p className="mx-auto mt-1 max-w-2xl border-b border-amber-600/50 pb-1 text-xl font-black text-violet-700 sm:mt-2 sm:text-4xl">{user.full_name || "Hero Donor"}</p>
+            <p className="mt-1 text-[9px] font-medium text-stone-700 sm:mt-2 sm:text-xs">for achieving the highest PawChain donor distinction</p>
+            <p className="mt-2 text-sm font-black tracking-[0.14em] text-violet-700 sm:mt-4 sm:text-xl">HERO DONOR</p>
+            <div className="mx-auto mt-1 h-0.5 w-14 bg-amber-400 sm:w-20" />
+            <p className="mx-auto mt-2 max-w-2xl text-[8px] italic leading-3 text-stone-600 sm:mt-3 sm:text-xs sm:leading-4">With gratitude for exceptional generosity and continued support for animal shelters.</p>
+            <div className="mt-auto grid gap-1 text-left text-[7px] font-semibold text-stone-600 sm:grid-cols-2 sm:text-[10px]"><div><p>Issued: {date(issuedDate)}</p><p>Certificate: {certificate?.certificate_number || "Generated when sent"}</p></div><div className="sm:text-right"><p className="break-all">Wallet: {user.wallet_address}</p><p className="font-black text-stone-900">PawChain Administration</p></div></div>
+          </div>
+        </div>
+
+        <div className="mt-2 rounded-xl border border-orange-100 bg-orange-50/50 px-3 py-2 text-xs sm:mt-3"><p><span className="font-black">Recipient:</span> {user.email}</p><p className="hidden font-semibold text-stone-500 sm:block">{alreadySent ? `Delivered once on ${date(certificate?.sent_at ?? null)} · further sending is disabled` : "PDF attachment · sent from the dedicated PawChain admin mailbox"}</p></div>
+        {sendError ? <div role="alert" className="mt-2 rounded-xl border border-red-200 bg-red-50 p-2 text-xs font-bold text-red-700">{sendError}</div> : null}
+        {!alreadySent ? <div className="mt-2 flex justify-end gap-2 sm:mt-3"><button type="button" onClick={close} disabled={isSending} className="rounded-xl border border-stone-300 px-4 py-2 text-xs font-black disabled:opacity-40 sm:text-sm">Cancel</button><button type="button" onClick={() => void sendCertificate()} disabled={isSending || !user.email} className="rounded-xl bg-violet-700 px-5 py-2 text-xs font-black text-white shadow-lg shadow-violet-200 transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">{isSending ? "Generating and sending…" : "Send certificate"}</button></div> : null}
+      </div>
+    </div>
+  );
+}
+
 export default function UserManagementPage() {
   const { address, isConnected } = useAppKitAccount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -102,6 +164,8 @@ export default function UserManagementPage() {
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState("newest");
   const [details, setDetails] = useState<User | null>(null);
+  const [certificateTarget, setCertificateTarget] = useState<User | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
   const [copied, setCopied] = useState("");
 
   const load = async () => {
@@ -162,10 +226,33 @@ export default function UserManagementPage() {
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(18rem,1.5fr)_repeat(2,minmax(9rem,1fr))]"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, email, or wallet" className="h-10 rounded-xl border border-orange-100 bg-white px-3 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100" /><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-xl border border-orange-100 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400"><option value="all">All accounts</option><option value="active">Active</option><option value="deactivated">Deactivated</option></select><select value={sort} onChange={(event) => setSort(event.target.value)} className="h-10 rounded-xl border border-orange-100 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="name-asc">Name A–Z</option><option value="name-desc">Name Z–A</option></select></div>
               </div>
             </div>
-            {filtered.length ? <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left"><thead className="border-b border-orange-100 bg-[rgba(var(--color-cream-rgb),0.55)] text-[11px] uppercase tracking-wider text-stone-500"><tr>{["Donor", "Email", "Wallet", "Role", "Badge Level", "Account", "Created", "Actions"].map((label) => <th key={label} className="px-3 py-3 font-black xl:px-4">{label}</th>)}</tr></thead><tbody className="divide-y divide-orange-100">{filtered.map((user) => <tr key={user.id} className="transition hover:bg-orange-50/35"><td className="px-3 py-4 xl:px-4"><div className="flex items-center gap-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--color-peach)] text-xs font-black text-[var(--color-orange)]">{(user.full_name || user.email || "U").slice(0,2).toUpperCase()}</span><p className="max-w-40 truncate font-semibold">{user.full_name || "Unnamed donor"}</p></div></td><td className="max-w-44 truncate px-3 py-4 text-sm font-medium text-stone-600 xl:px-4">{user.email || "—"}</td><td className="px-3 py-4 xl:px-4"><div className="flex items-center gap-1.5"><span className="font-mono text-xs">{shortWallet(user.wallet_address)}</span>{user.wallet_address ? <button onClick={() => void copyWallet(user.wallet_address!)} className="rounded-lg border border-orange-100 px-2 py-1 text-[10px] font-black text-[var(--color-orange)]">{copied === user.wallet_address ? "Copied" : "Copy"}</button> : null}</div></td><td className="px-3 py-4 xl:px-4"><Badge className="bg-amber-50 text-amber-800">{user.role}</Badge></td><td className="px-3 py-4 xl:px-4"><DonorBadge level={user.donor_badge_level} /></td><td className="px-3 py-4 xl:px-4"><Badge className={user.account_status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-stone-200 text-stone-700"}>{user.account_status}</Badge></td><td className="px-3 py-4 text-xs font-medium text-stone-500 xl:px-4">{date(user.created_at)}</td><td className="px-3 py-4 xl:px-4"><div className="flex flex-col items-start gap-2"><button onClick={() => setDetails(user)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:ring-offset-2"><svg viewBox="0 0 24 24" className="h-4 w-4 text-stone-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></svg>View details</button>{user.donor_badge_level === "hero" && user.email ? <a href={certificateEmailHref(user)} className="inline-flex whitespace-nowrap rounded-lg bg-violet-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300 focus:ring-offset-2">Email certificate</a> : null}</div></td></tr>)}</tbody></table></div> : <div className="p-12 text-center"><h3 className="text-base font-black">No donors found</h3><p className="mt-1 text-sm font-semibold text-stone-500">Adjust the search or filters to view another donor.</p></div>}
+            {filtered.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1000px] text-left">
+                  <thead className="border-b border-orange-100 bg-[rgba(var(--color-cream-rgb),0.55)] text-[11px] uppercase tracking-wider text-stone-500"><tr>{["Donor", "Email", "Wallet", "Role", "Badge Level", "Account", "Created", "Actions"].map((label) => <th key={label} className="px-3 py-3 font-black xl:px-4">{label}</th>)}</tr></thead>
+                  <tbody className="divide-y divide-orange-100">{filtered.map((user) => (
+                    <tr key={user.id} className="transition hover:bg-orange-50/35">
+                      <td className="px-3 py-4 xl:px-4"><div className="flex items-center gap-2"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--color-peach)] text-xs font-black text-[var(--color-orange)]">{(user.full_name || user.email || "U").slice(0,2).toUpperCase()}</span><p className="max-w-40 truncate font-semibold">{user.full_name || "Unnamed donor"}</p></div></td>
+                      <td className="max-w-44 truncate px-3 py-4 text-sm font-medium text-stone-600 xl:px-4">{user.email || "—"}</td>
+                      <td className="px-3 py-4 xl:px-4"><div className="flex items-center gap-1.5"><span className="font-mono text-xs">{shortWallet(user.wallet_address)}</span>{user.wallet_address ? <button onClick={() => void copyWallet(user.wallet_address!)} className="rounded-lg border border-orange-100 px-2 py-1 text-[10px] font-black text-[var(--color-orange)]">{copied === user.wallet_address ? "Copied" : "Copy"}</button> : null}</div></td>
+                      <td className="px-3 py-4 xl:px-4"><Badge className="bg-amber-50 text-amber-800">{user.role}</Badge></td>
+                      <td className="px-3 py-4 xl:px-4"><DonorBadge level={user.donor_badge_level} /></td>
+                      <td className="px-3 py-4 xl:px-4"><Badge className={user.account_status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-stone-200 text-stone-700"}>{user.account_status}</Badge></td>
+                      <td className="px-3 py-4 text-xs font-medium text-stone-500 xl:px-4">{date(user.created_at)}</td>
+                      <td className="px-3 py-4 xl:px-4"><div className="flex flex-col items-start gap-2">
+                        <button onClick={() => setDetails(user)} className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-800 shadow-sm transition hover:border-stone-400 hover:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-stone-300 focus:ring-offset-2"><svg viewBox="0 0 24 24" className="h-4 w-4 text-stone-500" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></svg>View details</button>
+                        {user.donor_badge_level === "hero" && user.email ? <><button type="button" onClick={() => setCertificateTarget(user)} disabled={user.hero_certificate?.delivery_status === "sending"} className={`inline-flex whitespace-nowrap rounded-lg px-3 py-2 text-xs font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${user.hero_certificate?.sent_at ? "border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 focus:ring-violet-200" : "bg-violet-600 text-white hover:bg-violet-700 focus:ring-violet-300"}`}>{user.hero_certificate?.delivery_status === "sending" ? "Sending…" : user.hero_certificate?.sent_at ? "View certificate" : "Send certificate"}</button>{user.hero_certificate ? <span className={`text-[10px] font-black uppercase tracking-wide ${user.hero_certificate.delivery_status === "sent" ? "text-emerald-600" : user.hero_certificate.delivery_status === "failed" ? "text-red-600" : "text-stone-500"}`}>{user.hero_certificate.delivery_status === "sent" ? `Sent ${date(user.hero_certificate.sent_at)}` : user.hero_certificate.delivery_status}</span> : null}</> : null}
+                      </div></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            ) : <div className="p-12 text-center"><h3 className="text-base font-black">No donors found</h3><p className="mt-1 text-sm font-semibold text-stone-500">Adjust the search or filters to view another donor.</p></div>}
           </section>}
       </div>
     </main>
     {details ? <Modal user={details} close={() => setDetails(null)} /> : null}
+    {certificateTarget && address ? <CertificateModal user={certificateTarget} adminWallet={address} close={() => setCertificateTarget(null)} sent={async (message) => { setCertificateTarget(null); setSuccessMessage(message); await load(); }} /> : null}
+    <BlockchainSuccessPopup open={Boolean(successMessage)} title="Certificate sent successfully" message={successMessage} confirmedLabel="Email delivered" details={[{ label: "Delivery", value: "Recorded" }, { label: "Duplicate sending", value: "Prevented" }]} onClose={() => setSuccessMessage("")} />
   </>;
 }

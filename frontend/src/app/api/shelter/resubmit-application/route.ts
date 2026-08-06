@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   removeShelterDocument,
@@ -14,6 +15,7 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
   const formData = await request.formData();
   const walletAddress = readText(formData, "walletAddress");
+  requireWalletSession(request, walletAddress);
 
   if (!walletAddress) {
     return NextResponse.json(

@@ -75,6 +75,14 @@ cd frontend
 npm.cmd run dev
 ```
 
+### Hero Donor certificate email
+
+The admin certificate action generates a personalized PDF and sends it through
+the dedicated PawChain Gmail account. Copy the variables from
+`frontend/certificate-email.env.example` into `frontend/.env.local`, then use a
+Google App Password generated for that account. Restart the frontend after
+changing environment variables.
+
 ## Verification
 
 ```powershell

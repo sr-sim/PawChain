@@ -39,6 +39,7 @@ type Campaign = {
   shelter_id: string;
   shelter_name: string | null;
   shelter_wallet: string | null;
+  shelter_phone: string | null;
   title: string;
   description: string;
   goal_amount: number | string;
@@ -74,6 +75,7 @@ type Campaign = {
 type Tab =
   | "All Campaigns"
   | "Pending Approval"
+  | "Needs Proof Review"
   | "Approved"
   | "Rejected"
   | "Completed"
@@ -99,6 +101,7 @@ function displayProofName(name: string) {
 const tabs: Tab[] = [
   "All Campaigns",
   "Pending Approval",
+  "Needs Proof Review",
   "Approved",
   "Rejected",
   "Completed",
@@ -129,6 +132,12 @@ const campaignProgress = (campaign: Campaign) => {
   const raised = Number(campaign.on_chain_total_raised_wei ?? 0);
   const goal = Number(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? 0);
   return goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+};
+const campaignDaysLeft = (campaign: Campaign) => {
+  const deadline = campaign.blockchain_deadline
+    ? new Date(campaign.blockchain_deadline).getTime()
+    : new Date(campaign.created_at).getTime() + campaign.duration_days * 86_400_000;
+  return Math.max(0, Math.ceil((deadline - Date.now()) / 86_400_000));
 };
 const milestoneFundingState = (
   milestones: Milestone[],
@@ -161,6 +170,14 @@ const weiAsEth = (value?: string | null) =>
   `${Number(formatEther(BigInt(value || "0"))).toLocaleString("en-MY", {
     maximumFractionDigits: 6,
   })} ETH`;
+const milestoneAmountWei = (goalWei: string | null | undefined, percentage: number | string) => {
+  try {
+    const basisPoints = BigInt(Math.round((Number(percentage) || 0) * 100));
+    return ((BigInt(goalWei || "0") * basisPoints) / BigInt(10_000)).toString();
+  } catch {
+    return "0";
+  }
+};
 const reviewableMilestone = (item: Milestone) =>
   Boolean(item.proof_url) && item.status === "submitted";
 
@@ -375,17 +392,21 @@ export default function CampaignManagementPage() {
           (item.campaign_milestones ?? []).filter(reviewableMilestone).length,
         0,
       ),
+      proofCampaigns: campaigns.filter((item) =>
+        (item.campaign_milestones ?? []).some(reviewableMilestone),
+      ).length,
     }),
     [campaigns],
   );
   const latestCampaigns = useMemo(
     () =>
       [...campaigns]
+        .filter((campaign) => campaign.campaign_status === "active")
         .sort(
           (a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         )
-        .slice(0, 4),
+        .slice(0, 3),
     [campaigns],
   );
   const heroSlideCount = latestCampaigns.length + 1;
@@ -406,6 +427,8 @@ export default function CampaignManagementPage() {
       tab === "All Campaigns" ||
       (tab === "Pending Approval" &&
         effectiveCampaignStatus(item) === "pending_approval") ||
+      (tab === "Needs Proof Review" &&
+        (item.campaign_milestones ?? []).some(reviewableMilestone)) ||
       (tab === "Approved" && isApproved(effectiveCampaignStatus(item))) ||
       (tab === "Rejected" && effectiveCampaignStatus(item) === "rejected") ||
       (tab === "Completed" &&
@@ -437,7 +460,11 @@ export default function CampaignManagementPage() {
               .includes(q)),
       )
       .sort((a, b) =>
-        sort === "goal"
+        tab === "Needs Proof Review"
+          ? (b.campaign_milestones ?? []).filter(reviewableMilestone).length -
+              (a.campaign_milestones ?? []).filter(reviewableMilestone).length ||
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          : sort === "goal"
           ? Number(b.on_chain_goal_wei ?? b.goal_wei ?? 0) -
             Number(a.on_chain_goal_wei ?? a.goal_wei ?? 0)
           : sort === "funded"
@@ -920,7 +947,7 @@ export default function CampaignManagementPage() {
       >
         <div className="mx-auto max-w-[1500px] space-y-6">
           <section
-            className="group relative h-[22rem] overflow-hidden rounded-2xl bg-orange-50 text-white shadow-[0_16px_45px_rgba(28,25,23,0.16)] sm:h-72"
+            className="group relative h-[22rem] overflow-hidden rounded-2xl bg-orange-50 text-white shadow-[0_16px_45px_rgba(28,25,23,0.16)]"
             aria-roledescription="carousel"
             aria-label="Campaign management highlights"
             tabIndex={0}
@@ -977,6 +1004,7 @@ export default function CampaignManagementPage() {
               </div>
               {latestCampaigns.map((campaign, index) => {
                 const progress = campaignProgress(campaign);
+                const daysLeft = campaignDaysLeft(campaign);
                 return (
                   <article key={campaign.id} className="relative h-full w-full shrink-0" aria-hidden={heroSlide !== index + 1}>
                     {campaign.image_url ? (
@@ -991,17 +1019,20 @@ export default function CampaignManagementPage() {
                         <span className="text-stone-500">•</span>
                         <span className="text-stone-300">Submitted {date(campaign.created_at)}</span>
                       </div>
-                      <h2 className="mt-2 line-clamp-2 text-2xl font-black sm:text-3xl">{campaign.title}</h2>
+                      <h2 className="mt-2 shrink-0 line-clamp-2 text-2xl font-black leading-tight sm:text-3xl">{campaign.title}</h2>
                       <p className="mt-1 text-sm font-semibold text-stone-300">{campaign.shelter_name || "Unknown shelter"}</p>
+                      <p className="mt-2 line-clamp-2 max-w-2xl text-sm font-medium leading-5 text-stone-300">{campaign.description || "No campaign summary provided."}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <StatusBadge status={effectiveCampaignStatus(campaign)} />
                         <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black capitalize ring-1 ring-white/15">{campaign.urgency_level} urgency</span>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black ring-1 ring-white/15">{daysLeft > 0 ? `${daysLeft} days left` : "Deadline reached"}</span>
                       </div>
                       <div className="mt-4 max-w-lg">
                         <div className="flex justify-between text-xs font-bold text-stone-300"><span>{weiAsEth(campaign.on_chain_total_raised_wei)} raised</span><span>{progress}% of {weiAsEth(campaign.on_chain_goal_wei ?? campaign.goal_wei)}</span></div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} /></div>
+                        <div className="mt-1.5 flex justify-between gap-3 text-[10px] font-semibold text-stone-400"><span>≈ {money(weiToMyr(campaign.on_chain_total_raised_wei ?? "0"))} raised</span><span>Goal ≈ {money(weiToMyr(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? "0"))}</span></div>
                       </div>
-                      <button type="button" onClick={() => setDetails(campaign)} className="mt-4 w-fit rounded-xl bg-white px-4 py-2 text-xs font-black text-stone-950 transition hover:bg-orange-100">View details →</button>
+                      <button type="button" onClick={() => setDetails(campaign)} className="mt-4 w-fit rounded-xl bg-white px-4 py-2 text-xs font-black text-stone-950 transition hover:bg-orange-100">View details ↗</button>
                     </div>
                   </article>
                 );
@@ -1092,14 +1123,16 @@ export default function CampaignManagementPage() {
                   <button
                     key={item}
                     onClick={() => setTab(item)}
-                    className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-black transition ${tab === item ? "bg-white text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100" : "text-stone-500 hover:bg-white/60 hover:text-stone-900"}`}
+                    className={`inline-flex items-center whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-black transition ${item === "Needs Proof Review" ? tab === item ? "bg-amber-100 text-amber-900 shadow-sm ring-1 ring-amber-200" : "text-amber-700 hover:bg-amber-50" : tab === item ? "bg-white text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100" : "text-stone-500 hover:bg-white/60 hover:text-stone-900"}`}
                   >
-                    {item}{" "}
-                    <span className="ml-1 text-xs opacity-60">
+                    {item === "Needs Proof Review" ? <><span className="mr-2 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-amber-200" />Proof Review</> : item}{" "}
+                    <span className={`ml-1.5 text-xs ${item === "Needs Proof Review" ? "rounded-full bg-white/80 px-2 py-0.5 text-amber-800 ring-1 ring-amber-200" : "opacity-60"}`}>
                       {item === "All Campaigns"
                         ? summary.total
                         : item === "Pending Approval"
                           ? summary.pending
+                          : item === "Needs Proof Review"
+                            ? summary.proofCampaigns
                           : item === "Approved"
                             ? summary.approved
                             : item === "Rejected"
@@ -1119,6 +1152,8 @@ export default function CampaignManagementPage() {
                 <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((campaign) => {
                     const progress = campaignProgress(campaign);
+                    const daysLeft = campaignDaysLeft(campaign);
+                    const pendingProofs = (campaign.campaign_milestones ?? []).filter(reviewableMilestone);
                     const hasHoverActions =
                       campaign.campaign_status === "pending_approval" ||
                       isApproved(campaign.campaign_status);
@@ -1145,7 +1180,8 @@ export default function CampaignManagementPage() {
                             />
                           ) : <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,.9),transparent_35%),radial-gradient(circle_at_85%_75%,rgba(255,138,0,.22),transparent_38%)]" />}
                           <div className="absolute left-3 top-3"><StatusBadge status={effectiveCampaignStatus(campaign)} /></div>
-                          <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-black capitalize text-stone-800 shadow-sm backdrop-blur">{campaign.urgency_level}</span>
+                          <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-black capitalize text-stone-800 shadow-sm backdrop-blur">{campaign.urgency_level} urgency</span>
+                          {pendingProofs.length ? <span className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-100/95 px-3 py-2 text-xs font-black text-amber-950 shadow-[0_8px_24px_rgba(28,25,23,0.18)] backdrop-blur"><span className="grid h-5 w-5 place-items-center rounded-full bg-amber-500 text-[11px] text-white">!</span>{pendingProofs.length} proof {pendingProofs.length === 1 ? "review" : "reviews"}</span> : null}
                         </div>
                         <div className="relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-100 bg-white px-4 pb-3 pt-5 transition-colors group-hover/card:border-orange-200">
                           <div className="flex items-start justify-between gap-3">
@@ -1157,7 +1193,7 @@ export default function CampaignManagementPage() {
                                 {campaign.shelter_name || campaign.shelter_id}
                               </p>
                             </div>
-                            <span className="shrink-0 text-xs font-bold text-stone-400">{date(campaign.created_at)}</span>
+                            <span className="shrink-0 text-right text-[10px] font-bold uppercase tracking-wide text-stone-400">Submitted<br />{date(campaign.created_at)}</span>
                           </div>
                           <p className="mt-2 line-clamp-2 text-sm leading-5 text-stone-600">
                             {campaign.description}
@@ -1174,10 +1210,14 @@ export default function CampaignManagementPage() {
                               style={{ width: `${progress}%` }}
                             />
                           </div>
+                          <div className="mt-1.5 flex justify-between gap-3 text-[10px] font-semibold text-stone-400">
+                            <span>≈ {money(weiToMyr(campaign.on_chain_total_raised_wei ?? "0"))} raised</span>
+                            <span>Goal ≈ {money(weiToMyr(campaign.on_chain_goal_wei ?? campaign.goal_wei ?? "0"))}</span>
+                          </div>
                           <div className="mt-3 grid grid-cols-2 gap-2 text-left">
                             <div className="rounded-xl bg-orange-50/60 p-2.5">
-                              <p className="text-sm font-black">{campaign.duration_days}</p>
-                              <p className="text-[10px] font-semibold text-stone-500">Days</p>
+                              <p className="text-sm font-black">{daysLeft}</p>
+                              <p className="text-[10px] font-semibold text-stone-500">Days left</p>
                             </div>
                             <div className="rounded-xl bg-orange-50/60 p-2.5">
                               <p className="text-sm font-black">{campaign.campaign_milestones?.length ?? 0}</p>
@@ -1186,19 +1226,9 @@ export default function CampaignManagementPage() {
                           </div>
                           {isApproved(campaign.campaign_status) ? (
                             <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-orange-100 bg-orange-50/30 px-3 py-2 text-xs font-bold">
-                              <span>
-                                {
-                                  campaign.campaign_milestones.filter(
-                                    reviewableMilestone,
-                                  ).length
-                                }{" "}
-                                proofs awaiting review
-                              </span>
+                              <span>{pendingProofs.length} proofs awaiting review</span>
                               <span className="text-stone-400">·</span>
-                              <span className="max-w-md truncate font-mono text-[10px] text-stone-500">
-                                {campaign.contract_address ||
-                                  "No campaign contract address"}
-                              </span>
+                              <span className="max-w-md truncate font-mono text-[10px] text-stone-500">{campaign.contract_address || "No campaign contract address"}</span>
                             </div>
                           ) : null}
                           {campaign.campaign_status === "rejected" &&
@@ -1453,6 +1483,15 @@ export default function CampaignManagementPage() {
                 </p>
               </div>
             </div>
+            <div className="mt-4 flex flex-col gap-2 rounded-xl border border-orange-200 bg-orange-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-orange-700">Shelter contact for verification</p>
+                <p className="mt-1 text-sm font-bold text-stone-800">{milestoneCampaign.shelter_name || "Shelter representative"}</p>
+              </div>
+              {milestoneCampaign.shelter_phone ? (
+                <a href={`tel:${milestoneCampaign.shelter_phone}`} className="inline-flex w-fit items-center rounded-xl bg-stone-950 px-4 py-2 text-sm font-black text-white transition hover:bg-orange-600">Call {milestoneCampaign.shelter_phone}</a>
+              ) : <span className="text-xs font-bold text-stone-500">No phone number available</span>}
+            </div>
             <div className="relative mt-4 h-3 overflow-hidden rounded-full bg-orange-100 ring-1 ring-orange-200/70">
               <div
                 className="h-full rounded-full bg-[var(--color-orange)] transition-[width] duration-700 ease-out"
@@ -1496,41 +1535,49 @@ export default function CampaignManagementPage() {
             </div>
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-5 space-y-4 rounded-2xl border border-stone-200 bg-stone-100/80 p-3 sm:p-4">
             {milestoneCampaign.campaign_milestones.length ? (
               milestoneCampaign.campaign_milestones.map((milestone, index) => {
                 const links = proofLinks(milestone.proof_url);
+                const amountWei = milestoneAmountWei(milestoneCampaign.on_chain_goal_wei ?? milestoneCampaign.goal_wei, milestone.percentage);
                 return (
-                  <article key={milestone.id} className="rounded-2xl border border-orange-100 p-4 shadow-sm sm:p-5">
+                  <article key={milestone.id} className={`relative overflow-hidden rounded-2xl border p-4 shadow-[0_8px_24px_rgba(28,25,23,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(28,25,23,0.13)] sm:p-5 ${reviewableMilestone(milestone) ? "border-amber-400 bg-amber-50" : "border-stone-300 bg-white"}`}>
+                    <span className={`absolute inset-y-0 left-0 w-1.5 ${reviewableMilestone(milestone) ? "bg-amber-500" : milestone.status === "approved" ? "bg-emerald-600" : milestone.status === "rejected" ? "bg-red-600" : "bg-orange-400"}`} aria-hidden="true" />
                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-50 text-xs font-black text-[var(--color-orange)]">{index + 1}</span>
-                          <h4 className="font-black text-stone-950">{milestone.title}</h4>
+                          <span className={`grid h-9 w-9 place-items-center rounded-xl text-xs font-black ${reviewableMilestone(milestone) ? "bg-amber-200 text-amber-900" : "bg-orange-50 text-[var(--color-orange)]"}`}>{index + 1}</span>
+                          <div><p className="text-[9px] font-black uppercase tracking-[0.14em] text-stone-600">Milestone {index + 1} of {milestoneCampaign.campaign_milestones.length}</p><h4 className="mt-0.5 text-base font-black text-stone-950">{milestone.title}</h4></div>
                           <MilestoneBadge item={milestone} />
                         </div>
-                        <p className="mt-3 text-sm leading-6 text-stone-600">{milestone.description}</p>
-                        <p className="mt-2 text-xs font-bold text-stone-500">Requirement: {milestone.requirement}</p>
+                        <p className="mt-3 text-sm font-medium leading-6 text-stone-700">{milestone.description}</p>
                       </div>
                       <div className="shrink-0 text-left md:text-right">
                         <p className="text-2xl font-black text-[var(--color-orange)]">{milestone.percentage}%</p>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Fund release</p>
+                        <p className="mt-1 text-sm font-black text-stone-950">{weiAsEth(amountWei)}</p>
+                        <p className="text-xs font-bold text-stone-600">≈ {money(weiToMyr(amountWei))}</p>
+                        <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-stone-600">Allocated fund release</p>
                       </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl bg-orange-50/50 p-3">
+                    <div className="mt-4 rounded-xl border border-stone-300 bg-stone-100 px-3 py-3"><p className="text-[9px] font-black uppercase tracking-wide text-stone-600">Completion requirement</p><p className="mt-1 text-xs font-bold leading-5 text-stone-800">{milestone.requirement || "No additional requirement provided."}</p></div>
+
+                    <div className={`mt-4 rounded-xl border p-3 ${links.length ? reviewableMilestone(milestone) ? "border-amber-400 bg-amber-100" : "border-orange-300 bg-orange-100/80" : "border-dashed border-stone-300 bg-stone-100"}`}>
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-stone-700">Submitted evidence</p>
+                      <div className="flex flex-wrap items-center gap-2">
                       {links.length ? links.map((link, linkIndex) => (
                         <button
                           type="button"
                           key={`${link.url}-${linkIndex}`}
                           title={link.name}
                           onClick={() => setProofPreview(link)}
-                          className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-black text-[var(--color-orange)] shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-100"
+                          className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-orange)] px-4 py-2.5 text-xs font-black text-white shadow-[0_6px_18px_rgba(249,115,22,0.28)] ring-1 ring-orange-500 transition hover:-translate-y-0.5 hover:bg-orange-600 hover:shadow-[0_9px_24px_rgba(249,115,22,0.38)] focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-offset-2"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
                           View proof{links.length > 1 ? ` ${linkIndex + 1}` : ""}
                         </button>
                       )) : <span className="text-xs font-bold text-stone-500">No proof submitted yet</span>}
+                      </div>
                     </div>
 
                     {milestone.rejection_reason ? <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">Previous rejection: {milestone.rejection_reason}</p> : null}
@@ -1542,13 +1589,13 @@ export default function CampaignManagementPage() {
                       />
                     </div>
 
-                    <div className="mt-4 flex flex-col gap-3 border-t border-orange-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-stone-400">Updated {date(milestone.updated_at)}</p>
+                    <div className="mt-4 flex flex-col gap-3 border-t border-stone-300 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs font-semibold text-stone-600">Updated {date(milestone.updated_at)}</p>
                       <div className="flex flex-wrap gap-2">
                         {reviewableMilestone(milestone) ? (
                           <>
-                            <button onClick={() => setMilestoneApproveTarget(milestone)} className="rounded-xl bg-[var(--color-orange)] px-4 py-2 text-xs font-black text-white hover:bg-orange-600">Approve proof</button>
-                            <button onClick={() => { setMilestoneRejectTarget(milestone); setMilestoneReason(""); }} className="rounded-xl bg-stone-950 px-4 py-2 text-xs font-black text-white hover:bg-stone-800">Reject proof</button>
+                            <button onClick={() => setMilestoneApproveTarget(milestone)} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white shadow-sm hover:bg-emerald-700">Approve proof</button>
+                            <button onClick={() => { setMilestoneRejectTarget(milestone); setMilestoneReason(""); }} className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-xs font-black text-red-700 hover:bg-red-50">Reject proof</button>
                           </>
                         ) : null}
                       </div>

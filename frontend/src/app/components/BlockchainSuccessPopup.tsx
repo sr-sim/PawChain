@@ -12,6 +12,7 @@ type BlockchainSuccessPopupProps = {
   transactions?: { label: string; hash: string }[];
   details?: { label: string; value: string }[];
   actionLabel?: string;
+  confirmedLabel?: string;
   onClose: () => void;
   autoCloseMs?: number;
 };
@@ -27,6 +28,7 @@ export function BlockchainSuccessPopup({
   transactions = [],
   details = [],
   actionLabel = "View transaction",
+  confirmedLabel = "Transaction confirmed",
   onClose,
   autoCloseMs = 0,
 }: BlockchainSuccessPopupProps) {
@@ -122,7 +124,7 @@ export function BlockchainSuccessPopup({
                   ? "Confirmation pending"
                   : failed
                     ? "Transaction not completed"
-                    : "Transaction confirmed"}
+                    : confirmedLabel}
               </p>
               <h2 className="mt-1 text-base font-black text-stone-950">
                 {title}

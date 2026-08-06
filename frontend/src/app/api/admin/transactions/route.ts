@@ -7,6 +7,7 @@ import {
   type Log,
 } from "viem";
 import { isAdminWallet } from "@/lib/admin-wallets";
+import { walletSessionMatches } from "@/lib/wallet-session";
 import {
   getCampaignFactoryAddress,
   getPawChainId,
@@ -112,6 +113,9 @@ export async function GET(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
     const walletAddress = params.get("walletAddress") ?? "";
+    if (!walletSessionMatches(request, walletAddress)) {
+      return NextResponse.json({ message: "Wallet authentication is required." }, { status: 401 });
+    }
     if (!(await isAdminWallet(walletAddress))) {
       return NextResponse.json({ message: "Access denied." }, { status: 403 });
     }

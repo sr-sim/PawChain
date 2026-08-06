@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireWalletSession } from "@/lib/wallet-session";
 import { getDonorDonations } from "@/lib/donor-donations";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { campaignContractAbi } from "@/lib/campaign-contract-abi";
@@ -21,6 +22,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const walletAddress = request.nextUrl.searchParams.get("walletAddress") ?? "";
+    requireWalletSession(request, walletAddress);
 
     if (!walletAddress) {
       return NextResponse.json(
@@ -50,6 +52,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const walletAddress = String(body.walletAddress ?? "").trim();
+    requireWalletSession(request, walletAddress);
     const campaignId = String(body.campaignId ?? "").trim();
     const txHash = String(body.txHash ?? "").trim();
 

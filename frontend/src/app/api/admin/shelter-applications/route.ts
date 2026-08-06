@@ -7,6 +7,7 @@ import {
   type Hash,
 } from "viem";
 import { isAdminWallet } from "@/lib/admin-wallets";
+import { walletSessionMatches } from "@/lib/wallet-session";
 import { getRoleNFTConfig, getRoleNFTStatus } from "@/lib/role-nft";
 import { roleNFTAbi } from "@/lib/role-nft-abi";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -19,6 +20,9 @@ function readAdminWallet(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const adminWallet = readAdminWallet(request);
 
+  if (!walletSessionMatches(request, adminWallet)) {
+    return NextResponse.json({ message: "Wallet authentication is required." }, { status: 401 });
+  }
   if (!(await isAdminWallet(adminWallet))) {
     return NextResponse.json(
       { message: "Access denied. This wallet is not an admin." },
@@ -83,6 +87,9 @@ export async function POST(request: NextRequest) {
   const rejectionReason = String(body.rejectionReason ?? "").trim();
   const txHash = String(body.txHash ?? "").trim();
 
+  if (!walletSessionMatches(request, adminWallet)) {
+    return NextResponse.json({ message: "Wallet authentication is required." }, { status: 401 });
+  }
   if (!(await isAdminWallet(adminWallet))) {
     return NextResponse.json(
       { message: "Access denied. This wallet is not an admin." },
