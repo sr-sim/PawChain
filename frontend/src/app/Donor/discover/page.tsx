@@ -1554,7 +1554,7 @@ export default function DonorDiscoverPage() {
                           />
                         </div>
                         <p className="mt-1 text-[11px] font-semibold text-stone-400">
-                          {Math.round(fundingState.progress)}% of this stage funded
+                          {Number(fundingState.progress.toFixed(2))}% of this stage funded
                         </p>
                         <p className="text-xs font-semibold text-stone-500">
                           Stage:{" "}
