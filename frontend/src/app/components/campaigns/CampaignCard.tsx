@@ -119,7 +119,7 @@ function CampaignCardContent({ campaign, milestoneCount }: { campaign: Campaign;
                   ? `${refundPoolEth.toLocaleString("en-MY", { maximumFractionDigits: 6 })} ETH`
                   : "Reading on-chain..."}
               </p>
-              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">about {formatCurrency(refundPoolEth * rate)} · claimed proportionally by donors</p> : null}
+              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">about {formatCurrency(refundPoolEth * rate)} · available to eligible donors</p> : null}
             </div>
           ) : null}
           <div className="mt-4 flex items-center justify-between border-t border-orange-100 pt-3 text-[11px] font-bold text-stone-500"><span>{milestoneCount ?? 0} milestone{milestoneCount === 1 ? "" : "s"}</span><span>{campaign.campaign_status === "completed" ? "Completed" : campaign.campaign_status === "closed" ? "Closed" : `${remainingDays} days left`}</span></div>

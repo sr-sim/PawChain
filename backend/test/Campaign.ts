@@ -123,7 +123,7 @@ describe("Campaign and CampaignFactory", function () {
       campaignAddress,
     );
     expect(await factory.read.getCampaignCount()).to.equal(1n);
-    expect(await factory.read.FLOW_VERSION()).to.equal(2n);
+    expect(await factory.read.FLOW_VERSION()).to.equal(3n);
     expect(await factory.read.getAllCampaigns()).to.deep.equal([
       campaignAddress,
     ]);
@@ -131,7 +131,7 @@ describe("Campaign and CampaignFactory", function () {
       await factory.read.getCampaignsByShelter([shelter.account.address]),
     ).to.deep.equal([campaignAddress]);
     expect(await campaign.read.getMilestoneCount()).to.equal(4n);
-    expect(await campaign.read.FLOW_VERSION()).to.equal(2n);
+    expect(await campaign.read.FLOW_VERSION()).to.equal(3n);
     expect(await campaign.read.campaignStatus()).to.equal(
       CampaignStatus.Funding,
     );
@@ -462,7 +462,7 @@ describe("Campaign and CampaignFactory", function () {
     );
   });
 
-  it("refunds the remaining locked balance proportionally after cancellation", async function () {
+  it("refunds only unreleased milestone contributions after cancellation", async function () {
     const {
       campaign,
       campaignAsShelter,
@@ -490,10 +490,10 @@ describe("Campaign and CampaignFactory", function () {
     expect(await campaign.read.refundPool()).to.equal(parseEther("2"));
     expect(
       await campaign.read.getRefundableAmount([donorOne.account.address]),
-    ).to.equal(parseEther("1.04"));
+    ).to.equal(parseEther("1"));
     expect(
       await campaign.read.getRefundableAmount([donorTwo.account.address]),
-    ).to.equal(parseEther("0.96"));
+    ).to.equal(parseEther("1"));
 
     await campaignAsDonorOne.write.claimRefund();
     await expectRevert(
@@ -535,6 +535,81 @@ describe("Campaign and CampaignFactory", function () {
       campaignAsDonorOne.write.donate([], { value: parseEther("0.1") }),
       "Not funding",
     );
+  });
+
+  describe("Milestone-specific refunds (desired V3 behavior)", function () {
+    it("refunds a milestone 2 donor in full after milestone 1 was released", async function () {
+      const {
+        campaign,
+        campaignAsShelter,
+        campaignAsDonorOne,
+        campaignAsDonorTwo,
+        donorOne,
+        donorTwo,
+        deadline,
+      } = await loadFixture(deployFixture);
+
+      // Milestone 1 is fully funded, withdrawn, and approved.
+      await campaignAsDonorOne.write.donate([], {
+        value: parseEther("0.5"),
+      });
+      await campaignAsShelter.write.withdrawMilestone([0n]);
+      await campaignAsShelter.write.submitMilestoneProof([0n, "proof-0"]);
+      await campaign.write.approveMilestone([0n]);
+
+      // This contribution belongs only to the unfinished milestone 2.
+      await campaignAsDonorTwo.write.donate([], {
+        value: parseEther("1"),
+      });
+      await time.increaseTo(deadline);
+      await campaign.write.finalizeExpired();
+
+      expect(
+        await campaign.read.getRefundableAmount([donorOne.account.address]),
+      ).to.equal(0n);
+      expect(
+        await campaign.read.getRefundableAmount([donorTwo.account.address]),
+      ).to.equal(parseEther("1"));
+    });
+
+    it("refunds only milestone 4 contributions after milestones 1 to 3 were released", async function () {
+      const {
+        campaign,
+        campaignAsShelter,
+        campaignAsDonorOne,
+        campaignAsDonorTwo,
+        donorOne,
+        donorTwo,
+        deadline,
+      } = await loadFixture(deployFixture);
+
+      const releasedAllocations = ["0.5", "2.5", "3"] as const;
+      for (let index = 0; index < releasedAllocations.length; index++) {
+        await campaignAsDonorOne.write.donate([], {
+          value: parseEther(releasedAllocations[index]),
+        });
+        await campaignAsShelter.write.withdrawMilestone([BigInt(index)]);
+        await campaignAsShelter.write.submitMilestoneProof([
+          BigInt(index),
+          `proof-${index}`,
+        ]);
+        await campaign.write.approveMilestone([BigInt(index)]);
+      }
+
+      // Only this milestone 4 contribution remains in the contract.
+      await campaignAsDonorTwo.write.donate([], {
+        value: parseEther("1"),
+      });
+      await time.increaseTo(deadline);
+      await campaign.write.finalizeExpired();
+
+      expect(
+        await campaign.read.getRefundableAmount([donorOne.account.address]),
+      ).to.equal(0n);
+      expect(
+        await campaign.read.getRefundableAmount([donorTwo.account.address]),
+      ).to.equal(parseEther("1"));
+    });
   });
 
   it("rejects a zero RoleNFT factory deployment", async function () {

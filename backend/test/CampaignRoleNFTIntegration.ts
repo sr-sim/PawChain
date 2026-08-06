@@ -87,8 +87,8 @@ describe("CampaignFactory with the real RoleNFT", function () {
       campaignAddress,
     );
 
-    expect(await factory.read.FLOW_VERSION()).to.equal(2n);
-    expect(await campaign.read.FLOW_VERSION()).to.equal(2n);
+    expect(await factory.read.FLOW_VERSION()).to.equal(3n);
+    expect(await campaign.read.FLOW_VERSION()).to.equal(3n);
     expect((await campaign.read.getMilestone([0n])).status).to.equal(1);
     expect((await campaign.read.getMilestone([1n])).status).to.equal(0);
 
