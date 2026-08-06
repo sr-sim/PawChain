@@ -464,6 +464,11 @@ export default async function DonorTrackingPage({
                     const hasCampaignRefund = campaignRefunds.has(
                       donation.campaignId,
                     );
+                    const rowStatus = campaignRefund
+                      ? "Refunded"
+                      : hasCampaignRefund
+                        ? "Closed"
+                        : donation.status;
 
                     return (
                     <article
@@ -629,9 +634,7 @@ export default async function DonorTrackingPage({
                         {formatDate(donation.createdAt)}
                       </p>
                       <div className="flex justify-start lg:justify-center">
-                        <StatusPill
-                          status={hasCampaignRefund ? "Refunded" : donation.status}
-                        />
+                        <StatusPill status={rowStatus} />
                       </div>
                     </article>
                     );
