@@ -333,6 +333,38 @@ npm.cmd run frontend
 
 Open [http://localhost:3000](http://localhost:3000), connect MetaMask to Sepolia, select a role, and start using PawChain.
 
+### Administrator account setup
+
+Administrators are internal users and cannot create an account through the public registration form. Admin access is determined directly by the deployed RoleNFT contract through `isAdmin(walletAddress)`, so an administrator does not need a donor or shelter profile in Supabase.
+
+For the current Sepolia deployment, the connected wallet must be one of the following:
+
+- The wallet that owns the deployed RoleNFT contract.
+- `0x6aFf4af1a3f45adBbEa5d64955387b2f809521A6`
+- `0x0D900c6FeF62E96Aa8Cf5788170A516aC66f3776`
+
+To prepare lecturer access:
+
+1. Choose a dedicated authorized Sepolia test wallet intended for demonstration. Do not reuse a wallet that controls real funds.
+2. Provide its private key to the lecturer through a secure private channel. Never place the key in this README, GitHub, email screenshots, or presentation slides.
+3. In MetaMask, select **Add account or hardware wallet → Import account** and import the private key.
+4. Switch MetaMask to **Ethereum Sepolia** with chain ID `11155111`.
+5. Ensure the wallet has a small amount of Sepolia ETH for administrative transactions.
+6. Start PawChain and connect the imported wallet.
+7. Sign the wallet-authentication message. PawChain checks the wallet against `RoleNFT.isAdmin()` and redirects an authorized wallet to `/Admin/dashboard`.
+
+Set the same authorized wallet key in `frontend/.env.local` when the server must mint or revoke RoleNFTs:
+
+```env
+ROLE_NFT_MINTER_PRIVATE_KEY=0xYOUR_AUTHORIZED_ADMIN_PRIVATE_KEY
+```
+
+This variable is server-only. Do not add `NEXT_PUBLIC_` to its name, and do not commit `frontend/.env.local`.
+
+An arbitrary lecturer wallet cannot be made an administrator through the UI or database. With the current contract, use an already authorized wallet, transfer RoleNFT ownership from the current owner, or deploy a new RoleNFT contract configured for the lecturer's test wallet.
+
+For a fresh local Hardhat deployment, the first Hardhat account deploys RoleNFT and becomes its owner, so it is automatically an administrator. Import that account's private key from the local Hardhat terminal into MetaMask, connect to `http://127.0.0.1:8545` with chain ID `31337`, and use the newly deployed local contract addresses.
+
 ## 🔧 Troubleshooting
 
 ### Wallet connection issues
@@ -347,6 +379,14 @@ Open [http://localhost:3000](http://localhost:3000), connect MetaMask to Sepolia
 - Confirm the RoleNFT and CampaignFactory addresses match the deployed Sepolia contracts listed above.
 - Confirm the administrator or minter wallet is authorized by the RoleNFT contract.
 - Restart the frontend after changing environment variables.
+
+### Administrator access denied
+
+- Confirm MetaMask is using the intended administrator address.
+- Confirm the wallet is connected to the same network as `NEXT_PUBLIC_ROLE_NFT_ADDRESS`.
+- Confirm the configured RoleNFT address is `0x2F2bFC356D87a901CDe862B5D0DFc20017838C43` for the current Sepolia deployment.
+- Check the wallet with the RoleNFT contract's `isAdmin(address)` read function on Etherscan.
+- Admin access cannot be granted by inserting an `admin` row into Supabase; the wallet must be authorized by the smart contract.
 
 ### Frontend or database errors
 
