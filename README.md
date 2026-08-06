@@ -335,35 +335,28 @@ Open [http://localhost:3000](http://localhost:3000), connect MetaMask to Sepolia
 
 ### Administrator account setup
 
-Administrators are internal users and cannot create an account through the public registration form. Admin access is determined directly by the deployed RoleNFT contract through `isAdmin(walletAddress)`, so an administrator does not need a donor or shelter profile in Supabase.
+Administrators are internal users and cannot register through the public form. Access is granted when the connected wallet is recognized by the RoleNFT contract.
 
-For the current Sepolia deployment, the connected wallet must be one of the following:
+For the current Sepolia deployment, use the contract owner or one of these authorized wallets:
 
-- The wallet that owns the deployed RoleNFT contract.
 - `0x6aFf4af1a3f45adBbEa5d64955387b2f809521A6`
 - `0x0D900c6FeF62E96Aa8Cf5788170A516aC66f3776`
 
-To prepare lecturer access:
+To access the admin dashboard:
 
-1. Choose a dedicated authorized Sepolia test wallet intended for demonstration. Do not reuse a wallet that controls real funds.
-2. Provide its private key to the lecturer through a secure private channel. Never place the key in this README, GitHub, email screenshots, or presentation slides.
-3. In MetaMask, select **Add account or hardware wallet → Import account** and import the private key.
-4. Switch MetaMask to **Ethereum Sepolia** with chain ID `11155111`.
-5. Ensure the wallet has a small amount of Sepolia ETH for administrative transactions.
-6. Start PawChain and connect the imported wallet.
-7. Sign the wallet-authentication message. PawChain checks the wallet against `RoleNFT.isAdmin()` and redirects an authorized wallet to `/Admin/dashboard`.
+1. Import the private key of a dedicated authorized test wallet into MetaMask.
+2. Switch MetaMask to Ethereum Sepolia (`11155111`).
+3. Ensure the wallet has Sepolia ETH for transaction fees.
+4. Start PawChain, connect the wallet, and sign the authentication message.
+5. An authorized wallet is automatically redirected to `/Admin/dashboard`.
 
-Set the same authorized wallet key in `frontend/.env.local` when the server must mint or revoke RoleNFTs:
+The same authorized wallet key is configured on the server for RoleNFT minting and revocation:
 
 ```env
 ROLE_NFT_MINTER_PRIVATE_KEY=0xYOUR_AUTHORIZED_ADMIN_PRIVATE_KEY
 ```
 
-This variable is server-only. Do not add `NEXT_PUBLIC_` to its name, and do not commit `frontend/.env.local`.
-
-An arbitrary lecturer wallet cannot be made an administrator through the UI or database. With the current contract, use an already authorized wallet, transfer RoleNFT ownership from the current owner, or deploy a new RoleNFT contract configured for the lecturer's test wallet.
-
-For a fresh local Hardhat deployment, the first Hardhat account deploys RoleNFT and becomes its owner, so it is automatically an administrator. Import that account's private key from the local Hardhat terminal into MetaMask, connect to `http://127.0.0.1:8545` with chain ID `31337`, and use the newly deployed local contract addresses.
+Keep all private keys confidential and never commit `frontend/.env.local`.
 
 ## 🔧 Troubleshooting
 
@@ -382,11 +375,9 @@ For a fresh local Hardhat deployment, the first Hardhat account deploys RoleNFT 
 
 ### Administrator access denied
 
-- Confirm MetaMask is using the intended administrator address.
-- Confirm the wallet is connected to the same network as `NEXT_PUBLIC_ROLE_NFT_ADDRESS`.
-- Confirm the configured RoleNFT address is `0x2F2bFC356D87a901CDe862B5D0DFc20017838C43` for the current Sepolia deployment.
-- Check the wallet with the RoleNFT contract's `isAdmin(address)` read function on Etherscan.
-- Admin access cannot be granted by inserting an `admin` row into Supabase; the wallet must be authorized by the smart contract.
+- Confirm MetaMask is using an authorized wallet on Sepolia.
+- Confirm `NEXT_PUBLIC_ROLE_NFT_ADDRESS` matches the deployed contract.
+- Check the wallet using the contract's `isAdmin(address)` function on Etherscan.
 
 ### Frontend or database errors
 
