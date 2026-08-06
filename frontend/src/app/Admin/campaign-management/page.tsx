@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { useChainId, usePublicClient, useWriteContract } from "wagmi";
 import { formatEther, isAddress } from "viem";
@@ -275,6 +276,8 @@ function Modal({
 }
 
 export default function CampaignManagementPage() {
+  const searchParams = useSearchParams();
+  const requestedCampaignId = searchParams.get("campaignId");
   const { rate: ethMyrRate, weiToMyr } = useEthMyrRate();
   const { address, isConnected } = useAppKitAccount();
   const chainId = useChainId();
@@ -349,6 +352,13 @@ export default function CampaignManagementPage() {
     if (address && isConnected) void load();
     else setCampaigns([]);
   }, [address, isConnected]);
+  useEffect(() => {
+    if (!requestedCampaignId || campaigns.length === 0) return;
+    const requestedCampaign = campaigns.find(
+      (campaign) => campaign.id === requestedCampaignId,
+    );
+    if (requestedCampaign) setDetails(requestedCampaign);
+  }, [campaigns, requestedCampaignId]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 3500);

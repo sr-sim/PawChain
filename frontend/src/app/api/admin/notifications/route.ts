@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       { data: milestones, error: milestoneError },
       { data: donors, error: donorError },
       { data: certificates, error: certificateError },
+      { data: reports, error: reportError },
     ] = await Promise.all([
       supabase
         .from("shelter_applications")
@@ -58,6 +59,11 @@ export async function GET(request: NextRequest) {
       supabase
         .from("hero_certificates")
         .select("donor_id, delivery_status"),
+      supabase
+        .from("donor_support_requests")
+        .select("id, donor_id, campaign_id, subject, created_at, campaigns(title)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
     ]);
 
     if (shelterError) throw shelterError;
@@ -65,11 +71,15 @@ export async function GET(request: NextRequest) {
     if (milestoneError) throw milestoneError;
     if (donorError) throw donorError;
     if (certificateError) throw certificateError;
+    if (reportError) throw reportError;
 
     const sentCertificateDonors = new Set(
       (certificates ?? [])
         .filter((certificate) => certificate.delivery_status === "sent")
         .map((certificate) => certificate.donor_id),
+    );
+    const donorEmails = new Map(
+      (donors ?? []).map((donor) => [donor.id, donor.email]),
     );
 
     const heroDonors = (
@@ -123,6 +133,26 @@ export async function GET(request: NextRequest) {
           created_at: item.updated_at,
           campaign_id: item.campaign_id,
           href: "/Admin/milestone-verification",
+        };
+      }),
+      ...(reports ?? []).map((item) => {
+        const campaignRelation = item.campaigns as
+          | { title?: string }
+          | { title?: string }[]
+          | null;
+        const campaignTitle = Array.isArray(campaignRelation)
+          ? campaignRelation[0]?.title
+          : campaignRelation?.title;
+
+        return {
+          id: `donor-report-${item.id}`,
+          title: "Campaign reported by donor",
+          message: `${item.subject || "A campaign concern"} was submitted for admin review.\nCampaign: ${campaignTitle || "Not available"}\nReport reference: ${item.id}\nDonor email: ${donorEmails.get(item.donor_id) || "Not available"}`,
+          status: "warning" as const,
+          is_read: false as const,
+          created_at: item.created_at,
+          campaign_id: item.campaign_id,
+          href: "/Admin/help-support",
         };
       }),
       ...heroDonors.map((donor) => ({
