@@ -94,8 +94,8 @@ function getCampaignDisplayStatus(campaign: { status: string; raised: number }) 
   return campaign.status;
 }
 
-function canCampaignReceiveDonation(campaign: { status: string; raised: number }) {
-  return getCampaignDisplayStatus(campaign) === "Active";
+function canCampaignReceiveDonation(campaign: DonorCampaign) {
+  return getCampaignActionState(campaign).canDonate;
 }
 
 function formatMyr(value: number) {
@@ -227,6 +227,93 @@ function getMilestoneFundingState(
     ),
     tone: "active" as const,
   };
+}
+
+function getCampaignActionState(campaign: DonorCampaign) {
+  const displayStatus = getCampaignDisplayStatus(campaign);
+
+  if (displayStatus === "Completed") {
+    return {
+      canDonate: false,
+      label: "Completed",
+      helper: "Campaign funding is complete.",
+      tone: "complete" as const,
+    };
+  }
+
+  if (displayStatus === "Closed") {
+    return {
+      canDonate: false,
+      label: "Closed",
+      helper: "This campaign is no longer accepting donations.",
+      tone: "closed" as const,
+    };
+  }
+
+  const milestones = getCampaignMilestoneItems(campaign);
+  const currentIndex = getCurrentMilestoneIndex(
+    milestones,
+    campaign.raised,
+    displayStatus,
+    campaign.currentMilestoneIndex,
+  );
+  const currentMilestone =
+    currentIndex >= 0 ? milestones[currentIndex] : null;
+  const fundingState =
+    currentIndex >= 0
+      ? getMilestoneFundingState(milestones, currentIndex, campaign.raised)
+      : null;
+  const milestoneStatus = String(currentMilestone?.status ?? "").toLowerCase();
+
+  if (fundingState?.tone === "complete" && campaign.raised < 100) {
+    if (milestoneStatus.includes("review")) {
+      return {
+        canDonate: false,
+        label: "Proof review",
+        helper: "The current milestone proof is under review.",
+        tone: "waiting" as const,
+      };
+    }
+
+    if (milestoneStatus.includes("reject")) {
+      return {
+        canDonate: false,
+        label: "Proof revision",
+        helper: "The shelter is revising milestone proof.",
+        tone: "waiting" as const,
+      };
+    }
+
+    return {
+      canDonate: false,
+      label: "Milestone funded",
+      helper: "This milestone is funded and waiting for the shelter action.",
+      tone: "waiting" as const,
+    };
+  }
+
+  return {
+    canDonate: true,
+    label: "Open for donation",
+    helper: "This campaign can accept donations.",
+    tone: "active" as const,
+  };
+}
+
+function getActionStateStyle(tone: ReturnType<typeof getCampaignActionState>["tone"]) {
+  if (tone === "active") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (tone === "complete") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (tone === "waiting") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-stone-200 bg-stone-50 text-stone-600";
 }
 
 function shortHash(value: string) {
@@ -639,7 +726,10 @@ export default function DonorDiscoverPage() {
     };
   }, [selectedCampaign]);
   const activeCampaigns = useMemo(
-    () => sortedCampaigns.filter((campaign) => canCampaignReceiveDonation(campaign)),
+    () =>
+      sortedCampaigns.filter(
+        (campaign) => getCampaignDisplayStatus(campaign) === "Active",
+      ),
     [sortedCampaigns],
   );
   const completedCampaigns = useMemo(
@@ -1025,14 +1115,24 @@ export default function DonorDiscoverPage() {
                         <span className="truncate">{campaign.shelter}</span>
                       </Link>
                     </div>
-                    <span
-                      className={[
-                        "shrink-0 rounded-full px-2.5 py-1 text-[0.68rem] font-semibold",
-                        getUrgencyStyle(campaign.urgency),
-                      ].join(" ")}
-                    >
-                      {campaign.urgency}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span
+                        className={[
+                          "rounded-full px-2.5 py-1 text-[0.68rem] font-semibold",
+                          getUrgencyStyle(campaign.urgency),
+                        ].join(" ")}
+                      >
+                        {campaign.urgency}
+                      </span>
+                      <span
+                        className={[
+                          "max-w-[8.5rem] rounded-full border px-2.5 py-1 text-right text-[0.62rem] font-black leading-3",
+                          getActionStateStyle(getCampaignActionState(campaign).tone),
+                        ].join(" ")}
+                      >
+                        {getCampaignActionState(campaign).label}
+                      </span>
+                    </div>
                   </div>
 
                   <p className="mt-2 line-clamp-2 min-h-10 text-sm leading-5 text-stone-600">
@@ -1106,12 +1206,18 @@ export default function DonorDiscoverPage() {
                     </div>
                     <div className="rounded-xl bg-orange-50/45 px-3 py-2">
                       <p className="font-black text-stone-950">
-                        {getCampaignDisplayStatus(campaign) === "Completed"
+                        {getCampaignDisplayStatus(campaign) === "Active" &&
+                        !canCampaignReceiveDonation(campaign)
+                          ? getCampaignActionState(campaign).label
+                          : getCampaignDisplayStatus(campaign) === "Completed"
                           ? "Completed"
                           : `${campaign.daysLeft} days`}
                       </p>
                       <p className="text-xs font-medium text-stone-500">
-                        Remaining
+                        {getCampaignDisplayStatus(campaign) === "Active" &&
+                        !canCampaignReceiveDonation(campaign)
+                          ? "Current stage"
+                          : "Remaining"}
                       </p>
                     </div>
                   </div>
@@ -1172,6 +1278,10 @@ export default function DonorDiscoverPage() {
                       > 
                         Donate Now
                       </Link>
+                    ) : getCampaignDisplayStatus(campaign) === "Active" ? (
+                      <div className="inline-flex w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700">
+                        {getCampaignActionState(campaign).label}
+                      </div>
                     ) : null}
                   </div>
                 </div>
