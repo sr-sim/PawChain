@@ -58,6 +58,7 @@ PawChain combines:
 - Review campaign proposals and deploy approved Campaign contracts.
 - Approve or reject milestone evidence.
 - Cancel campaigns and initiate the eligible refund flow.
+- Monitor underfunded campaign expiry through Chainlink Automation.
 - Monitor users, shelters, campaigns, transactions, analytics, and notifications.
 - Review donor reports with donor, campaign, shelter, and transaction references.
 - Open reported campaigns in campaign management for investigation.
@@ -94,10 +95,11 @@ PawChain combines:
 
 ### 5. Cancellation and refunds
 
-1. An administrator may cancel an active campaign, or an expired underfunded campaign may be finalized for refunds.
-2. New donations and normal withdrawals stop when refunds are enabled.
-3. Each donor claims with the same wallet used to donate.
-4. The donor receives contributions assigned to milestones whose funds were not released. Contributions from released milestones are not refundable.
+1. An administrator may cancel an active campaign.
+2. Chainlink Automation detects an expired campaign that has not reached its goal and calls `finalizeExpired()`.
+3. New donations and normal withdrawals stop when refunds are enabled.
+4. Each donor claims with the same wallet used to donate.
+5. The donor receives contributions assigned to milestones whose funds were not released. Contributions from released milestones are not refundable.
 
 ## 🔗 Smart contracts
 
@@ -124,6 +126,14 @@ PawChain combines:
 - Restricts proof decisions and cancellation to administrators.
 - Supports underfunded expiry, cancellation, and donor refund claims.
 - Uses state changes and reentrancy protection to prevent repeated withdrawals or claims.
+
+### `CampaignExpiryAutomation.sol`
+
+- Implements Chainlink Automation-compatible `checkUpkeep()` and `performUpkeep()` functions.
+- Reads campaigns created by CampaignFactory.
+- Detects campaigns that are still funding, have passed their deadline, and remain underfunded.
+- Calls the existing Campaign `finalizeExpired()` function to enable refunds.
+- Revalidates the campaign before execution to prevent stale upkeep calls.
 
 ## 📜 Contracts deployed
 
@@ -195,6 +205,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - **Frontend/API:** Next.js 16, React 19, TypeScript, Tailwind CSS
 - **Wallet/Web3:** Reown AppKit, Wagmi, Viem
 - **Blockchain:** Solidity 0.8.28, Hardhat, Hardhat Ignition
+- **Automation:** Chainlink Automation
 - **Database/storage:** Supabase and IPFS-compatible storage
 - **Documents/email:** PDF-Lib and Nodemailer
 
@@ -325,7 +336,25 @@ npm.cmd --prefix backend run compile
 npm.cmd run test:backend
 ```
 
-#### 5. Start the development server
+#### 5. Deploy and register Chainlink Automation
+
+Deploy the coordinator using the existing Sepolia CampaignFactory:
+
+```powershell
+npm.cmd run deploy:automation:sepolia
+```
+
+Copy the deployed `CampaignExpiryAutomation` address, then register it as a **Custom Logic** upkeep in the [Chainlink Automation app](https://automation.chain.link/):
+
+1. Select Ethereum Sepolia.
+2. Select **Custom Logic** and enter the automation contract address.
+3. Use empty check data (`0x`) and set a suitable perform gas limit.
+4. Fund the upkeep with Sepolia LINK.
+5. Confirm that the upkeep is active.
+
+The source code is implemented, but expiry automation is not live until this deployment and upkeep registration are completed. The administrator's manual **Finalize expiry** button remains available as a fallback.
+
+#### 6. Start the development server
 
 ```powershell
 npm.cmd run frontend
@@ -337,26 +366,18 @@ Open [http://localhost:3000](http://localhost:3000), connect MetaMask to Sepolia
 
 Administrators are internal users and cannot register through the public form. Access is granted when the connected wallet is recognized by the RoleNFT contract.
 
-For the current Sepolia deployment, use the contract owner or one of these authorized wallets:
+For independent evaluation, use a fresh local Hardhat deployment:
 
-- `0x6aFf4af1a3f45adBbEa5d64955387b2f809521A6`
-- `0x0D900c6FeF62E96Aa8Cf5788170A516aC66f3776`
+1. Run `npm.cmd run backend` and keep the Hardhat terminal open.
+2. In another terminal, run `npm.cmd run deploy`.
+3. Copy the deployed RoleNFT and CampaignFactory addresses into `frontend/.env.local`.
+4. Set `NEXT_PUBLIC_CHAIN_ID=31337` and `NEXT_PUBLIC_RPC_URL=http://127.0.0.1:8545`.
+5. Copy the first test account's private key from Hardhat into `ROLE_NFT_MINTER_PRIVATE_KEY` and import that account into MetaMask.
+6. Run `npm.cmd run frontend`, connect MetaMask to the local network, and sign in.
 
-To access the admin dashboard:
+The first Hardhat account deploys RoleNFT and becomes its owner, so it is automatically recognized as an administrator. This uses a disposable local test account and does not require access to the project owner's Sepolia wallet.
 
-1. Import the private key of a dedicated authorized test wallet into MetaMask.
-2. Switch MetaMask to Ethereum Sepolia (`11155111`).
-3. Ensure the wallet has Sepolia ETH for transaction fees.
-4. Start PawChain, connect the wallet, and sign the authentication message.
-5. An authorized wallet is automatically redirected to `/Admin/dashboard`.
-
-The same authorized wallet key is configured on the server for RoleNFT minting and revocation:
-
-```env
-ROLE_NFT_MINTER_PRIVATE_KEY=0xYOUR_AUTHORIZED_ADMIN_PRIVATE_KEY
-```
-
-Keep all private keys confidential and never commit `frontend/.env.local`.
+For evaluation on the existing Sepolia deployment, authorized demonstration-account credentials must be provided separately by the project owner. Never publish or commit a private key.
 
 ## 🔧 Troubleshooting
 
