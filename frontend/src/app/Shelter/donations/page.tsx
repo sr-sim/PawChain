@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { formatEther } from "viem";
+import { decodeEventLog, formatEther, type Hash } from "viem";
+import { campaignContractAbi } from "@/lib/campaign-contract-abi";
+import { getPawChainPublicClient } from "@/lib/campaign-blockchain";
 import { getLatestEthMyrRate } from "@/lib/currency";
 import { getDashboardProfile } from "@/lib/dashboard-access";
 import { getShelterPortalData, sepoliaTxUrl, shortAddress } from "@/lib/shelter-portal";
@@ -46,15 +48,82 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
   const { campaigns, donations } = await getShelterPortalData(userId);
   const { rate: liveEthMyrRate } = await getLatestEthMyrRate();
   const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
-  const visible = donations.filter((donation) =>
-    (!params?.campaign || donation.campaign_id === params.campaign) &&
-    (!params?.status || donation.status === params.status),
+  const campaignDonations = donations.filter(
+    (donation) => !params?.campaign || donation.campaign_id === params.campaign,
   );
-  const totalEth = visible
+  const publicClient = getPawChainPublicClient();
+  const transactionGroups = await Promise.all(
+    campaignDonations.map(async (donation) => {
+      const amountEth = donationAmountEth(
+        donation.amount_wei,
+        donation.amount,
+        donation.currency,
+        liveEthMyrRate,
+      );
+      const originalStatus = donation.status.toLowerCase().includes("refund")
+        ? "confirmed"
+        : donation.status.toLowerCase();
+      const records = [{
+        key: `${donation.id}:donation`,
+        donation,
+        amountEth,
+        date: donation.created_at,
+        txHash: donation.tx_hash,
+        status: originalStatus,
+        statusLabel: originalStatus === "confirmed" ? "Confirmed" : donation.status,
+      }];
+
+      if (donation.refund_tx_hash) {
+        let refundEth = amountEth;
+        try {
+          const receipt = await publicClient.getTransactionReceipt({
+            hash: donation.refund_tx_hash as Hash,
+          });
+          const refundLog = receipt.logs
+            .map((log) => {
+              try {
+                return decodeEventLog({
+                  abi: campaignContractAbi,
+                  data: log.data,
+                  topics: log.topics,
+                });
+              } catch {
+                return null;
+              }
+            })
+            .find((log) => log?.eventName === "RefundClaimed");
+          if (refundLog?.eventName === "RefundClaimed") {
+            refundEth = Number(formatEther(refundLog.args.amount));
+          }
+        } catch {
+          // Use the donation amount only as a fallback for legacy records.
+        }
+
+        records.push({
+          key: `${donation.id}:refund`,
+          donation,
+          amountEth: refundEth,
+          date: donation.refunded_at ?? donation.created_at,
+          txHash: donation.refund_tx_hash,
+          status: "refunded",
+          statusLabel: "Refunded",
+        });
+      }
+
+      return records;
+    }),
+  );
+  const transactionRecords = transactionGroups
+    .flat()
+    .filter((record) => !params?.status || record.status === params.status)
+    .sort(
+      (first, second) =>
+        new Date(second.date).getTime() - new Date(first.date).getTime(),
+    );
+  const totalEth = campaignDonations
     .filter(
       (item) =>
-        !item.refund_tx_hash &&
-        !["failed", "refunded"].includes(item.status.toLowerCase()),
+        item.status.toLowerCase() !== "failed",
     )
     .reduce(
       (sum, item) =>
@@ -85,10 +154,10 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
           </p>
         </div>
         {[
-          ["Transactions", String(visible.length)],
+          ["Transactions", String(transactionRecords.length)],
           [
             "Campaigns supported",
-            String(new Set(visible.map((item) => item.campaign_id)).size),
+            String(new Set(transactionRecords.map((item) => item.donation.campaign_id)).size),
           ],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border border-orange-100 bg-white p-5 shadow-[0_8px_24px_rgba(111,69,20,0.05)]">
@@ -103,47 +172,34 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
           <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="bg-[#FFFCC9]/40 text-[11px] font-black uppercase tracking-wide text-stone-500"><tr><th className="px-5 py-4">Donor</th><th>Campaign</th><th>Amount</th><th>Date</th><th>Transaction</th><th className="pr-5">Status</th></tr></thead>
             <tbody className="divide-y divide-orange-100">
-              {visible.map((donation) => {
-                const txUrl = sepoliaTxUrl(donation.tx_hash);
-                const amountEth = donationAmountEth(
-                  donation.amount_wei,
-                  donation.amount,
-                  donation.currency,
-                  liveEthMyrRate,
-                );
-                const refunded =
-                  Boolean(donation.refund_tx_hash) ||
-                  donation.status.toLowerCase().includes("refund");
-                const confirmed = donation.status.toLowerCase() === "confirmed";
-                const statusLabel = refunded
-                  ? "Refunded"
-                  : confirmed
-                    ? "Confirmed"
-                    : donation.status;
+              {transactionRecords.map((record) => {
+                const { donation } = record;
+                const txUrl = sepoliaTxUrl(record.txHash);
+                const refunded = record.status === "refunded";
                 return (
-                  <tr key={donation.id} className="transition hover:bg-orange-50/35">
+                  <tr key={record.key} className="transition hover:bg-orange-50/35">
                     <td className="px-5 py-4"><p className="font-black text-stone-950">{donation.donor_name?.trim() || "Anonymous donor"}</p><p className="mt-1 font-mono text-[10px] font-semibold text-stone-400">{shortAddress(donation.donor_id)}</p></td>
                     <td><Link href={`/Shelter/campaigns/${donation.campaign_id}`} className="font-black hover:text-[var(--color-orange)]">{campaignMap.get(donation.campaign_id)?.title ?? "Campaign"}</Link></td>
                     <td>
-                      <p className="font-black text-stone-950">{formatEth(amountEth)}</p>
+                      <p className="font-black text-stone-950">{formatEth(record.amountEth)}</p>
                       <p className="mt-1 text-xs font-bold text-stone-500">
-                        {formatLiveMyr(amountEth * liveEthMyrRate)}
+                        {formatLiveMyr(record.amountEth * liveEthMyrRate)}
                       </p>
                     </td>
-                    <td className="font-semibold text-stone-500">{new Intl.DateTimeFormat("en-MY", { dateStyle: "medium" }).format(new Date(donation.created_at))}</td>
-                    <td>{txUrl ? <a href={txUrl} target="_blank" rel="noreferrer" aria-label={`View transaction ${donation.tx_hash} on Sepolia Etherscan`} className="font-mono text-xs font-black text-[var(--color-orange)] hover:underline">{shortAddress(donation.tx_hash)} ↗</a> : "-"}</td>
+                    <td className="font-semibold text-stone-500">{new Intl.DateTimeFormat("en-MY", { dateStyle: "medium" }).format(new Date(record.date))}</td>
+                    <td>{txUrl ? <a href={txUrl} target="_blank" rel="noreferrer" aria-label={`View ${record.status} transaction ${record.txHash} on Sepolia Etherscan`} className="font-mono text-xs font-black text-[var(--color-orange)] hover:underline">{shortAddress(record.txHash)} ↗</a> : "-"}</td>
                     <td className="pr-5">
                       <span
                         className={[
                           "rounded-full px-2.5 py-1 text-xs font-black capitalize ring-1",
                           refunded
                             ? "bg-red-50 text-red-700 ring-red-200"
-                            : confirmed
+                            : record.status === "confirmed"
                               ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                               : "bg-stone-100 text-stone-700 ring-stone-200",
                         ].join(" ")}
                       >
-                        {statusLabel}
+                        {record.statusLabel}
                       </span>
                     </td>
                   </tr>
@@ -152,7 +208,7 @@ export default async function ShelterDonationsPage({ searchParams }: PageProps) 
             </tbody>
           </table>
         </div>
-        {!visible.length ? <div className="p-10 text-center text-sm font-bold text-stone-500">No donation transactions are available for this wallet yet.</div> : null}
+        {!transactionRecords.length ? <div className="p-10 text-center text-sm font-bold text-stone-500">No donation transactions are available for this wallet yet.</div> : null}
       </section>
     </div>
   );

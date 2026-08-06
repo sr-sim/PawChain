@@ -132,8 +132,8 @@ export function DonorSidebar({
         isOpen ? "w-64" : "w-0",
       ].join(" ")}
     >
-      <div className="donor-nav-rail flex h-full w-full min-w-64 flex-col px-4 py-4">
-        <nav className="flex-1 space-y-4 overflow-y-auto">
+      <div className="donor-nav-rail flex h-full w-full min-w-64 flex-col overflow-x-hidden px-4 py-4">
+        <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden">
           {navigationSections.map((section) => (
             <div key={section.label}>
               <p className="mb-1.5 px-2 text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-slate-400">

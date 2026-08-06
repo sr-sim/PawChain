@@ -102,11 +102,20 @@ export function ShelterCampaignCard({
       : campaign.campaign_status === "rejected"
         ? "Rejected"
         : `${remainingDays} days`;
+  const isInactive =
+    campaign.campaign_status === "closed" ||
+    campaign.campaign_status === "completed";
 
   return (
-    <article className="group/card donor-gradient-card relative flex h-full w-full flex-col overflow-hidden rounded-2xl border-2 border-orange-300 bg-transparent shadow-[0_4px_14px_rgba(194,101,16,0.12)] transition hover:-translate-y-0.5 hover:border-orange-500 hover:shadow-[0_10px_24px_rgba(194,101,16,0.22)]">
-      <Link href={href} className="flex flex-1 flex-col">
-        <div className="relative h-44 shrink-0 overflow-hidden transition-[height] duration-500 ease-in-out group-hover/card:h-[7.75rem] motion-reduce:transition-none">
+    <article
+      className={`group/card donor-gradient-card relative flex h-full w-full flex-col overflow-hidden rounded-2xl border-2 transition ${
+        isInactive
+          ? "border-stone-300 bg-stone-100 shadow-sm hover:border-stone-400"
+          : "border-orange-300 bg-transparent shadow-[0_4px_14px_rgba(194,101,16,0.12)] hover:-translate-y-0.5 hover:border-orange-500 hover:shadow-[0_10px_24px_rgba(194,101,16,0.22)]"
+      }`}
+    >
+      <Link href={href} className={`flex flex-1 flex-col ${isInactive ? "grayscale opacity-75" : ""}`}>
+        <div className={`relative h-44 shrink-0 overflow-hidden transition-[height] duration-500 ease-in-out group-hover/card:h-[7.75rem] motion-reduce:transition-none ${isInactive ? "grayscale opacity-70" : ""}`}>
           {campaign.image_url ? (
             <img
               src={campaign.image_url}
@@ -127,7 +136,7 @@ export function ShelterCampaignCard({
           </div>
         </div>
 
-        <div className="relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-300 bg-white px-4 pb-4 pt-5 transition-colors group-hover/card:border-orange-400">
+        <div className={`relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border px-4 pb-4 pt-5 transition-colors ${isInactive ? "border-stone-300 bg-stone-100 group-hover/card:border-stone-400" : "border-orange-300 bg-white group-hover/card:border-orange-400"}`}>
           <div className="flex items-start justify-between gap-3">
             <h2 className="line-clamp-2 text-lg font-black leading-6 text-stone-950">
               {campaign.title}
@@ -164,18 +173,36 @@ export function ShelterCampaignCard({
           </div>
 
           {campaign.campaign_status === "closed" ? (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <div className="hidden">
               <p className="text-[10px] font-black uppercase tracking-wide text-amber-700">Reserved for donor refunds</p>
               <p className="mt-1 text-sm font-black text-stone-950">
                 {onChainRefundPool !== undefined ? formatEth(refundPoolEth) : "Reading on-chain..."}
               </p>
-              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">≈ {formatLiveMyr(refundPoolEth * rate)} · claimed proportionally by donors</p> : null}
+              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">≈ {formatLiveMyr(refundPoolEth * rate)} · available to eligible donors</p> : null}
             </div>
           ) : null}
         </div>
       </Link>
 
-      <div className="relative z-20 max-h-0 overflow-hidden border-t-0 border-orange-300 bg-white px-4 py-0 opacity-0 transition-all duration-300 group-hover/card:max-h-40 group-hover/card:border-t group-hover/card:py-3 group-hover/card:opacity-100 group-focus-within/card:max-h-40 group-focus-within/card:border-t group-focus-within/card:py-3 group-focus-within/card:opacity-100">
+      {campaign.campaign_status === "closed" ? (
+        <div className="relative z-20 mx-4 mb-4 rounded-xl border-2 border-amber-400 bg-amber-50 px-3 py-2.5 shadow-sm shadow-amber-100">
+          <p className="text-[10px] font-black uppercase tracking-wide text-amber-700">
+            Reserved for donor refunds
+          </p>
+          <p className="mt-1 text-sm font-black text-stone-950">
+            {onChainRefundPool !== undefined
+              ? formatEth(refundPoolEth)
+              : "Reading on-chain..."}
+          </p>
+          {onChainRefundPool !== undefined ? (
+            <p className="mt-0.5 text-[10px] font-bold text-amber-800">
+              ≈ {formatLiveMyr(refundPoolEth * rate)} · available to eligible donors
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className={`relative z-20 max-h-0 overflow-hidden border-t-0 px-4 py-0 opacity-0 transition-all duration-300 group-hover/card:max-h-40 group-hover/card:border-t group-hover/card:py-3 group-hover/card:opacity-100 group-focus-within/card:max-h-40 group-focus-within/card:border-t group-focus-within/card:py-3 group-focus-within/card:opacity-100 ${isInactive ? "border-stone-300 bg-stone-100 grayscale" : "border-orange-300 bg-white"}`}>
         {actions}
       </div>
     </article>

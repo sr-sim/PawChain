@@ -13,6 +13,8 @@ type SupportRequest = {
   updated_at: string;
 };
 
+export type DonorSupportRequestSummary = SupportRequest;
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-MY", {
     day: "2-digit",
@@ -21,23 +23,13 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function statusClass(status: string) {
-  if (status === "resolved") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (status === "rejected") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-
-  if (status === "reviewing") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-
-  return "border-slate-200 bg-slate-50 text-slate-600";
-}
-
-export function DonorSupportRequestList() {
+export function DonorSupportRequestList({
+  externalRequests,
+  onRequestsLoaded,
+}: {
+  externalRequests?: SupportRequest[];
+  onRequestsLoaded?: (requests: SupportRequest[]) => void;
+}) {
   const searchParams = useSearchParams();
   const walletAddress = searchParams.get("walletAddress") ?? "";
   const [requests, setRequests] = useState<SupportRequest[]>([]);
@@ -69,7 +61,11 @@ export function DonorSupportRequestList() {
         }
 
         if (isMounted) {
-          setRequests(Array.isArray(result.requests) ? result.requests : []);
+          const loadedRequests = Array.isArray(result.requests)
+            ? result.requests
+            : [];
+          setRequests(loadedRequests);
+          onRequestsLoaded?.(loadedRequests);
         }
       } catch (error) {
         if (isMounted) {
@@ -121,7 +117,9 @@ export function DonorSupportRequestList() {
     );
   }
 
-  if (requests.length === 0) {
+  const visibleRequests = externalRequests ?? requests;
+
+  if (visibleRequests.length === 0) {
     return (
       <div className="mt-4 rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-5 text-center">
         <p className="text-sm font-black text-stone-950">
@@ -136,7 +134,7 @@ export function DonorSupportRequestList() {
 
   return (
     <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
-      {requests.map((request) => (
+      {visibleRequests.map((request) => (
         <article
           key={request.id}
           className="grid gap-2 bg-orange-50/20 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"
@@ -146,21 +144,12 @@ export function DonorSupportRequestList() {
               {request.subject}
             </p>
             <p className="mt-1 text-xs font-medium text-stone-500">
-              {request.request_type.replaceAll("_", " ")} -{" "}
-              {formatDate(request.updated_at ?? request.created_at)}
+              Submitted {formatDate(request.updated_at ?? request.created_at)}
             </p>
           </div>
-          <span
-            className={[
-              "inline-flex min-w-32 justify-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize",
-              statusClass(request.status),
-            ].join(" ")}
-          >
-            {request.status}
-          </span>
           <Link
             href={`/Donor/reports/${request.id}?walletAddress=${encodeURIComponent(walletAddress)}`}
-            className="text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950 sm:col-span-2"
+            className="text-xs font-semibold text-[var(--color-orange)] transition hover:text-stone-950 sm:text-right"
           >
             View report detail
           </Link>

@@ -1,11 +1,20 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type { Campaign } from "../Donor/campaignData";
 
 type ReportCampaign = Campaign & {
   source?: "supabase";
+};
+
+type SubmittedReport = {
+  id: string;
+  subject: string;
+  status: string;
+  request_type: string;
+  created_at: string;
+  updated_at: string;
 };
 
 const reportTargets = ["Campaign", "Shelter", "Donation", "Other"];
@@ -17,7 +26,11 @@ const concernTypes = [
   "Donation transaction issue",
 ];
 
-export default function DonorReportForm() {
+export default function DonorReportForm({
+  onSubmitted,
+}: {
+  onSubmitted?: (request: SubmittedReport) => void;
+}) {
   const searchParams = useSearchParams();
   const presetType = searchParams.get("type");
   const presetCampaign = searchParams.get("campaign");
@@ -39,10 +52,6 @@ export default function DonorReportForm() {
   const selectedCampaign = campaigns.find(
     (campaign) => campaign.id === relatedCampaignId,
   );
-
-  const reportReference = useMemo(() => {
-    return presetType === "report" ? "RPT-2026-014" : "DRQ-2026-008";
-  }, [presetType]);
 
   useEffect(() => {
     if (!actionToast) return;
@@ -133,7 +142,10 @@ export default function DonorReportForm() {
 
       setSubmittedRequestId(result.request?.id ?? "");
       setSubmitted(true);
-      setActionToast("Report submitted for admin review.");
+      if (result.request) {
+        onSubmitted?.(result.request as SubmittedReport);
+      }
+      setActionToast("Report submitted.");
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Unable to submit report.",
@@ -155,7 +167,7 @@ export default function DonorReportForm() {
           </h2>
           <p className="mt-2 text-sm leading-6 text-stone-600">
             Send suspicious activity, fake campaign details, fund misuse
-            concerns, or donation issues to the admin review queue.
+            concerns, or donation issues to PawChain records.
           </p>
         </div>
         {submitted ? (
@@ -168,11 +180,10 @@ export default function DonorReportForm() {
       {submitted ? (
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
           <p className="text-sm font-black text-emerald-800">
-            Report submitted for admin review
+            Report submitted
           </p>
           <p className="mt-2 text-sm leading-6 text-emerald-700">
-            Reference {submittedRequestId || reportReference} has been saved in
-            PawChain and is ready for admin review.
+            Your report has been submitted and saved.
           </p>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             <div>
@@ -288,23 +299,23 @@ export default function DonorReportForm() {
           {selectedCampaign ? (
             <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-400">
-                Real report context
+                Related report item
               </p>
               <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
                 <div>
+                  <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-stone-400">
+                    Campaign
+                  </p>
                   <p className="font-semibold text-stone-950">
                     {selectedCampaign.title}
                   </p>
-                  <p className="mt-1 text-xs font-medium text-stone-500">
-                    Campaign ID: {selectedCampaign.id}
-                  </p>
                 </div>
                 <div>
+                  <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-stone-400">
+                    Shelter
+                  </p>
                   <p className="font-semibold text-stone-950">
                     {selectedCampaign.shelter}
-                  </p>
-                  <p className="mt-1 text-xs font-medium text-stone-500">
-                    Shelter ID: {selectedCampaign.shelterId}
                   </p>
                 </div>
               </div>
@@ -349,8 +360,8 @@ export default function DonorReportForm() {
               className="mt-1 h-4 w-4 rounded border-orange-200 text-[var(--color-orange)] focus:ring-orange-200"
             />
             <span className="text-sm leading-6 text-stone-600">
-              I understand this report will be reviewed by admin and may require
-              follow-up proof.
+              I understand this report will be saved for review and may require
+              follow-up action.
             </span>
           </label>
 
@@ -372,9 +383,6 @@ export default function DonorReportForm() {
               {submitError}
             </p>
           ) : null}
-          <p className="text-center text-xs font-medium text-stone-500">
-            Saved for admin review.
-          </p>
         </form>
       )}
       {actionToast ? (

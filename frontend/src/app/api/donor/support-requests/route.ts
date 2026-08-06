@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       request: data,
-      message: "Report submitted to admin review.",
+      message: "Report submitted.",
     });
   } catch (error) {
     return NextResponse.json(

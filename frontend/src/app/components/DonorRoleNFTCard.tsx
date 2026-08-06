@@ -167,7 +167,7 @@ export function DonorRoleNFTCard({
               : "bg-amber-100 text-amber-700",
           ].join(" ")}
         >
-          {isWalletVerified ? "RoleNFT active" : "Needs wallet"}
+          {isWalletVerified ? "Verified" : "Needs wallet"}
         </span>
       </div>
 

@@ -6,7 +6,7 @@ import "./interfaces/IRoleNFT.sol";
 contract Campaign {
     uint16 public constant BASIS_POINTS = 10_000;
     uint16 public constant EMERGENCY_RELEASE_BPS = 500;
-    uint256 public constant FLOW_VERSION = 2;
+    uint256 public constant FLOW_VERSION = 3;
 
     enum CampaignStatus {
         Funding,
@@ -50,6 +50,10 @@ contract Campaign {
     uint256 public refundContributionBase;
 
     mapping(address => uint256) public donorContributions;
+    mapping(uint256 => mapping(address => uint256))
+        public milestoneContributions;
+    mapping(uint256 => uint256) public milestoneTotalContributions;
+    mapping(uint256 => bool) public milestoneFundsReleased;
     mapping(address => bool) public refundClaimed;
     Milestone[] private _milestones;
 
@@ -60,6 +64,11 @@ contract Campaign {
         address indexed donor,
         uint256 amount,
         uint256 totalRaised
+    );
+    event MilestoneDonationRecorded(
+        uint256 indexed milestoneIndex,
+        address indexed donor,
+        uint256 amount
     );
     event MilestoneStatusChanged(
         uint256 indexed milestoneIndex,
@@ -183,6 +192,8 @@ contract Campaign {
         );
 
         donorContributions[msg.sender] += msg.value;
+        milestoneContributions[currentMilestoneIndex][msg.sender] += msg.value;
+        milestoneTotalContributions[currentMilestoneIndex] += msg.value;
         totalRaised += msg.value;
 
         try roleNFT.recordDonation(msg.sender, msg.value) {
@@ -197,6 +208,11 @@ contract Campaign {
             msg.sender,
             msg.value,
             totalRaised
+        );
+        emit MilestoneDonationRecorded(
+            currentMilestoneIndex,
+            msg.sender,
+            msg.value
         );
     }
 
@@ -275,6 +291,7 @@ contract Campaign {
         require(address(this).balance >= amount, "Insufficient contract balance");
 
         totalReleased += amount;
+        milestoneFundsReleased[milestoneIndex] = true;
         milestone.status = MilestoneStatus.Released;
 
         (bool sent, ) = payable(shelter).call{value: amount}("");
@@ -305,11 +322,9 @@ contract Campaign {
         );
         require(!refundClaimed[msg.sender], "Refund already claimed");
 
-        uint256 contribution = donorContributions[msg.sender];
-        require(contribution > 0, "No contribution");
-
-        uint256 amount = (contribution * refundPool) / refundContributionBase;
+        uint256 amount = _refundableAmount(msg.sender);
         require(amount > 0, "No refundable balance");
+        require(address(this).balance >= amount, "Insufficient refund balance");
 
         refundClaimed[msg.sender] = true;
         (bool sent, ) = payable(msg.sender).call{value: amount}("");
@@ -335,15 +350,12 @@ contract Campaign {
         if (
             (campaignStatus != CampaignStatus.Refunding &&
                 campaignStatus != CampaignStatus.Cancelled) ||
-            refundClaimed[donor] ||
-            refundContributionBase == 0
+            refundClaimed[donor]
         ) {
             return 0;
         }
 
-        return
-            (donorContributions[donor] * refundPool) /
-            refundContributionBase;
+        return _refundableAmount(donor);
     }
 
     function _refreshCurrentMilestone() private {
@@ -382,9 +394,31 @@ contract Campaign {
 
         campaignStatus = nextStatus;
         refundPool = balance;
-        refundContributionBase = totalRaised;
+        refundContributionBase = _refundableContributionBase();
 
-        emit RefundsEnabled(nextStatus, balance, totalRaised);
+        emit RefundsEnabled(nextStatus, balance, refundContributionBase);
+    }
+
+    function _refundableAmount(
+        address donor
+    ) private view returns (uint256 amount) {
+        for (uint256 index = 0; index < _milestones.length; index++) {
+            if (!milestoneFundsReleased[index]) {
+                amount += milestoneContributions[index][donor];
+            }
+        }
+    }
+
+    function _refundableContributionBase()
+        private
+        view
+        returns (uint256 amount)
+    {
+        for (uint256 index = 0; index < _milestones.length; index++) {
+            if (!milestoneFundsReleased[index]) {
+                amount += milestoneTotalContributions[index];
+            }
+        }
     }
 
     function _isVerifiedShelter(

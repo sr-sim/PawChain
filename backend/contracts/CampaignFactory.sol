@@ -5,7 +5,7 @@ import "./Campaign.sol";
 import "./interfaces/IRoleNFT.sol";
 
 contract CampaignFactory {
-    uint256 public constant FLOW_VERSION = 2;
+    uint256 public constant FLOW_VERSION = 3;
 
     IRoleNFT public immutable roleNFT;
 
