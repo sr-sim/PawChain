@@ -48,16 +48,11 @@ by `RoleNFT` and must have local test ETH for gas. Fund that wallet from one of
 the accounts printed by `hardhat node`; never buy or send real ETH to the local
 network.
 
-### 4. Apply the Supabase migration
+### 4. Supabase database
 
-Run the SQL in:
-
-```text
-frontend/supabase/migrations/202607160001_campaign_blockchain.sql
-```
-
-Use the Supabase SQL editor or your normal migration workflow before using the
-new campaign screens.
+This assignment prototype uses a preconfigured Supabase database. The complete
+database provisioning schema is outside the scope of this repository, so use
+the existing Supabase project and credentials configured in `frontend/.env.local`.
 
 ### 5. Seed local RoleNFTs if needed
 
