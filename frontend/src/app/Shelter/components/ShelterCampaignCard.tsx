@@ -25,7 +25,7 @@ function formatEth(value: number) {
 }
 
 function formatLiveMyr(value: number) {
-  return `Approx. live MYR: MYR ${value.toLocaleString("en-MY", {
+  return `live MYR ${value.toLocaleString("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -85,6 +85,7 @@ export function ShelterCampaignCard({
     ? Number(formatEther(onChainRefundPool))
     : 0;
   const progress = getProgress(raisedEth, goalEth);
+  const remainingEth = Math.max(0, goalEth - raisedEth);
   const createdAt = campaign.created_at
     ? new Date(campaign.created_at).getTime()
     : Date.now();
@@ -104,7 +105,7 @@ export function ShelterCampaignCard({
         : `${remainingDays} days`;
 
   return (
-    <article className="group/card donor-gradient-card relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-orange-100 bg-transparent shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
+    <article className="group/card donor-gradient-card relative flex h-full w-full flex-col overflow-hidden rounded-2xl border-2 border-orange-300 bg-transparent shadow-[0_4px_14px_rgba(194,101,16,0.12)] transition hover:-translate-y-0.5 hover:border-orange-500 hover:shadow-[0_10px_24px_rgba(194,101,16,0.22)]">
       <Link href={href} className="flex flex-1 flex-col">
         <div className="relative h-44 shrink-0 overflow-hidden transition-[height] duration-500 ease-in-out group-hover/card:h-[7.75rem] motion-reduce:transition-none">
           {campaign.image_url ? (
@@ -127,7 +128,7 @@ export function ShelterCampaignCard({
           </div>
         </div>
 
-        <div className="relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-100 bg-white px-4 pb-4 pt-5 transition-colors group-hover/card:border-orange-200">
+        <div className="relative z-10 -mt-3 flex flex-1 flex-col rounded-2xl border border-orange-300 bg-white px-4 pb-4 pt-5 transition-colors group-hover/card:border-orange-400">
           <div className="flex items-start justify-between gap-3">
             <h2 className="line-clamp-2 text-lg font-black leading-6 text-stone-950">
               {campaign.title}
@@ -142,42 +143,25 @@ export function ShelterCampaignCard({
           </p>
 
           <div className="mt-4">
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <p className="text-lg font-black text-stone-950">{formatEth(raisedEth)}</p>
-                <p className="mt-0.5 text-xs font-semibold text-stone-500">raised of {formatEth(goalEth)}</p>
-              </div>
-              <p className="text-sm font-black text-[var(--color-orange)]">{progress}%</p>
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-xl font-black text-stone-950">{formatEth(raisedEth)}</p><p className="mt-0.5 text-[11px] font-bold text-stone-400">≈ {formatLiveMyr(raisedEth * rate)} raised</p></div>
+              <div className="text-right"><p className="text-xl font-black text-[var(--color-orange)]">{progress}%</p><p className="text-[11px] font-bold text-stone-500">of goal</p></div>
             </div>
-            <p className="mt-1 text-[11px] font-bold text-stone-400">{formatLiveMyr(raisedEth * rate)} raised</p>
-            <p className="mt-0.5 text-[11px] font-bold text-stone-400">{formatLiveMyr(goalEth * rate)} goal</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-orange-100">
+            <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-stone-200">
               <div className="donor-progress-fill h-full rounded-full bg-[var(--color-orange)]" style={{ width: `${progress}%` }} />
             </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-xl bg-orange-50/45 px-3 py-2">
-              <p className="font-black text-stone-950">{milestoneCount}</p>
-              <p className="text-xs font-medium text-stone-500">Milestones</p>
-            </div>
-            <div className="rounded-xl bg-orange-50/45 px-3 py-2">
-              <p className="font-black text-stone-950">{timingValue}</p>
-              <p className="text-xs font-medium text-stone-500">
-                {campaign.campaign_status === "active" ? "Remaining" : "Campaign status"}
-              </p>
+            <div className="mt-4 grid grid-cols-2 gap-4 border-b border-orange-200 pb-4 text-xs">
+              <div className="flex gap-2.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-50 text-violet-600" aria-hidden="true">◎</span><div><p className="font-black text-stone-700">Goal</p><p className="mt-1 text-sm font-black text-stone-950">{formatEth(goalEth)}</p><p className="mt-0.5 text-[10px] font-bold text-stone-400">≈ {formatLiveMyr(goalEth * rate)}</p></div></div>
+              <div className="flex gap-2.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600" aria-hidden="true">↗</span><div><p className="font-black text-stone-700">Remaining</p><p className="mt-1 text-sm font-black text-stone-950">{formatEth(remainingEth)}</p><p className="mt-0.5 text-[10px] font-bold text-stone-400">≈ {formatLiveMyr(remainingEth * rate)}</p></div></div>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
-            {contractAddress ? (
-              <>
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">Smart contract linked</span>
-                <span className="rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 font-mono text-[var(--color-orange)]">{shortAddress(contractAddress)}</span>
-              </>
-            ) : (
-              <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-stone-500">Contract pending</span>
-            )}
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+            <div className="rounded-xl bg-orange-50/45 px-3 py-2"><p className="font-black text-stone-950">{milestoneCount}</p><p className="text-xs font-medium text-stone-500">Milestones</p></div>
+            <div className="rounded-xl bg-orange-50/45 px-3 py-2"><p className="font-black text-stone-950">{timingValue}</p><p className="text-xs font-medium text-stone-500">{campaign.campaign_status === "active" ? "Remaining" : "Campaign status"}</p></div>
+            <div className="col-span-2 flex min-w-0 flex-col items-center justify-center rounded-xl border border-orange-300 bg-white px-2 py-2 text-center sm:col-span-1">
+              {contractAddress ? <><span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Smart contract linked</span><span className="mt-1 truncate font-mono text-[10px] font-black text-[var(--color-orange)]">{shortAddress(contractAddress)}</span></> : <span className="text-[10px] font-bold text-stone-500">Contract pending</span>}
+            </div>
           </div>
 
           {campaign.campaign_status === "closed" ? (
@@ -186,13 +170,13 @@ export function ShelterCampaignCard({
               <p className="mt-1 text-sm font-black text-stone-950">
                 {onChainRefundPool !== undefined ? formatEth(refundPoolEth) : "Reading on-chain..."}
               </p>
-              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">{formatLiveMyr(refundPoolEth * rate)} · claimed proportionally by donors</p> : null}
+              {onChainRefundPool !== undefined ? <p className="mt-0.5 text-[10px] font-bold text-stone-500">≈ {formatLiveMyr(refundPoolEth * rate)} · claimed proportionally by donors</p> : null}
             </div>
           ) : null}
         </div>
       </Link>
 
-      <div className="relative z-20 border-t border-orange-100 bg-white px-4 py-3">
+      <div className="relative z-20 max-h-0 overflow-hidden border-t-0 border-orange-300 bg-white px-4 py-0 opacity-0 transition-all duration-300 group-hover/card:max-h-40 group-hover/card:border-t group-hover/card:py-3 group-hover/card:opacity-100 group-focus-within/card:max-h-40 group-focus-within/card:border-t group-focus-within/card:py-3 group-focus-within/card:opacity-100">
         {actions}
       </div>
     </article>

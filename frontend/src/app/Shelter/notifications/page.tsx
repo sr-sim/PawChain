@@ -48,6 +48,9 @@ export default function ShelterNotificationsPage() {
   const [notifications, setNotifications] = useState<ShelterNotification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isClearingAll, setIsClearingAll] = useState(false);
+  const [supportsDismissal, setSupportsDismissal] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [activeTab, setActiveTab] = useState<"All" | "Unread" | "Read">("All");
 
@@ -72,6 +75,7 @@ export default function ShelterNotificationsPage() {
         if (!response.ok) throw new Error(result.message ?? "Unable to load notifications.");
         if (isMounted) {
           setNotifications(Array.isArray(result.notifications) ? result.notifications : []);
+          setSupportsDismissal(result.supportsDismissal !== false);
         }
       } catch (error) {
         if (isMounted) {
@@ -117,6 +121,64 @@ export default function ShelterNotificationsPage() {
       setErrorMessage(error instanceof Error ? error.message : "Unable to update notifications.");
     } finally {
       setIsUpdating(false);
+    }
+  }
+
+  async function deleteNotification(notificationId: string) {
+    if (!walletAddress || deletingId || isClearingAll) return;
+
+    setDeletingId(notificationId);
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/shelter/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress, notificationId }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to delete notification.");
+      }
+
+      setNotifications((current) =>
+        current.filter((item) => item.id !== notificationId),
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete notification.",
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function clearAllNotifications() {
+    if (!walletAddress || notifications.length === 0 || isClearingAll) return;
+
+    setIsClearingAll(true);
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/shelter/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress, clearAll: true }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to clear notifications.");
+      }
+
+      setNotifications([]);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to clear notifications.",
+      );
+    } finally {
+      setIsClearingAll(false);
     }
   }
 
@@ -181,14 +243,26 @@ export default function ShelterNotificationsPage() {
               {tab}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => void updateReadState()}
-            disabled={!walletAddress || unreadCount === 0 || isUpdating}
-            className="ml-auto rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {isUpdating ? "Updating..." : "Mark all as read"}
-          </button>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void updateReadState()}
+              disabled={!walletAddress || unreadCount === 0 || isUpdating}
+              className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-black text-[var(--color-orange)] transition hover:border-[var(--color-orange)] hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isUpdating ? "Updating..." : "Mark all as read"}
+            </button>
+            {supportsDismissal ? (
+              <button
+                type="button"
+                onClick={() => void clearAllNotifications()}
+                disabled={!walletAddress || notifications.length === 0 || isClearingAll}
+                className="rounded-full border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-red-700 transition hover:border-red-200 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {isClearingAll ? "Clearing..." : "Clear all"}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {errorMessage ? (
@@ -239,7 +313,33 @@ export default function ShelterNotificationsPage() {
                     ) : null}
                   </div>
                 </div>
-                <StatusPill status={item.status} />
+                <div className="flex items-center justify-between gap-2 sm:justify-end">
+                  <StatusPill status={item.status} />
+                  {supportsDismissal ? (
+                    <button
+                      type="button"
+                      onClick={() => void deleteNotification(item.id)}
+                      disabled={deletingId === item.id || isClearingAll}
+                      aria-label={`Delete ${item.title}`}
+                      title="Delete notification"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-orange-100 bg-white text-stone-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
               </article>
             ))
           ) : (

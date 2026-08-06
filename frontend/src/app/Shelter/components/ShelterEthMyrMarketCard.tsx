@@ -5,7 +5,7 @@ import type { EthMyrHistoryPoint } from "@/app/components/EthMyrMarketCard";
 import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 
 function formatMYR(value: number, fractionDigits = 2) {
-  return `MYR ${new Intl.NumberFormat("en-MY", {
+  return `live MYR ${new Intl.NumberFormat("en-MY", {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   }).format(value)}`;

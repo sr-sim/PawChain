@@ -172,8 +172,8 @@ export default function EditCampaignPage() {
           throw new Error(result.message ?? "Unable to load campaign.");
         }
 
-        if (result.campaign.campaign_status !== "rejected") {
-          throw new Error("Only rejected campaigns can be edited.");
+        if (!["pending_approval", "rejected"].includes(result.campaign.campaign_status) || result.campaign.contract_address) {
+          throw new Error("Only pending or rejected campaigns can be edited before approval.");
         }
 
         setForm(toCampaignForm(result.campaign));
@@ -320,7 +320,8 @@ export default function EditCampaignPage() {
         throw new Error(result.message ?? "Unable to resubmit campaign.");
       }
 
-      router.push(`/Shelter/campaigns/${params.id}`);
+      router.replace("/Shelter/campaigns?status=pending_approval");
+      router.refresh();
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -343,14 +344,14 @@ export default function EditCampaignPage() {
 
       <section className="overflow-hidden rounded-2xl border border-orange-100 bg-[linear-gradient(135deg,rgba(var(--color-white-rgb),0.98),rgba(var(--color-cream-rgb),0.9)_48%,rgba(var(--color-peach-rgb),0.5))] p-5 shadow-[0_22px_60px_rgba(155,86,20,0.12)] sm:p-6">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-orange)]">
-          Edit Rejected Campaign
+          Edit Campaign
         </p>
         <h1 className="mt-2 text-3xl font-black text-stone-950 sm:text-4xl">
-          Update and resubmit
+          Update campaign details
         </h1>
         <p className="mt-3 max-w-2xl text-base font-bold leading-7 text-stone-700">
-          Rejected campaigns can be edited once. After resubmission, the
-          campaign returns to pending approval and editing is locked again.
+          Update campaign information and milestones while it is awaiting admin
+          approval. Approved campaigns remain locked.
         </p>
       </section>
 
@@ -438,7 +439,7 @@ export default function EditCampaignPage() {
                 className="w-full rounded-2xl border border-orange-100 bg-orange-50/40 px-4 py-3 text-sm font-bold text-stone-950 outline-none transition focus:border-[var(--color-orange)] focus:bg-white focus:ring-4 focus:ring-orange-100"
                 required
               />
-              <p className="mt-2 text-xs font-bold text-stone-500">Approx. live MYR: MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(form.goalAmount || 0) * liveEthMyrRate)}</p>
+              <p className="mt-2 text-xs font-bold text-stone-500">≈ live MYR {new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(form.goalAmount || 0) * liveEthMyrRate)}</p>
             </FieldLabel>
 
             <FieldLabel label="Duration">

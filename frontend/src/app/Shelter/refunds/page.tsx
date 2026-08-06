@@ -13,7 +13,7 @@ import {
 type PageProps = { searchParams?: Promise<{ walletAddress?: string }> };
 
 function formatLiveMyr(value: number) {
-  return `Approx. live MYR: MYR ${new Intl.NumberFormat("en-MY", {
+  return `≈ live MYR ${new Intl.NumberFormat("en-MY", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)}`;
