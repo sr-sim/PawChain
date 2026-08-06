@@ -184,6 +184,14 @@ export default async function DonorCampaignDetailPage({
   );
   const currentMilestone =
     currentMilestoneIndex >= 0 ? milestoneItems[currentMilestoneIndex] : null;
+  const currentMilestoneFundingState =
+    currentMilestoneIndex >= 0
+      ? getMilestoneFundingState(
+          milestoneItems,
+          currentMilestoneIndex,
+          campaign.raised,
+        )
+      : null;
   const raisedDisplay =
     typeof campaign.onChainTotalRaisedEth === "number"
       ? formatEth(campaign.onChainTotalRaisedEth)
@@ -373,6 +381,39 @@ export default async function DonorCampaignDetailPage({
                   <p className="mt-1 text-xs font-semibold text-stone-500">
                     Stage amount: {getStageAmount(currentMilestone.percentage)}
                   </p>
+                  {currentMilestoneFundingState ? (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between gap-3 text-[11px] font-black uppercase tracking-[0.12em]">
+                        <span className="text-stone-500">Current stage</span>
+                        <span
+                          className={
+                            currentMilestoneFundingState.tone === "complete"
+                              ? "text-emerald-700"
+                              : currentMilestoneFundingState.tone === "active"
+                                ? "text-[var(--color-orange)]"
+                                : "text-slate-500"
+                          }
+                        >
+                          {Math.round(currentMilestoneFundingState.progress)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+                        <div
+                          className={[
+                            "h-full rounded-full transition-all",
+                            currentMilestoneFundingState.tone === "complete"
+                              ? "bg-emerald-500"
+                              : currentMilestoneFundingState.tone === "active"
+                                ? "bg-[var(--color-orange)]"
+                                : "bg-slate-300",
+                          ].join(" ")}
+                          style={{
+                            width: `${currentMilestoneFundingState.progress}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
@@ -615,7 +656,7 @@ export default async function DonorCampaignDetailPage({
                         />
                       </div>
                       <p className="mt-1 text-[11px] font-semibold text-stone-400">
-                        {Math.round(fundingState.progress)}% of this stage funded
+                        {Number(fundingState.progress.toFixed(2))}% of this stage funded
                       </p>
                   {milestone.description ? (
                     <p className="mt-3 text-xs leading-5 text-stone-600">
