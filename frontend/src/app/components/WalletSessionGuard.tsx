@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useAppKitAccount } from "@reown/appkit/react";
 import { usePathname, useRouter } from "next/navigation";
-import { useSignMessage } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 
 export function WalletSessionGuard({ children }: { children: ReactNode }) {
-  const { address, isConnected } = useAppKitAccount();
+  // Signing is performed by Wagmi, so use its account state as the source of
+  // truth. AppKit can report a restored session slightly before Wagmi has an
+  // active connector, which makes signMessageAsync fail without opening the
+  // wallet.
+  const { address, status } = useAccount();
+  const isConnected = status === "connected";
   const { signMessageAsync } = useSignMessage();
   const router = useRouter();
   const pathname = usePathname();
@@ -15,6 +19,7 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
   const redirectTarget = useRef<string | null>(null);
   const [authenticatedAddress, setAuthenticatedAddress] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [phase, setPhase] = useState<"signing" | "finding">("signing");
 
@@ -36,6 +41,7 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
     if (!isConnected || !address || authenticatedAddress === address.toLowerCase() || inFlight.current === address.toLowerCase()) return;
     inFlight.current = address.toLowerCase();
     setFailed(false);
+    setErrorMessage("");
     setPhase("signing");
 
     const authenticate = async () => {
@@ -107,7 +113,16 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
         }
 
         setAuthenticatedAddress(address.toLowerCase());
-      } catch {
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "The wallet could not start the signature request.";
+        setErrorMessage(
+          /rejected|denied|cancelled|canceled/i.test(message)
+            ? "The signature request was cancelled. Please approve it in your wallet to continue."
+            : message,
+        );
         setFailed(true);
       } finally {
         if (!redirecting.current) inFlight.current = null;
@@ -132,7 +147,12 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
             : "Sign the PawChain login message in your wallet. It is free and does not create a blockchain transaction."}
         </p>
         {failed ? (
-          <button type="button" onClick={() => { inFlight.current = null; setAttempt((value) => value + 1); }} className="mt-5 rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white hover:bg-orange-600">Try signing again</button>
+          <>
+            <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {errorMessage || "The wallet could not start the signature request."}
+            </p>
+            <button type="button" onClick={() => { inFlight.current = null; setAttempt((value) => value + 1); }} className="mt-5 rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white hover:bg-orange-600">Try signing again</button>
+          </>
         ) : (
           <div className="mx-auto mt-5 flex w-fit items-center gap-2 text-sm font-bold text-orange-600">
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600" aria-hidden="true" />
