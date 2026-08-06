@@ -212,20 +212,27 @@ function SidebarContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div
-        className={[
-          "min-h-[88px] border-b border-orange-100 py-4 transition-all duration-300 ease-out",
-          collapsed ? "px-3 text-center" : "px-5",
-        ].join(" ")}
-      >
-        {!collapsed ? <div className="flex items-center gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl bg-orange-50 ring-1 ring-orange-100"><img src="/images/logo.png" alt="PawChain" className="h-full w-full object-contain" /></span><div><p className="text-sm font-black uppercase leading-4 tracking-[0.12em] text-[var(--color-orange)]">Shelter</p><p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--color-orange)]">Portal</p></div>{onToggleCollapsed ? <button type="button" aria-label="Collapse shelter navigation" aria-expanded="true" onClick={onToggleCollapsed} className="ml-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-orange-100 bg-white text-stone-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-orange-50 hover:text-[var(--color-orange)]"><svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true"><path d="m12 5-5 5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button> : null}</div> : null}
-        {collapsed ? (
-          <div className="flex items-center justify-center gap-1">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-xs font-black text-[var(--color-orange)] ring-1 ring-orange-100">SP</span>
-            {onToggleCollapsed ? <button type="button" aria-label="Expand shelter navigation" aria-expanded="false" onClick={onToggleCollapsed} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-orange-100 bg-white text-stone-700 shadow-sm transition hover:bg-orange-50 hover:text-[var(--color-orange)]"><svg viewBox="0 0 20 20" className="h-3.5 w-3.5" fill="none" aria-hidden="true"><path d="m8 5 5 5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button> : null}
-          </div>
-        ) : null}
-      </div>
+      {onToggleCollapsed ? (
+        <div className={collapsed ? "flex justify-center px-3 pt-4" : "flex justify-end px-5 pt-4"}>
+          <button
+            type="button"
+            aria-label={collapsed ? "Expand shelter navigation" : "Collapse shelter navigation"}
+            aria-expanded={!collapsed}
+            onClick={onToggleCollapsed}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-orange-100 bg-white text-stone-700 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-orange-50 hover:text-[var(--color-orange)]"
+          >
+            <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" aria-hidden="true">
+              <path
+                d={collapsed ? "m8 5 5 5-5 5" : "m12 5-5 5 5 5"}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      ) : null}
 
       <nav
         className="flex-1 overflow-y-auto px-3 py-4 transition-all duration-300 ease-out"
