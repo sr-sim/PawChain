@@ -124,9 +124,13 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const claimedRefunds = donationData.donations.filter(
     (donation) => donation.refundTxHash,
   );
+  const claimedRefundCampaignIds = new Set(
+    claimedRefunds.map((donation) => donation.campaignId),
+  );
   const potentialRefunds = donationData.donations.filter(
     (donation) =>
       !donation.refundTxHash &&
+      !claimedRefundCampaignIds.has(donation.campaignId) &&
       donation.contractAddress &&
       ["Closed", "Refunding"].includes(donation.campaignStatus),
   );
@@ -158,11 +162,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
       }, new Map<string, (typeof potentialRefunds)[number]>())
       .values(),
   ];
-  const totalRefundedEth = claimedRefunds.reduce(
+  const totalRefundedEth = claimedRefundGroups.reduce(
     (total, donation) => total + donation.refundAmountEth,
     0,
   );
-  const totalRefundedMyr = claimedRefunds.reduce(
+  const totalRefundedMyr = claimedRefundGroups.reduce(
     (total, donation) => total + donation.refundAmount,
     0,
   );
