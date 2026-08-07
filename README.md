@@ -153,6 +153,21 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - When a shelter is deactivated, its pending campaigns are rejected and its active campaigns are cancelled. Donors can then claim any eligible refunds.
 - Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
 
+### Shelters
+
+- A shelter represents an animal-welfare organization rather than an individual fundraiser.
+- Each shelter account is linked to one wallet address, and that wallet acts as the organization’s authorized blockchain identity.
+- The person registering the shelter is assumed to have authority to act on behalf of the organization.
+- Each campaign belongs to one shelter wallet and cannot be reassigned to another shelter after contract deployment.
+- Only the registered shelter wallet can withdraw milestone funds and submit milestone evidence.
+- The shelter is responsible for maintaining access to its wallet. PawChain cannot recover lost private keys or reverse completed transactions.
+- The shelter must ensure its connected wallet uses the supported blockchain network before performing transactions.
+- Campaign information, milestones, funding goals, deadlines, and evidence requirements are expected to be accurate and achievable.
+- Evidence submission does not automatically approve a milestone; administrator review is required.
+- Rejected evidence may be corrected and resubmitted, but the following milestone remains locked until approval.
+- When refunds are enabled, normal donations and withdrawals stop.
+- Shelters can monitor refunds but cannot claim refunds on behalf of donors.
+
 ### Donor RoleNFT badges
 
 Donor badges are achievement credentials, not a live net-balance score. Progress is based on cumulative ETH from successfully confirmed on-chain donations recorded when each donation is made.
