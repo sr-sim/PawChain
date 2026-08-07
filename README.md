@@ -203,8 +203,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 
 ## System architecture
 
-<img width="1698" height="829" alt="image" src="https://github.com/user-attachments/assets/e31263fd-c910-4dca-9c30-23a5d1fb2c09" />
-
+<img width="2688" height="1632" alt="PawChain Simple Architecture" src="https://github.com/user-attachments/assets/a33e4408-2525-4b66-95a8-db133c5d7dab" />
 
 ## 🚀 Run the application locally
 
