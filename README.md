@@ -54,13 +54,14 @@ PawChain combines:
 
 - Sign in with an approved internal administrator wallet.
 - Review shelter applications and supporting documents.
-- Approve shelters and mint or revoke Shelter RoleNFTs.
+- Approve shelters and mint Shelter RoleNFTs.
+- Deactivate shelters and revoke their Shelter RoleNFTs.
+- Generate and email certificates to eligible Hero Donors.
 - Review campaign proposals and deploy approved Campaign contracts.
 - Approve or reject milestone evidence.
 - Cancel campaigns and initiate the eligible refund flow.
 - Monitor users, shelters, campaigns, transactions, analytics, and notifications.
-- Review donor reports with donor, campaign, shelter, and transaction references.
-- Open reported campaigns in campaign management for investigation.
+- Review submitted reports and investigate campaign concerns.
 
 ## 🔄 Platform flow
 
@@ -149,6 +150,7 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - Administrators are trusted PawChain staff and cannot register publicly.
 - Authorized administrator addresses are configured before RoleNFT deployment.
 - Administrators do not require a Supabase profile or RoleNFT.
+- When a shelter is deactivated, its pending campaigns are rejected and its active campaigns are cancelled. Donors can then claim any eligible refunds.
 - Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
 
 ### Donor RoleNFT badges
