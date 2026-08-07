@@ -192,6 +192,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - ETH-to-MYR values are display estimates; contracts account only in ETH.
 - RPC providers, IPFS gateways, Supabase, Reown, and email delivery are external dependencies.
 - Uploaded documents and evidence still require human verification.
+- ETH-to-MYR values are estimates. Historical MYR values use the rate saved when the donation or refund was recorded.
 
 ## 🛠️ Technology stack
 
