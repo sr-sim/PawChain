@@ -342,13 +342,13 @@ Get the Supabase URL and API keys from **Supabase Dashboard -> Project Settings 
 
 `ROLE_NFT_MINTER_PRIVATE_KEY` must contain the administrator wallet's private key, not its public wallet address, and must start with `0x`. The corresponding wallet must be recognized by `RoleNFT.isAdmin()` as the RoleNFT contract owner, `ADMIN_ONE`, or `ADMIN_TWO`. Using any other wallet causes RoleNFT minting to fail with an `Only admin` contract error. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
 
-RoleNFT metadata files are available in `backend/metadata/role-nfts`. You may upload them to Pinata with `npm --prefix backend run upload:role-metadata`, then add the printed CIDs to `frontend/.env.local`.
+RoleNFT metadata files are available in `backend/metadata/role-nfts`. To upload them, set `PINATA_JWT` in your terminal, run `npm --prefix backend run upload:role-metadata`, and add the printed CIDs to `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
 #### 5. Configure the backend
 
-The contracts are already deployed. This file is needed only when compiling, testing, or redeploying them. Create `backend/.env`:
+The contracts are already deployed. Create `backend/.env` only if you want to deploy them to Sepolia:
 
 ```env
 DEPLOYER_PRIVATE_KEY=
