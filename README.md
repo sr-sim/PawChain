@@ -43,7 +43,7 @@ PawChain combines:
 - Register an organization and upload supporting documents for verification. 
 - Track the application's approval, rejection, and resubmission status.
 - Receive a non-transferable Shelter RoleNFT after administrator approval.
-- Create campaign proposals with a funding goal, deadline, image, and three and more milestones.
+- Create campaign proposals with a funding goal, deadline, image, and two to five milestones.
 - Track campaign approval status, donations, balances, and milestone progress.
 - Withdraw a funded milestone using the registered shelter wallet.
 - Upload evidence showing how released funds were used.
