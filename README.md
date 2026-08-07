@@ -40,15 +40,15 @@ PawChain combines:
 
 ### 🏥 Shelter
 
-- Register an organization and upload verification documents.
-- Track approval, rejection, and resubmission status.
-- Receive a Shelter RoleNFT after administrator approval.
-- Create campaign proposals with a goal, deadline, image, and two to five milestones.
-- Monitor donations, campaign balances, and milestone progress.
+- Register an organization and upload supporting documents for verification. 
+- Track the application's approval, rejection, and resubmission status.
+- Receive a non-transferable Shelter RoleNFT after administrator approval.
+- Create campaign proposals with a funding goal, deadline, image, and three and more milestones.
+- Track campaign approval status, donations, balances, and milestone progress.
 - Withdraw a funded milestone using the registered shelter wallet.
 - Upload evidence showing how released funds were used.
 - Correct and resubmit rejected milestone evidence.
-- Manage campaigns, refunds, notifications, and shelter profile information.
+- Manage campaigns, notifications, shelter profile information and monitor refunds.
 
 ### 🛠️ Administrator
 
@@ -73,8 +73,8 @@ PawChain combines:
 
 ### 2. Campaign approval
 
-1. The verified shelter creates a campaign proposal with its goal, deadline, and milestones.
-2. The campaign must contain two to five milestones, the first milestone must be 5%, and all percentages must total 100%.
+1. The verified shelter creates a campaign proposal with its funding goal, deadline, and milestones.
+2. The campaign must contain at least three milestones, the first milestone must be 5%, and all percentages must total 100%.
 3. An administrator reviews the proposal and either rejects it with a reason or approves it.
 4. Approval deploys a dedicated Campaign smart contract and makes the campaign available to donors.
 
