@@ -40,15 +40,15 @@ PawChain combines:
 
 ### 🏥 Shelter
 
-- Register an organization and upload verification documents.
-- Track approval, rejection, and resubmission status.
-- Receive a Shelter RoleNFT after administrator approval.
-- Create campaign proposals with a goal, deadline, image, and two to five milestones.
-- Monitor donations, campaign balances, and milestone progress.
+- Register an organization and upload supporting documents for verification. 
+- Track the application's approval, rejection, and resubmission status.
+- Receive a non-transferable Shelter RoleNFT after administrator approval.
+- Create campaign proposals with a funding goal, deadline, image, and two to five milestones.
+- Track campaign approval status, donations, balances, and milestone progress.
 - Withdraw a funded milestone using the registered shelter wallet.
 - Upload evidence showing how released funds were used.
 - Correct and resubmit rejected milestone evidence.
-- Manage campaigns, refunds, notifications, and shelter profile information.
+- Manage campaigns, notifications, shelter profile information and monitor refunds.
 
 ### 🛠️ Administrator
 
@@ -73,8 +73,8 @@ PawChain combines:
 
 ### 2. Campaign approval
 
-1. The verified shelter creates a campaign proposal with its goal, deadline, and milestones.
-2. The campaign must contain two to five milestones, the first milestone must be 5%, and all percentages must total 100%.
+1. The verified shelter creates a campaign proposal with its funding goal, deadline, and milestones.
+2. The campaign must contain at least three milestones, the first milestone must be 5%, and all percentages must total 100%.
 3. An administrator reviews the proposal and either rejects it with a reason or approves it.
 4. Approval deploys a dedicated Campaign smart contract and makes the campaign available to donors.
 
@@ -152,6 +152,21 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - Administrators do not require a Supabase profile or RoleNFT.
 - When a shelter is deactivated, its pending campaigns are rejected and its active campaigns are cancelled. Donors can then claim any eligible refunds.
 - Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
+
+### Shelters
+
+- A shelter represents an animal-welfare organization rather than an individual fundraiser.
+- Each shelter account is linked to one wallet address, and that wallet acts as the organization’s authorized blockchain identity.
+- The person registering the shelter is assumed to have authority to act on behalf of the organization.
+- Each campaign belongs to one shelter wallet and cannot be reassigned to another shelter after contract deployment.
+- Only the registered shelter wallet can withdraw milestone funds and submit milestone evidence.
+- The shelter is responsible for maintaining access to its wallet. PawChain cannot recover lost private keys or reverse completed transactions.
+- The shelter must ensure its connected wallet uses the supported blockchain network before performing transactions.
+- Campaign information, milestones, funding goals, deadlines, and evidence requirements are expected to be accurate and achievable.
+- Evidence submission does not automatically approve a milestone; administrator review is required.
+- Rejected evidence may be corrected and resubmitted, but the following milestone remains locked until approval.
+- When refunds are enabled, normal donations and withdrawals stop.
+- Shelters can monitor refunds but cannot claim refunds on behalf of donors.
 
 ### Donor RoleNFT badges
 
