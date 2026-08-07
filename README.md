@@ -153,6 +153,14 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - When a shelter is deactivated, its pending campaigns are rejected and its active campaigns are cancelled. Donors can then claim any eligible refunds.
 - Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
 
+### Donors
+
+- A donor is an individual who controls the connected wallet and is authorized to use the ETH in it.
+- Donors are responsible for reviewing the campaign, shelter, milestones, and transaction details before approving a donation in their wallet. Platform approval reduces fraud risk but does not guarantee a campaign's outcome or the accuracy of every claim.
+- Donations and eligible refunds are denominated in ETH. Donors accept ETH price volatility, and network gas fees are separate costs that are not included in donation totals or refunded by PawChain.
+- A donation receipt, RoleNFT badge, or Hero Donor certificate records participation in PawChain; it is not proof that a donation is tax-deductible.
+- Saved campaigns and notifications are convenience features. Saving a campaign does not reserve milestone capacity, and donors should verify the latest on-chain campaign state before donating or claiming a refund.
+
 ### Donor RoleNFT badges
 
 Donor badges are achievement credentials, not a live net-balance score. Progress is based on cumulative ETH from successfully confirmed on-chain donations recorded when each donation is made.
