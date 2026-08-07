@@ -74,7 +74,7 @@ PawChain combines:
 ### 2. Campaign approval
 
 1. The verified shelter creates a campaign proposal with its funding goal, deadline, and milestones.
-2. The campaign must contain at least three milestones, the first milestone must be 5%, and all percentages must total 100%.
+2. The campaign must contain at least two milestones, the first milestone must be 5%, and all percentages must total 100%.
 3. An administrator reviews the proposal and either rejects it with a reason or approves it.
 4. Approval deploys a dedicated Campaign smart contract and makes the campaign available to donors.
 
@@ -162,11 +162,19 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - Only the registered shelter wallet can withdraw milestone funds and submit milestone evidence.
 - The shelter is responsible for maintaining access to its wallet. PawChain cannot recover lost private keys or reverse completed transactions.
 - The shelter must ensure its connected wallet uses the supported blockchain network before performing transactions.
+- When create campaign, the shelter must set the funding goal at least MYR 1000 or above.
 - Campaign information, milestones, funding goals, deadlines, and evidence requirements are expected to be accurate and achievable.
 - Evidence submission does not automatically approve a milestone; administrator review is required.
 - Rejected evidence may be corrected and resubmitted, but the following milestone remains locked until approval.
 - When refunds are enabled, normal donations and withdrawals stop.
 - Shelters can monitor refunds but cannot claim refunds on behalf of donors.
+
+### Donors
+
+- Donors make voluntary donation decisions and are responsible for reviewing the campaign and milestone information. PawChain's approval process does not guarantee a campaign's success or the accuracy of every shelter claim.
+- A donation is recorded only after its blockchain transaction is confirmed. Pending, rejected, or reverted transactions are not successful donations.
+- Confirmed donations cannot be manually cancelled or reversed. Refunds are available only when enabled by the campaign contract, must be claimed with the wallet that donated, and exclude funds already released to the shelter.
+- Donors are responsible for blockchain gas fees and ETH price fluctuations. Gas fees are not counted as donations and are not refundable.
 
 ### Donor RoleNFT badges
 
