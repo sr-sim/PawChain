@@ -170,11 +170,10 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 
 ### Donors
 
-- A donor is an individual who controls the connected wallet and is authorized to use the ETH in it.
-- Donors are responsible for reviewing the campaign, shelter, milestones, and transaction details before approving a donation in their wallet. Platform approval reduces fraud risk but does not guarantee a campaign's outcome or the accuracy of every claim.
-- Donations and eligible refunds are denominated in ETH. Donors accept ETH price volatility, and network gas fees are separate costs that are not included in donation totals or refunded by PawChain.
-- A donation receipt, RoleNFT badge, or Hero Donor certificate records participation in PawChain; it is not proof that a donation is tax-deductible.
-- Saved campaigns and notifications are convenience features. Saving a campaign does not reserve milestone capacity, and donors should verify the latest on-chain campaign state before donating or claiming a refund.
+- Donors make voluntary donation decisions and are responsible for reviewing the campaign and milestone information. PawChain's approval process does not guarantee a campaign's success or the accuracy of every shelter claim.
+- A donation is recorded only after its blockchain transaction is confirmed. Pending, rejected, or reverted transactions are not successful donations.
+- Confirmed donations cannot be manually cancelled or reversed. Refunds are available only when enabled by the campaign contract, must be claimed with the wallet that donated, and exclude funds already released to the shelter.
+- Donors are responsible for blockchain gas fees and ETH price fluctuations. Gas fees are not counted as donations and are not refundable.
 
 ### Donor RoleNFT badges
 
