@@ -168,6 +168,13 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - When refunds are enabled, normal donations and withdrawals stop.
 - Shelters can monitor refunds but cannot claim refunds on behalf of donors.
 
+### Donors
+
+- Donors make voluntary donation decisions and are responsible for reviewing the campaign and milestone information. PawChain's approval process does not guarantee a campaign's success or the accuracy of every shelter claim.
+- A donation is recorded only after its blockchain transaction is confirmed. Pending, rejected, or reverted transactions are not successful donations.
+- Confirmed donations cannot be manually cancelled or reversed. Refunds are available only when enabled by the campaign contract, must be claimed with the wallet that donated, and exclude funds already released to the shelter.
+- Donors are responsible for blockchain gas fees and ETH price fluctuations. Gas fees are not counted as donations and are not refundable.
+
 ### Donor RoleNFT badges
 
 Donor badges are achievement credentials, not a live net-balance score. Progress is based on cumulative ETH from successfully confirmed on-chain donations recorded when each donation is made.
