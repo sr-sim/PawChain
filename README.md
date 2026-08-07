@@ -254,6 +254,10 @@ The wallets used for deployment and testing need Sepolia ETH for gas.
 - IPFS metadata CIDs for RoleNFT badges.
 - Gmail with an App Password for Hero certificate emails.
 
+#### ETH-to-MYR currency API
+
+PawChain uses the public [CoinGecko API](https://www.coingecko.com/en/api) to retrieve the current Ethereum price in MYR. It uses `/api/v3/simple/price` for the latest rate and `/api/v3/coins/ethereum/market_chart` for 24-hour price history. Results are cached briefly, and no CoinGecko API key is currently required. If a request fails, the application uses its predefined demonstration rate, so displayed MYR amounts remain estimates; smart contracts and financial records use ETH.
+
 ### Setup steps
 
 #### 1. Clone the repository
@@ -352,6 +356,12 @@ address public constant ADMIN_ONE = 0x...; // Administrator wallet
 5. Update `NEXT_PUBLIC_ROLE_NFT_ADDRESS` and `NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS` in `frontend/.env.local`.
 
 Administrator constants cannot be changed after RoleNFT is deployed. A new deployment is required when replacing one of these predefined administrator addresses.
+
+#### Lecturer demonstration
+
+For a demonstration, keep your wallet as `ADMIN_ONE` and set the lecturer's **public wallet address** as `ADMIN_TWO`. The lecturer must connect that exact account to Ethereum Sepolia and have enough test ETH for gas. Never request their private key, password, or recovery phrase.
+
+After redeployment, verify the setup by calling `isAdmin(lecturerAddress)`; it should return `true`. Then update the frontend with the new contract addresses before testing an administrator action. A redeployed contract starts with fresh state, so NFTs and records from the previous deployment are not transferred.
 
 #### Administrator sign-in
 
