@@ -3,9 +3,9 @@
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAppKitAccount } from "@reown/appkit/react";
+import { formatEther } from "viem";
 import { DashboardTopBar } from "@/app/components/DashboardTopBar";
 import { AdminSidebar as SharedAdminSidebar } from "@/app/Admin/components/AdminSidebar";
-import { useEthMyrRate } from "@/lib/use-eth-myr-rate";
 import {
   getWalletStyle,
   saveWalletStyle,
@@ -92,6 +92,11 @@ const statusMeta: Record<string, { label: string; color: string; classes: string
     classes: "bg-[var(--color-cream)] text-stone-700 ring-[var(--color-gold)]",
   },
 };
+
+function formatEth(value: string) {
+  const amount = Number(formatEther(BigInt(value || "0")));
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(amount)} ETH`;
+}
 
 function formatMoney(value: number | string | null) {
   return new Intl.NumberFormat("en-MY", {
@@ -198,10 +203,6 @@ function DashboardSkeleton() {
 }
 
 export default function AdminDashboard() {
-  const {
-    weiToMyr,
-    source: rateSource,
-  } = useEthMyrRate();
   const { address, isConnected } = useAppKitAccount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -294,8 +295,8 @@ export default function AdminDashboard() {
                 <SummaryCard label="Active campaigns" value={data.summary.activeCampaigns} note="Approved and fundraising" tone="bg-[rgba(var(--color-orange-rgb),0.24)]" />
                 <SummaryCard label="Rejected campaigns" value={data.summary.rejectedCampaigns} note="Require shelter revision" tone="bg-stone-200" />
                 <SummaryCard label="Milestone reviews" value={data.summary.pendingMilestones} note="Submitted proof awaiting review" tone="bg-[rgba(var(--color-peach-rgb),0.55)]" />
-                <SummaryCard label="Donations received" value={formatMoney(weiToMyr(data.summary.totalDonationsWei))} note={`Approx. live MYR · ${rateSource === "coingecko" ? "CoinGecko" : "configured fallback rate"}`} tone="bg-[rgba(var(--color-cream-rgb),0.9)]" />
-                <SummaryCard label="Funds released" value={formatMoney(weiToMyr(data.summary.totalFundsReleasedWei))} note={`Approx. live MYR · ${rateSource === "coingecko" ? "CoinGecko" : "configured fallback rate"}`} tone="bg-[rgba(var(--color-gold-rgb),0.22)]" />
+                <SummaryCard label="Donations received" value={formatEth(data.summary.totalDonationsWei)} note="Verified on-chain donations" tone="bg-[rgba(var(--color-cream-rgb),0.9)]" />
+                <SummaryCard label="Funds released" value={formatEth(data.summary.totalFundsReleasedWei)} note="Verified on-chain milestone releases" tone="bg-[rgba(var(--color-gold-rgb),0.22)]" />
               </section>
 
               <section className="order-2 grid gap-6 xl:grid-cols-5">
