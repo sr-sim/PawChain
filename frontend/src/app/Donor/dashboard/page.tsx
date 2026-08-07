@@ -236,22 +236,22 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const maxChartValue = Math.max(...chartData.map((point) => point.value), 1);
   const summaryStats = [
     {
-      label: "Total donated",
-      value: formatAmount(rangeTotalMyr, "MYR"),
+      label: "Donations",
+      value: `${rangeConfirmed.length} confirmed`,
       detail:
         activeRange === "all"
-          ? "Lifetime recorded value"
+          ? "Lifetime donation records"
           : rangeTrend !== null
             ? `${rangeTrend >= 0 ? "Up" : "Down"} ${formatPercentage(Math.abs(rangeTrend))}% vs previous ${activeRange} days`
             : rangeTotalMyr > 0
-              ? "New support in this period"
+              ? `${formatAmount(rangeTotalMyr, "MYR")} in this period`
               : `Last ${activeRange} days`,
       tone: "orange",
     },
     {
-      label: "Confirmed support",
-      value: String(rangeConfirmed.length),
-      detail: `${rangeCampaignCount} campaigns in this period`,
+      label: "Campaigns supported",
+      value: `${rangeCampaignCount} campaigns`,
+      detail: "Across confirmed donations",
       tone: "violet",
     },
     {
