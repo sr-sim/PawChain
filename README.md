@@ -192,6 +192,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - ETH-to-MYR values are display estimates; contracts account only in ETH.
 - RPC providers, IPFS gateways, Supabase, Reown, and email delivery are external dependencies.
 - Uploaded documents and evidence still require human verification.
+- ETH-to-MYR values are estimates. Historical MYR values use the rate saved when the donation or refund was recorded.
 
 ## 🛠️ Technology stack
 
@@ -203,18 +204,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 
 ## System architecture
 
-View and edit the full diagram in [PawChain System Architecture on FigJam](https://www.figma.com/board/8kscQjJZHq1AbBq58gRoJM).
-
-```mermaid
-flowchart LR
-    users["Donor, Shelter and Admin"] --> app["PawChain Web App"]
-    app --> api["Backend API"]
-    app --> wallet["MetaMask Wallet"]
-    wallet --> blockchain["Sepolia Smart Contracts"]
-    api --> blockchain
-    api --> supabase["Supabase Database and Storage"]
-    api --> services["IPFS, CoinGecko and Email"]
-```
+<img width="5376" height="3264" alt="image" src="https://github.com/user-attachments/assets/5927387a-726c-44b0-bc78-3e577197d641" />
 
 ## 🚀 Run the application locally
 
