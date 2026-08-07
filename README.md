@@ -147,7 +147,10 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 ### Internal administrators
 
 - Administrators are trusted PawChain staff and cannot register publicly for the role.
-- Administrator wallets are approved in advance by the RoleNFT contract.
+- Administrator public wallet addresses are configured as `ADMIN_ONE` or `ADMIN_TWO` before RoleNFT deployment; the deployment owner is also recognized as an administrator.
+- Administrator access assumes the user connects the exact configured wallet to Ethereum Sepolia and signs the authentication message.
+- Administrators do not require a Supabase user profile or RoleNFT to sign in.
+- Replacing a configured administrator requires contract redeployment and frontend configuration updates. The new deployment starts with fresh contract state.
 - Internal procedures are responsible for protecting and replacing administrator wallets.
 - Shelter verification, campaign approval, evidence review, and donor-report investigation require human judgment.
 
@@ -357,11 +360,16 @@ address public constant ADMIN_ONE = 0x...; // Administrator wallet
 
 Administrator constants cannot be changed after RoleNFT is deployed. A new deployment is required when replacing one of these predefined administrator addresses.
 
-#### Lecturer demonstration
+#### Configure an additional administrator
 
-For a demonstration, keep your wallet as `ADMIN_ONE` and set the lecturer's **public wallet address** as `ADMIN_TWO`. The lecturer must connect that exact account to Ethereum Sepolia and have enough test ETH for gas. Never request their private key, password, or recovery phrase.
+1. Copy the public address of the MetaMask account that will be used for administrator access.
+2. Keep the primary administrator as `ADMIN_ONE` and replace `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the additional administrator address.
+3. Compile and redeploy the RoleNFT and CampaignFactory contracts to Ethereum Sepolia.
+4. Update the new contract addresses in `frontend/.env.local`, then restart the application.
+5. Call `isAdmin(additionalAdminAddress)` and confirm that it returns `true`.
+6. Connect the same MetaMask account to Sepolia and sign in.
 
-After redeployment, verify the setup by calling `isAdmin(lecturerAddress)`; it should return `true`. Then update the frontend with the new contract addresses before testing an administrator action. A redeployed contract starts with fresh state, so NFTs and records from the previous deployment are not transferred.
+Only a public wallet address is required; never share a private key, password, or recovery phrase. The wallet requires Sepolia ETH for gas. Redeployment creates fresh contract state, so records and NFTs from the previous deployment are not transferred.
 
 #### Administrator sign-in
 
