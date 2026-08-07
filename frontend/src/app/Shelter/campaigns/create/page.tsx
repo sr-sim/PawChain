@@ -52,8 +52,7 @@ const initialMilestones: MilestoneForm[] = [
     requirement: "",
     percentage: "5",
   },
-  { title: "", description: "", requirement: "", percentage: "45" },
-  { title: "", description: "", requirement: "", percentage: "50" },
+  { title: "", description: "", requirement: "", percentage: "95" },
 ];
 
 function ArrowIcon() {
@@ -394,8 +393,8 @@ export default function CreateCampaignPage() {
   }
 
   function validateMilestones() {
-    if (milestones.length < 3 || milestones.length > 5) {
-      setError("Add at least 3 milestones. Campaigns must have between 3 and 5 milestones.");
+    if (milestones.length < 2 || milestones.length > 5) {
+      setError("Add at least 2 milestones. Campaigns must have between 2 and 5 milestones.");
       return false;
     }
 
@@ -727,7 +726,7 @@ export default function CreateCampaignPage() {
             </div>
 
             <section className="rounded-3xl border border-orange-100 bg-white p-4 shadow-[0_10px_28px_rgba(111,69,20,0.05)] sm:p-5">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-xl font-black text-stone-950">Milestones</h3><p className="text-xs font-semibold text-stone-500">At least 3 milestones are required; a maximum of 5 is allowed.</p></div><div className="text-right"><p className="text-xs font-black text-stone-500">Total Percentage <span className={totalPercentage === 100 ? "text-emerald-600" : "text-[var(--color-orange)]"}>{totalPercentage}%</span></p><p className="mt-1 text-[10px] font-bold text-stone-400">Milestones 2-{milestones.length} must total 95%</p></div></div>
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-xl font-black text-stone-950">Milestones</h3><p className="text-xs font-semibold text-stone-500">At least 2 milestones are required; a maximum of 5 is allowed.</p></div><div className="text-right"><p className="text-xs font-black text-stone-500">Total Percentage <span className={totalPercentage === 100 ? "text-emerald-600" : "text-[var(--color-orange)]"}>{totalPercentage}%</span></p><p className="mt-1 text-[10px] font-bold text-stone-400">Milestones 2-{milestones.length} must total 95%</p></div></div>
               <div className="relative space-y-3 before:absolute before:bottom-8 before:left-[1.75rem] before:top-8 before:w-px before:bg-orange-200">
                 {milestones.map((milestone, index) => (
                   <MilestoneEditorRow
@@ -738,7 +737,7 @@ export default function CreateCampaignPage() {
                     maxPercentage={Math.max(0, 100 - milestones.slice(0, index).reduce((sum, item) => sum + Number(item.percentage || 0), 0))}
                     goalAmount={form.goalAmount}
                     ethMyrRate={ethMyrRate}
-                    canRemove={milestones.length > 3}
+                    canRemove={milestones.length > 2}
                     onUpdate={(key, value) => updateMilestone(index, key, value)}
                     onRemove={() => setMilestones((current) => current.filter((_, milestoneIndex) => milestoneIndex !== index))}
                   />
