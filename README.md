@@ -257,7 +257,7 @@ The wallets used for deployment and testing need Sepolia ETH for gas.
 
 #### Required services
 
-- A Supabase project with the PawChain database tables. The application uses one private Storage bucket, `shelter-verification-documents`, which it creates automatically when the first shelter document is uploaded.
+- A fresh Supabase project. The PawChain tables can be created from the included migration. The application creates the private Storage bucket `shelter-verification-documents` automatically when the first shelter document is uploaded.
 - A Reown Cloud project for wallet connection.
 - A Sepolia RPC URL.
 - IPFS metadata CIDs for RoleNFT badges.
@@ -284,7 +284,25 @@ npm --prefix backend install
 npm --prefix frontend install
 ```
 
-#### 3. Configure the frontend
+#### 3. Create the Supabase database
+
+Create a new project in the [Supabase Dashboard](https://supabase.com/dashboard), then copy its **Session pooler** connection URI from **Connect**. Replace the password placeholder in the URI with the database password chosen when the project was created.
+
+Apply the included baseline migration to the new project:
+
+```powershell
+npx --yes supabase@latest db push --db-url "YOUR_DATABASE_CONNECTION_URI"
+```
+
+This command applies [`supabase/migrations/202608070001_initial_schema.sql`](supabase/migrations/202608070001_initial_schema.sql), which creates the PawChain tables, enums, constraints, indexes, functions, triggers, and row-level security policies. Docker is not required for this command.
+
+Use a fresh Supabase project. Do not apply the baseline to a database that already contains the PawChain tables. The migration creates the schema only; it does not copy users, authentication accounts, uploaded files, or application records.
+
+The connection URI contains the database password. Do not commit it, place it in the README, or share it. If the password contains reserved URL characters, use a percent-encoded connection URI.
+
+After the command succeeds, confirm in **Supabase Dashboard -> Table Editor** that tables such as `profiles`, `campaigns`, `campaign_milestones`, `donations`, and `donor_support_requests` are present.
+
+#### 4. Configure the frontend
 
 Create `frontend/.env.local`:
 
@@ -317,13 +335,13 @@ GMAIL_APP_PASSWORD=
 WALLET_SESSION_SECRET=
 ```
 
-Get the Supabase values from **Supabase Dashboard → Project Settings → API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use IPFS metadata CIDs for the badge variables.
+Get the Supabase URL and API keys from **Supabase Dashboard -> Project Settings -> API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use the public anonymous key for `NEXT_PUBLIC_SUPABASE_ANON_KEY` and keep the service-role key server-only. Use IPFS metadata CIDs for the badge variables.
 
 `ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
-#### 4. Configure the backend
+#### 5. Configure the backend
 
 The contracts are already deployed. This file is needed only when compiling, testing, or redeploying them. Create `backend/.env`:
 
@@ -332,14 +350,18 @@ DEPLOYER_PRIVATE_KEY=
 SEPOLIA_RPC_URL=
 ```
 
-The deployer wallet must have Sepolia ETH. To compile and test:
+The deployer wallet must have Sepolia ETH. To redeploy both RoleNFT and CampaignFactory to Sepolia:
 
 ```powershell
-npm.cmd --prefix backend run compile
-npm.cmd run test:backend
+cd backend
+npm.cmd run compile
+npx.cmd hardhat ignition deploy ignition/modules/PawChain.ts --network sepolia --deployment-id pawchain-sepolia-new
+cd ..
 ```
 
-#### 5. Start the development server
+After deployment, copy the new RoleNFT and CampaignFactory addresses from `backend/ignition/deployments/pawchain-sepolia-new/deployed_addresses.json` into `frontend/.env.local`, then restart the frontend. Use a new deployment ID if `pawchain-sepolia-new` has already been used.
+
+#### 6. Start the development server
 
 ```powershell
 npm.cmd run frontend
