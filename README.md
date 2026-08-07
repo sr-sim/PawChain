@@ -43,7 +43,7 @@ PawChain combines:
 - Register an organization and upload supporting documents for verification. 
 - Track the application's approval, rejection, and resubmission status.
 - Receive a non-transferable Shelter RoleNFT after administrator approval.
-- Create campaign proposals with a funding goal, deadline, image, and two to five milestones.
+- Create campaign proposals with a funding goal, 30-, 60-, or 90-day duration, optional image, and two to five milestones.
 - Track campaign approval status, donations, balances, and milestone progress.
 - Withdraw a funded milestone using the registered shelter wallet.
 - Upload evidence showing how released funds were used.
@@ -156,7 +156,7 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 ### Shelters
 
 - A shelter represents an animal-welfare organization rather than an individual fundraiser.
-- Each shelter account is linked to one wallet address, and that wallet acts as the organization’s authorized blockchain identity.
+- Each shelter account is linked to one wallet address, and that wallet acts as the organization's authorized blockchain identity.
 - The person registering the shelter is assumed to have authority to act on behalf of the organization.
 - Each campaign belongs to one shelter wallet and cannot be reassigned to another shelter after contract deployment.
 - Only the registered shelter wallet can withdraw milestone funds and submit milestone evidence.
@@ -196,6 +196,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 
 - One wallet represents one PawChain user and can hold only one RoleNFT.
 - RoleNFTs are non-transferable platform credentials, not tradable NFTs.
+- The contract limits active Donor and Shelter RoleNFT supplies to 50 each as a prototype constraint for controlled testing and demonstration. The number 50 is not a permanent business requirement; a production deployment should increase, configure, or remove the limit based on scalability and governance needs. Revoking a RoleNFT decreases the corresponding active supply count, allowing another RoleNFT of that role to be minted.
 - `ROLE_NFT_MINTER_PRIVATE_KEY` belongs to an authorized administrator wallet and is used by the server to mint a Donor RoleNFT automatically after successful donor registration. A Shelter RoleNFT is minted separately using the connected administrator wallet during shelter approval.
 - Donor badge levels upgrade automatically when confirmed cumulative on-chain donations reach the configured thresholds. Shelter RoleNFTs do not have badge levels.
 - Users control their own wallets; PawChain never stores private keys or reverses confirmed transactions.
@@ -224,7 +225,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - **Frontend/API:** Next.js 16, React 19, TypeScript, Tailwind CSS
 - **Wallet/Web3:** Reown AppKit, Wagmi, Viem
 - **Blockchain:** Solidity 0.8.28, Hardhat, Hardhat Ignition
-- **Database/storage:** Supabase and IPFS-compatible storage
+- **Database/storage:** Supabase Database and Storage; IPFS for RoleNFT metadata
 - **Documents/email:** PDF-Lib and Nodemailer
 
 ## System architecture
@@ -340,6 +341,8 @@ WALLET_SESSION_SECRET=
 Get the Supabase URL and API keys from **Supabase Dashboard -> Project Settings -> API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use the public anonymous key for `NEXT_PUBLIC_SUPABASE_ANON_KEY` and keep the service-role key server-only. Use IPFS metadata CIDs for the badge variables.
 
 `ROLE_NFT_MINTER_PRIVATE_KEY` must contain the administrator wallet's private key, not its public wallet address, and must start with `0x`. The corresponding wallet must be recognized by `RoleNFT.isAdmin()` as the RoleNFT contract owner, `ADMIN_ONE`, or `ADMIN_TWO`. Using any other wallet causes RoleNFT minting to fail with an `Only admin` contract error. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
+
+RoleNFT metadata files are available in `backend/metadata/role-nfts`. You may upload them to Pinata with `npm --prefix backend run upload:role-metadata`, then add the printed CIDs to `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
