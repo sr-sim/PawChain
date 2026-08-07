@@ -40,15 +40,15 @@ PawChain combines:
 
 ### 🏥 Shelter
 
-- Register an organization and upload verification documents.
-- Track approval, rejection, and resubmission status.
-- Receive a Shelter RoleNFT after administrator approval.
-- Create campaign proposals with a goal, deadline, image, and two to five milestones.
-- Monitor donations, campaign balances, and milestone progress.
+- Register an organization and upload supporting documents for verification.
+- Track the application's approval, rejection, and resubmission status.
+- Receive a non-transferable Shelter RoleNFT after administrator approval.
+- Create campaign proposals with a funding goal, deadline, image, and two to five milestones.
+- Track campaign approval status, donations, balances, and milestone progress.
 - Withdraw a funded milestone using the registered shelter wallet.
 - Upload evidence showing how released funds were used.
 - Correct and resubmit rejected milestone evidence.
-- Manage campaigns, refunds, notifications, and shelter profile information.
+- Manage campaigns, notifications, shelter profile information and monitor refunds.
 
 ### 🛠️ Administrator
 
@@ -73,8 +73,8 @@ PawChain combines:
 
 ### 2. Campaign approval
 
-1. The verified shelter creates a campaign proposal with its goal, deadline, and milestones.
-2. The campaign must contain two to five milestones, the first milestone must be 5%, and all percentages must total 100%.
+1. The verified shelter creates a campaign proposal with its funding goal, deadline, and milestones.
+2. The campaign must contain at least three milestones, the first milestone must be 5%, and all percentages must total 100%.
 3. An administrator reviews the proposal and either rejects it with a reason or approves it.
 4. Approval deploys a dedicated Campaign smart contract and makes the campaign available to donors.
 
@@ -153,13 +153,27 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 - When a shelter is deactivated, its pending campaigns are rejected and its active campaigns are cancelled. Donors can then claim any eligible refunds.
 - Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
 
+### Shelters
+
+- A shelter represents an animal-welfare organization rather than an individual fundraiser.
+- Each shelter account is linked to one wallet address, and that wallet acts as the organization’s authorized blockchain identity.
+- The person registering the shelter is assumed to have authority to act on behalf of the organization.
+- Each campaign belongs to one shelter wallet and cannot be reassigned to another shelter after contract deployment.
+- Only the registered shelter wallet can withdraw milestone funds and submit milestone evidence.
+- The shelter is responsible for maintaining access to its wallet. PawChain cannot recover lost private keys or reverse completed transactions.
+- The shelter must ensure its connected wallet uses the supported blockchain network before performing transactions.
+- Campaign information, milestones, funding goals, deadlines, and evidence requirements are expected to be accurate and achievable.
+- Evidence submission does not automatically approve a milestone; administrator review is required.
+- Rejected evidence may be corrected and resubmitted, but the following milestone remains locked until approval.
+- When refunds are enabled, normal donations and withdrawals stop.
+- Shelters can monitor refunds but cannot claim refunds on behalf of donors.
+
 ### Donors
 
-- A donor is an individual who controls the connected wallet and is authorized to use the ETH in it.
-- Donors are responsible for reviewing the campaign, shelter, milestones, and transaction details before approving a donation in their wallet. Platform approval reduces fraud risk but does not guarantee a campaign's outcome or the accuracy of every claim.
-- Donations and eligible refunds are denominated in ETH. Donors accept ETH price volatility, and network gas fees are separate costs that are not included in donation totals or refunded by PawChain.
-- A donation receipt, RoleNFT badge, or Hero Donor certificate records participation in PawChain; it is not proof that a donation is tax-deductible.
-- Saved campaigns and notifications are convenience features. Saving a campaign does not reserve milestone capacity, and donors should verify the latest on-chain campaign state before donating or claiming a refund.
+- Donors make voluntary donation decisions and are responsible for reviewing the campaign and milestone information. PawChain's approval process does not guarantee a campaign's success or the accuracy of every shelter claim.
+- A donation is recorded only after its blockchain transaction is confirmed. Pending, rejected, or reverted transactions are not successful donations.
+- Confirmed donations cannot be manually cancelled or reversed. Refunds are available only when enabled by the campaign contract, must be claimed with the wallet that donated, and exclude funds already released to the shelter.
+- Donors are responsible for blockchain gas fees and ETH price fluctuations. Gas fees are not counted as donations and are not refundable.
 
 ### Donor RoleNFT badges
 
@@ -200,6 +214,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - ETH-to-MYR values are display estimates; contracts account only in ETH.
 - RPC providers, IPFS gateways, Supabase, Reown, and email delivery are external dependencies.
 - Uploaded documents and evidence still require human verification.
+- ETH-to-MYR values are estimates. Historical MYR values use the rate saved when the donation or refund was recorded.
 
 ## 🛠️ Technology stack
 
@@ -209,26 +224,9 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - **Database/storage:** Supabase and IPFS-compatible storage
 - **Documents/email:** PDF-Lib and Nodemailer
 
-## 🗂️ Project structure
+## System architecture
 
-```text
-PawChain/
-├── backend/
-│   ├── contracts/       # RoleNFT, CampaignFactory, and Campaign
-│   ├── ignition/        # Deployment modules and records
-│   ├── metadata/        # RoleNFT metadata
-│   └── test/            # Hardhat tests
-├── frontend/
-│   ├── public/          # Images and static assets
-│   ├── scripts/         # RoleNFT seeding script
-│   └── src/
-│       ├── app/         # Donor, Shelter, Admin, registration, and API routes
-│       ├── context/     # Shared Web3 wallet context
-│       ├── lib/         # Blockchain, Supabase, session, and domain logic
-│       ├── styles/      # Shared theme styles
-│       └── utils/       # Web3 configuration
-└── package.json         # Root commands
-```
+<img width="5376" height="3264" alt="image" src="https://github.com/user-attachments/assets/5927387a-726c-44b0-bc78-3e577197d641" />
 
 ## 🚀 Run the application locally
 
@@ -320,7 +318,7 @@ WALLET_SESSION_SECRET=
 
 Get the Supabase values from **Supabase Dashboard → Project Settings → API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use IPFS metadata CIDs for the badge variables.
 
-`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` should contain at least 32 random characters.
+`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
@@ -370,7 +368,7 @@ Administrator constants cannot be changed after RoleNFT is deployed. A new deplo
 #### Configure an additional administrator
 
 1. Copy the public address of the MetaMask account that will be used for administrator access.
-2. Keep the primary administrator as `ADMIN_ONE` and replace `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the additional administrator address.
+2. Replace either `ADMIN_ONE` or `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the additional administrator address. Both constants can be updated if both administrator wallets need to change.
 3. Compile and redeploy the RoleNFT and CampaignFactory contracts to Ethereum Sepolia.
 4. Update the new contract addresses in `frontend/.env.local`, then restart the application.
 5. Call `isAdmin(additionalAdminAddress)` and confirm that it returns `true`.
