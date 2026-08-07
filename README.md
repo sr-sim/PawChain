@@ -296,15 +296,7 @@ WALLET_SESSION_SECRET=
 
 Get the Supabase values from **Supabase Dashboard → Project Settings → API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use IPFS metadata CIDs for the badge variables.
 
-`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to sign wallet login challenges and session cookies, preventing users from forging an authenticated wallet session.
-
-Generate it in PowerShell, then copy the output into `WALLET_SESSION_SECRET`:
-
-```powershell
-$sessionBytes = New-Object byte[] 48
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($sessionBytes)
-[Convert]::ToBase64String($sessionBytes)
-```
+`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
