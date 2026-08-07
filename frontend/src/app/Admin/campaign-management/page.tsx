@@ -1692,11 +1692,6 @@ export default function CampaignManagementPage() {
                   Raised on-chain: {weiAsEth(details.on_chain_total_raised_wei)}
                 </p>
               </div>
-              {details.contract_address ? (
-                <p className="mt-3 break-all rounded-xl bg-stone-100 px-3 py-2 font-mono text-xs text-stone-600">
-                  Contract: {details.contract_address}
-                </p>
-              ) : null}
             </div>
           </div>
           <div className="mx-4 mt-1 grid gap-4 sm:mx-5 lg:grid-cols-3">
