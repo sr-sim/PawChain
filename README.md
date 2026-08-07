@@ -203,18 +203,8 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 
 ## System architecture
 
-View and edit the full diagram in [PawChain System Architecture on FigJam](https://www.figma.com/board/8kscQjJZHq1AbBq58gRoJM).
+<img width="1698" height="829" alt="image" src="https://github.com/user-attachments/assets/e31263fd-c910-4dca-9c30-23a5d1fb2c09" />
 
-```mermaid
-flowchart LR
-    users["Donor, Shelter and Admin"] --> app["PawChain Web App"]
-    app --> api["Backend API"]
-    app --> wallet["MetaMask Wallet"]
-    wallet --> blockchain["Sepolia Smart Contracts"]
-    api --> blockchain
-    api --> supabase["Supabase Database and Storage"]
-    api --> services["IPFS, CoinGecko and Email"]
-```
 
 ## 🚀 Run the application locally
 
