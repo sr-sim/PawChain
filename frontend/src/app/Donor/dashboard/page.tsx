@@ -572,10 +572,12 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           {donationData.donations.length > 0 ? (
             <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
               {donationData.donations.slice(0, 3).map((donation) => {
-                const shouldShowRefundTx =
+                const visibleRefundTxHash =
                   donation.refundTxHash &&
-                  activityRefundDisplayRows.get(donation.campaignId) ===
-                    donation.id;
+                  activityRefundDisplayRows.get(donation.campaignId) === donation.id
+                    ? donation.refundTxHash
+                    : null;
+                const shouldShowRefundTx = Boolean(visibleRefundTxHash);
                 const hasCampaignRefund = claimedRefundCampaignIds.has(
                   donation.campaignId,
                 );
@@ -609,14 +611,14 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                       >
                         Donation TX {shortHash(donation.txHash)} ↗
                       </a>
-                      {shouldShowRefundTx ? (
+                      {visibleRefundTxHash ? (
                         <a
-                          href={getTransactionExplorerUrl(donation.refundTxHash)}
+                          href={getTransactionExplorerUrl(visibleRefundTxHash)}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 font-mono text-[10px] font-black text-red-700 transition hover:border-red-400 hover:bg-red-100"
                         >
-                          Refund TX {shortHash(donation.refundTxHash)} ↗
+                          Refund TX {shortHash(visibleRefundTxHash)} ↗
                         </a>
                       ) : null}
                     </div>

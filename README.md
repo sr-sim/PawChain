@@ -146,13 +146,10 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 
 ### Internal administrators
 
-- Administrators are trusted PawChain staff and cannot register publicly for the role.
-- Administrator public wallet addresses are configured as `ADMIN_ONE` or `ADMIN_TWO` before RoleNFT deployment; the deployment owner is also recognized as an administrator.
-- Administrator access assumes the user connects the exact configured wallet to Ethereum Sepolia and signs the authentication message.
-- Administrators do not require a Supabase user profile or RoleNFT to sign in.
-- Replacing a configured administrator requires contract redeployment and frontend configuration updates. The new deployment starts with fresh contract state.
-- Internal procedures are responsible for protecting and replacing administrator wallets.
-- Shelter verification, campaign approval, evidence review, and donor-report investigation require human judgment.
+- Administrators are trusted PawChain staff and cannot register publicly.
+- Authorized administrator addresses are configured before RoleNFT deployment.
+- Administrators do not require a Supabase profile or RoleNFT.
+- Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
 
 ### Donor RoleNFT badges
 
@@ -251,7 +248,7 @@ The wallets used for deployment and testing need Sepolia ETH for gas.
 
 #### Required services
 
-- A Supabase project with the PawChain tables and storage buckets.
+- A Supabase project with the PawChain database tables. The application uses one private Storage bucket, `shelter-verification-documents`, which it creates automatically when the first shelter document is uploaded.
 - A Reown Cloud project for wallet connection.
 - A Sepolia RPC URL.
 - IPFS metadata CIDs for RoleNFT badges.
