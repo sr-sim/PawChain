@@ -4,6 +4,27 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAccount, useSignMessage } from "wagmi";
 
+async function readJsonResponse(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function getApiMessage(response: Response, fallback: string) {
+  const data = await readJsonResponse(response);
+  const message = data && typeof data.message === "string" ? data.message : "";
+
+  return message || fallback;
+}
+
 export function WalletSessionGuard({ children }: { children: ReactNode }) {
   // Signing is performed by Wagmi, so use its account state as the source of
   // truth. AppKit can report a restored session slightly before Wagmi has an
@@ -48,8 +69,8 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
       try {
         const current = await fetch("/api/auth/wallet-session", { cache: "no-store" });
         if (current.ok) {
-          const session = await current.json();
-          if (String(session.address).toLowerCase() === address.toLowerCase()) {
+          const session = await readJsonResponse(current);
+          if (String(session?.address ?? "").toLowerCase() === address.toLowerCase()) {
             setAuthenticatedAddress(address.toLowerCase());
             return;
           }
@@ -59,15 +80,28 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ address }),
         });
-        const nonce = await nonceResponse.json();
-        if (!nonceResponse.ok) throw new Error(nonce.message ?? "Unable to start wallet authentication.");
+        const nonce = await readJsonResponse(nonceResponse);
+        if (!nonceResponse.ok) {
+          throw new Error(
+            typeof nonce?.message === "string"
+              ? nonce.message
+              : "Unable to start wallet authentication.",
+          );
+        }
+        if (!nonce || typeof nonce.message !== "string") {
+          throw new Error("Unable to start wallet authentication.");
+        }
         const signature = await signMessageAsync({ message: nonce.message });
         const verifyResponse = await fetch("/api/auth/wallet-session/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ signature }),
         });
-        if (!verifyResponse.ok) throw new Error("Wallet authentication failed.");
+        if (!verifyResponse.ok) {
+          throw new Error(
+            await getApiMessage(verifyResponse, "Wallet authentication failed."),
+          );
+        }
         setPhase("finding");
 
         const adminResponse = await fetch(
@@ -75,8 +109,8 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
           { cache: "no-store" },
         );
         if (adminResponse.ok) {
-          const admin = await adminResponse.json();
-          if (admin.isAdmin) {
+          const admin = await readJsonResponse(adminResponse);
+          if (admin?.isAdmin) {
             redirecting.current = true;
             redirectTarget.current = "/Admin/dashboard";
             router.replace("/Admin/dashboard");
@@ -89,8 +123,8 @@ export function WalletSessionGuard({ children }: { children: ReactNode }) {
           { cache: "no-store" },
         );
         if (profileResponse.ok) {
-          const result = await profileResponse.json();
-          const profile = result.profile as
+          const result = await readJsonResponse(profileResponse);
+          const profile = result?.profile as
             | { role?: string; directDashboard?: boolean }
             | null;
 

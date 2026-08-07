@@ -54,13 +54,14 @@ PawChain combines:
 
 - Sign in with an approved internal administrator wallet.
 - Review shelter applications and supporting documents.
-- Approve shelters and mint or revoke Shelter RoleNFTs.
+- Approve shelters and mint Shelter RoleNFTs.
+- Deactivate shelters and revoke their Shelter RoleNFTs.
+- Generate and email certificates to eligible Hero Donors.
 - Review campaign proposals and deploy approved Campaign contracts.
 - Approve or reject milestone evidence.
 - Cancel campaigns and initiate the eligible refund flow.
 - Monitor users, shelters, campaigns, transactions, analytics, and notifications.
-- Review donor reports with donor, campaign, shelter, and transaction references.
-- Open reported campaigns in campaign management for investigation.
+- Review submitted reports and investigate campaign concerns.
 
 ## 🔄 Platform flow
 
@@ -146,10 +147,11 @@ NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS=0x6ec3Cbadcbe84357228DeFd9Bc42666Ec815D1fa
 
 ### Internal administrators
 
-- Administrators are trusted PawChain staff and cannot register publicly for the role.
-- Administrator wallets are approved in advance by the RoleNFT contract.
-- Internal procedures are responsible for protecting and replacing administrator wallets.
-- Shelter verification, campaign approval, evidence review, and donor-report investigation require human judgment.
+- Administrators are trusted PawChain staff and cannot register publicly.
+- Authorized administrator addresses are configured before RoleNFT deployment.
+- Administrators do not require a Supabase profile or RoleNFT.
+- When a shelter is deactivated, its pending campaigns are rejected and its active campaigns are cancelled. Donors can then claim any eligible refunds.
+- Shelter verification, campaign approval, evidence review, and report investigation require human judgment.
 
 ### Donor RoleNFT badges
 
@@ -190,6 +192,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - ETH-to-MYR values are display estimates; contracts account only in ETH.
 - RPC providers, IPFS gateways, Supabase, Reown, and email delivery are external dependencies.
 - Uploaded documents and evidence still require human verification.
+- ETH-to-MYR values are estimates. Historical MYR values use the rate saved when the donation or refund was recorded.
 
 ## 🛠️ Technology stack
 
@@ -199,26 +202,9 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - **Database/storage:** Supabase and IPFS-compatible storage
 - **Documents/email:** PDF-Lib and Nodemailer
 
-## 🗂️ Project structure
+## System architecture
 
-```text
-PawChain/
-├── backend/
-│   ├── contracts/       # RoleNFT, CampaignFactory, and Campaign
-│   ├── ignition/        # Deployment modules and records
-│   ├── metadata/        # RoleNFT metadata
-│   └── test/            # Hardhat tests
-├── frontend/
-│   ├── public/          # Images and static assets
-│   ├── scripts/         # RoleNFT seeding script
-│   └── src/
-│       ├── app/         # Donor, Shelter, Admin, registration, and API routes
-│       ├── context/     # Shared Web3 wallet context
-│       ├── lib/         # Blockchain, Supabase, session, and domain logic
-│       ├── styles/      # Shared theme styles
-│       └── utils/       # Web3 configuration
-└── package.json         # Root commands
-```
+<img width="5376" height="3264" alt="image" src="https://github.com/user-attachments/assets/5927387a-726c-44b0-bc78-3e577197d641" />
 
 ## 🚀 Run the application locally
 
@@ -248,11 +234,15 @@ The wallets used for deployment and testing need Sepolia ETH for gas.
 
 #### Required services
 
-- A Supabase project with the PawChain tables and storage buckets.
+- A Supabase project with the PawChain database tables. The application uses one private Storage bucket, `shelter-verification-documents`, which it creates automatically when the first shelter document is uploaded.
 - A Reown Cloud project for wallet connection.
 - A Sepolia RPC URL.
 - IPFS metadata CIDs for RoleNFT badges.
 - Gmail with an App Password for Hero certificate emails.
+
+#### ETH-to-MYR currency API
+
+PawChain uses the public [CoinGecko API](https://www.coingecko.com/en/api) to retrieve the current Ethereum price in MYR. It uses `/api/v3/simple/price` for the latest rate and `/api/v3/coins/ethereum/market_chart` for 24-hour price history. Results are cached briefly, and no CoinGecko API key is currently required. If a request fails, the application uses its predefined demonstration rate, so displayed MYR amounts remain estimates; smart contracts and financial records use ETH.
 
 ### Setup steps
 
@@ -306,7 +296,7 @@ WALLET_SESSION_SECRET=
 
 Get the Supabase values from **Supabase Dashboard → Project Settings → API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use IPFS metadata CIDs for the badge variables.
 
-`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` should contain at least 32 random characters.
+`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
@@ -352,6 +342,17 @@ address public constant ADMIN_ONE = 0x...; // Administrator wallet
 5. Update `NEXT_PUBLIC_ROLE_NFT_ADDRESS` and `NEXT_PUBLIC_CAMPAIGN_FACTORY_ADDRESS` in `frontend/.env.local`.
 
 Administrator constants cannot be changed after RoleNFT is deployed. A new deployment is required when replacing one of these predefined administrator addresses.
+
+#### Configure an additional administrator
+
+1. Copy the public address of the MetaMask account that will be used for administrator access.
+2. Replace either `ADMIN_ONE` or `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the additional administrator address. Both constants can be updated if both administrator wallets need to change.
+3. Compile and redeploy the RoleNFT and CampaignFactory contracts to Ethereum Sepolia.
+4. Update the new contract addresses in `frontend/.env.local`, then restart the application.
+5. Call `isAdmin(additionalAdminAddress)` and confirm that it returns `true`.
+6. Connect the same MetaMask account to Sepolia and sign in.
+
+Only a public wallet address is required; never share a private key, password, or recovery phrase. The wallet requires Sepolia ETH for gas. Redeployment creates fresh contract state, so records and NFTs from the previous deployment are not transferred.
 
 #### Administrator sign-in
 

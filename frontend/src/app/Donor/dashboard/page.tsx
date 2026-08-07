@@ -236,22 +236,22 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
   const maxChartValue = Math.max(...chartData.map((point) => point.value), 1);
   const summaryStats = [
     {
-      label: "Total donated",
-      value: formatAmount(rangeTotalMyr, "MYR"),
+      label: "Donations",
+      value: `${rangeConfirmed.length} confirmed`,
       detail:
         activeRange === "all"
-          ? "Lifetime recorded value"
+          ? "Lifetime donation records"
           : rangeTrend !== null
             ? `${rangeTrend >= 0 ? "Up" : "Down"} ${formatPercentage(Math.abs(rangeTrend))}% vs previous ${activeRange} days`
             : rangeTotalMyr > 0
-              ? "New support in this period"
+              ? `${formatAmount(rangeTotalMyr, "MYR")} in this period`
               : `Last ${activeRange} days`,
       tone: "orange",
     },
     {
-      label: "Confirmed support",
-      value: String(rangeConfirmed.length),
-      detail: `${rangeCampaignCount} campaigns in this period`,
+      label: "Campaigns supported",
+      value: `${rangeCampaignCount} campaigns`,
+      detail: "Across confirmed donations",
       tone: "violet",
     },
     {
@@ -431,11 +431,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 <p className="mt-1 text-lg font-black text-amber-700">{potentialRefundGroups.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Claims</p>
                 <p className="mt-1 text-lg font-black text-emerald-700">{claimedRefundGroups.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Refunded</p>
                 <p className="mt-1 text-sm font-black text-emerald-800">{formatEth(totalRefundedEth)}</p>
                 <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
                   {formatAmount(totalRefundedMyr, "MYR")}
@@ -572,10 +572,12 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
           {donationData.donations.length > 0 ? (
             <div className="mt-4 divide-y divide-orange-100 overflow-hidden rounded-xl border border-orange-100">
               {donationData.donations.slice(0, 3).map((donation) => {
-                const shouldShowRefundTx =
+                const visibleRefundTxHash =
                   donation.refundTxHash &&
-                  activityRefundDisplayRows.get(donation.campaignId) ===
-                    donation.id;
+                  activityRefundDisplayRows.get(donation.campaignId) === donation.id
+                    ? donation.refundTxHash
+                    : null;
+                const shouldShowRefundTx = Boolean(visibleRefundTxHash);
                 const hasCampaignRefund = claimedRefundCampaignIds.has(
                   donation.campaignId,
                 );
@@ -609,14 +611,14 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                       >
                         Donation TX {shortHash(donation.txHash)} ↗
                       </a>
-                      {shouldShowRefundTx ? (
+                      {visibleRefundTxHash ? (
                         <a
-                          href={getTransactionExplorerUrl(donation.refundTxHash)}
+                          href={getTransactionExplorerUrl(visibleRefundTxHash)}
                           target="_blank"
                           rel="noreferrer"
                           className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 font-mono text-[10px] font-black text-red-700 transition hover:border-red-400 hover:bg-red-100"
                         >
-                          Refund TX {shortHash(donation.refundTxHash)} ↗
+                          Refund TX {shortHash(visibleRefundTxHash)} ↗
                         </a>
                       ) : null}
                     </div>

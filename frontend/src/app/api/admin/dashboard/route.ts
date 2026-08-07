@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdminWallet } from "@/lib/admin-wallets";
 import { walletSessionMatches } from "@/lib/wallet-session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getVerifiedFinancialEvents } from "@/lib/verified-financial-events";
 
 export async function GET(request: NextRequest) {
   const walletAddress = request.nextUrl.searchParams.get("walletAddress");
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
-    const [campaignResult, milestoneResult, applicationResult, donationResult] =
+    const [campaignResult, milestoneResult, applicationResult, verifiedFinancialEvents] =
       await Promise.all([
         supabase
           .from("campaigns")
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
           .from("shelter_applications")
           .select("id, shelter_name, status, created_at")
           .order("created_at", { ascending: false }),
-        supabase.from("donations").select("amount_wei, status"),
+        getVerifiedFinancialEvents(),
       ]);
 
     if (campaignResult.error) {
@@ -46,27 +47,18 @@ export async function GET(request: NextRequest) {
     const applications = applicationResult.error
       ? []
       : applicationResult.data ?? [];
-    const donations = donationResult.error ? [] : donationResult.data ?? [];
-    const totalDonationsWei = donations
-      .filter((donation) => donation.status === "confirmed")
+    const totalDonationsWei = verifiedFinancialEvents
+      .filter((event) => event.transactionType === "donation")
       .reduce(
-        (total, donation) =>
-          total + BigInt(String(donation.amount_wei ?? "0")),
+        (total, event) => total + BigInt(event.amountWei),
         BigInt(0),
       );
-    const campaignMap = new Map(
-      campaigns.map((campaign) => [campaign.id, campaign]),
-    );
-    const totalFundsReleasedWei = milestones
-      .filter((milestone) => Boolean(milestone.release_tx_hash))
-      .reduce((total, milestone) => {
-        const campaign = campaignMap.get(milestone.campaign_id);
-        const goalWei = BigInt(String(campaign?.goal_wei ?? "0"));
-        const basisPoints = BigInt(
-          Math.round(Number(milestone.percentage ?? 0) * 100),
-        );
-        return total + (goalWei * basisPoints) / BigInt(10_000);
-      }, BigInt(0));
+    const totalFundsReleasedWei = verifiedFinancialEvents
+      .filter((event) => event.transactionType === "fund_release")
+      .reduce(
+        (total, event) => total + BigInt(event.amountWei),
+        BigInt(0),
+      );
 
     const statusOrder = [
       "pending_approval",
@@ -117,8 +109,8 @@ export async function GET(request: NextRequest) {
         campaigns: "live",
         milestones: milestoneResult.error ? "unavailable" : "live",
         shelterApplications: applicationResult.error ? "unavailable" : "live",
-        donations: donationResult.error ? "unavailable" : "live",
-        releasedFunds: milestoneResult.error ? "unavailable" : "live",
+        donations: "live",
+        releasedFunds: "live",
       },
     });
   } catch (error) {

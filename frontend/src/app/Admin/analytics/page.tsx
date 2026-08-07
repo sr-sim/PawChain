@@ -92,6 +92,7 @@ const money = (value: number) =>
   new Intl.NumberFormat("en-MY", {
     style: "currency",
     currency: "MYR",
+    currencyDisplay: "code",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -164,7 +165,7 @@ function MetricCard({
   );
 }
 
-function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number }) {
+function TrendChart({ data }: { data: AnalyticsData["trend"] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   if (!data.length) {
     return <EmptyState text="Donation activity will appear after confirmed donations in this period." />;
@@ -200,7 +201,7 @@ function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number
             return (
               <g key={item.date}>
                 <rect x={x(index) - barWidth / 2} y={padding + plotHeight - barHeight} width={barWidth} height={barHeight} rx="4" fill="#fdba74">
-                  <title>{`${item.date}: ${eth(item.amountEth)}, ${item.count} donations, ${money(item.amountEth * rate)}`}</title>
+                  <title>{`${item.date}: ${eth(item.amountEth)}, ${item.count} donations`}</title>
                 </rect>
                 {(index === 0 || index === data.length - 1 || index % Math.ceil(data.length / 5) === 0) ? (
                   <text x={x(index)} y={height - 8} textAnchor="middle" fontSize="10" fill="#78716c">
@@ -227,7 +228,6 @@ function TrendChart({ data, rate }: { data: AnalyticsData["trend"]; rate: number
             <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600">{new Date(`${data[hoveredIndex].date}T00:00:00`).toLocaleDateString("en-MY", { day: "2-digit", month: "short", year: "numeric" })}</p>
             <div className="mt-3 space-y-2 text-xs">
               <div className="flex justify-between gap-3"><span className="text-stone-500">Total ETH donated</span><span className="font-bold text-stone-900">{eth(data[hoveredIndex].amountEth)}</span></div>
-              <div className="flex justify-between gap-3"><span className="text-stone-500">Total MYR value</span><span className="font-bold text-stone-900">{money(data[hoveredIndex].amountEth * rate)}</span></div>
               <div className="flex justify-between gap-3"><span className="text-stone-500">Total donations</span><span className="font-bold text-stone-900">{data[hoveredIndex].count}</span></div>
             </div>
           </div>
@@ -345,7 +345,7 @@ function EmptyState({ text }: { text: string }) {
 
 export default function AdminAnalyticsPage() {
   const { address, isConnected } = useAppKitAccount();
-  const { rate: ethMyrRate, ethToMyr, weiToMyr } = useEthMyrRate();
+  const { ethToMyr, weiToMyr } = useEthMyrRate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [period, setPeriod] = useState("30");
   const [campaignId, setCampaignId] = useState("all");
@@ -431,7 +431,7 @@ export default function AdminAnalyticsPage() {
 
               <section>
                 <Panel title="Donation activity" description="Confirmed ETH donations and transaction volume during the selected period.">
-                  <TrendChart data={data.trend} rate={ethMyrRate} />
+                  <TrendChart data={data.trend} />
                 </Panel>
               </section>
 
