@@ -296,7 +296,15 @@ WALLET_SESSION_SECRET=
 
 Get the Supabase values from **Supabase Dashboard → Project Settings → API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use IPFS metadata CIDs for the badge variables.
 
-`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` should contain at least 32 random characters.
+`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to sign wallet login challenges and session cookies, preventing users from forging an authenticated wallet session.
+
+Generate it in PowerShell, then copy the output into `WALLET_SESSION_SECRET`:
+
+```powershell
+$sessionBytes = New-Object byte[] 48
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($sessionBytes)
+[Convert]::ToBase64String($sessionBytes)
+```
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
@@ -346,7 +354,7 @@ Administrator constants cannot be changed after RoleNFT is deployed. A new deplo
 #### Configure an additional administrator
 
 1. Copy the public address of the MetaMask account that will be used for administrator access.
-2. Keep the primary administrator as `ADMIN_ONE` and replace `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the additional administrator address.
+2. Replace either `ADMIN_ONE` or `ADMIN_TWO` in `backend/contracts/RoleNFT.sol` with the additional administrator address. Both constants can be updated if both administrator wallets need to change.
 3. Compile and redeploy the RoleNFT and CampaignFactory contracts to Ethereum Sepolia.
 4. Update the new contract addresses in `frontend/.env.local`, then restart the application.
 5. Call `isAdmin(additionalAdminAddress)` and confirm that it returns `true`.
