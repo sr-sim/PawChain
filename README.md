@@ -201,25 +201,19 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 - **Database/storage:** Supabase and IPFS-compatible storage
 - **Documents/email:** PDF-Lib and Nodemailer
 
-## 🗂️ Project structure
+## System architecture
 
-```text
-PawChain/
-├── backend/
-│   ├── contracts/       # RoleNFT, CampaignFactory, and Campaign
-│   ├── ignition/        # Deployment modules and records
-│   ├── metadata/        # RoleNFT metadata
-│   └── test/            # Hardhat tests
-├── frontend/
-│   ├── public/          # Images and static assets
-│   ├── scripts/         # RoleNFT seeding script
-│   └── src/
-│       ├── app/         # Donor, Shelter, Admin, registration, and API routes
-│       ├── context/     # Shared Web3 wallet context
-│       ├── lib/         # Blockchain, Supabase, session, and domain logic
-│       ├── styles/      # Shared theme styles
-│       └── utils/       # Web3 configuration
-└── package.json         # Root commands
+View and edit the full diagram in [PawChain System Architecture on FigJam](https://www.figma.com/board/8kscQjJZHq1AbBq58gRoJM).
+
+```mermaid
+flowchart LR
+    users["Donor, Shelter and Admin"] --> app["PawChain Web App"]
+    app --> api["Backend API"]
+    app --> wallet["MetaMask Wallet"]
+    wallet --> blockchain["Sepolia Smart Contracts"]
+    api --> blockchain
+    api --> supabase["Supabase Database and Storage"]
+    api --> services["IPFS, CoinGecko and Email"]
 ```
 
 ## 🚀 Run the application locally
