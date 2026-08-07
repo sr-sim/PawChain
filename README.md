@@ -366,6 +366,15 @@ cd ..
 
 After deployment, copy the new RoleNFT and CampaignFactory addresses from `backend/ignition/deployments/pawchain-sepolia-new/deployed_addresses.json` into `frontend/.env.local`, then restart the frontend. Use a new deployment ID if `pawchain-sepolia-new` has already been used.
 
+#### Optional local blockchain
+
+To deploy the contracts locally, run these commands in separate terminals from the project root:
+
+```powershell
+npm.cmd run backend
+npm.cmd run deploy
+```
+
 #### 6. Start the development server
 
 ```powershell
