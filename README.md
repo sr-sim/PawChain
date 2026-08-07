@@ -196,7 +196,7 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 
 - One wallet represents one PawChain user and can hold only one RoleNFT.
 - RoleNFTs are non-transferable platform credentials, not tradable NFTs.
-- `ROLE_NFT_MINTER_PRIVATE_KEY` belongs to an authorized administrator wallet and is used by the server to mint both types of RoleNFT. A Donor RoleNFT is minted automatically after successful donor registration, while a Shelter RoleNFT is minted only after an administrator approves the shelter application.
+- `ROLE_NFT_MINTER_PRIVATE_KEY` belongs to an authorized administrator wallet and is used by the server to mint a Donor RoleNFT automatically after successful donor registration. A Shelter RoleNFT is minted separately using the connected administrator wallet during shelter approval.
 - Donor badge levels upgrade automatically when confirmed cumulative on-chain donations reach the configured thresholds. Shelter RoleNFTs do not have badge levels.
 - Users control their own wallets; PawChain never stores private keys or reverses confirmed transactions.
 - The application requires donor registration, although `Campaign.donate()` can be called directly by any wallet that satisfies its campaign rules.
