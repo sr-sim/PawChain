@@ -431,11 +431,11 @@ export default async function DonorDashboard({ searchParams }: DashboardProps) {
                 <p className="mt-1 text-lg font-black text-amber-700">{potentialRefundGroups.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Claims</p>
                 <p className="mt-1 text-lg font-black text-emerald-700">{claimedRefundGroups.length}</p>
               </div>
               <div className="border-l border-slate-100 bg-emerald-50/30 p-2.5">
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Received</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-stone-400">Refunded</p>
                 <p className="mt-1 text-sm font-black text-emerald-800">{formatEth(totalRefundedEth)}</p>
                 <p className="mt-0.5 text-[10px] font-semibold leading-4 text-stone-500">
                   {formatAmount(totalRefundedMyr, "MYR")}

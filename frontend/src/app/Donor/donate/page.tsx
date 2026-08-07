@@ -231,7 +231,7 @@ function clampPercentage(value: number) {
 
 function getMilestoneGateMessage(status: string, title: string) {
   if (status === "Withdrawable") {
-    return `${title} is fully funded. Waiting for the shelter to withdraw the milestone funds before proof can be submitted.`;
+    return `${title} is fully funded. Awaiting shelter action before proof can be submitted.`;
   }
 
   if (status === "Released") {
@@ -893,7 +893,7 @@ export default function DonorDonatePage() {
     ? isOpenForFunding
       ? "Open for funding"
       : currentStage.status === "Withdrawable"
-        ? "Waiting for shelter withdrawal"
+        ? "Milestone funded"
         : currentStage.status === "Released"
           ? "Released - awaiting proof"
           : currentStage.status === "Pending review"
@@ -1322,7 +1322,7 @@ export default function DonorDonatePage() {
                                 {selectorCanAccept
                                   ? formatApproxMyr(selectorDisplayRemainingMyr)
                                   : selectorDisplayStatus === "Withdrawable"
-                                    ? "Awaiting withdrawal"
+                                    ? "Milestone funded"
                                     : selectorDisplayStatus}
                               </span>
                             </div>
