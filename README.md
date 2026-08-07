@@ -196,6 +196,8 @@ Badge recording assumes the Campaign contract is an authorized donation recorder
 
 - One wallet represents one PawChain user and can hold only one RoleNFT.
 - RoleNFTs are non-transferable platform credentials, not tradable NFTs.
+- `ROLE_NFT_MINTER_PRIVATE_KEY` belongs to an authorized administrator wallet and is used by the server to mint both types of RoleNFT. A Donor RoleNFT is minted automatically after successful donor registration, while a Shelter RoleNFT is minted only after an administrator approves the shelter application.
+- Donor badge levels upgrade automatically when confirmed cumulative on-chain donations reach the configured thresholds. Shelter RoleNFTs do not have badge levels.
 - Users control their own wallets; PawChain never stores private keys or reverses confirmed transactions.
 - The application requires donor registration, although `Campaign.donate()` can be called directly by any wallet that satisfies its campaign rules.
 - A Shelter RoleNFT represents PawChain approval, not a government guarantee of every campaign claim.
@@ -337,7 +339,7 @@ WALLET_SESSION_SECRET=
 
 Get the Supabase URL and API keys from **Supabase Dashboard -> Project Settings -> API**, the project ID from Reown Cloud, and the RPC URL from a Sepolia RPC provider. Use the public anonymous key for `NEXT_PUBLIC_SUPABASE_ANON_KEY` and keep the service-role key server-only. Use IPFS metadata CIDs for the badge variables.
 
-`ROLE_NFT_MINTER_PRIVATE_KEY` must belong to an authorized PawChain administrator and start with `0x`. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
+`ROLE_NFT_MINTER_PRIVATE_KEY` must contain the administrator wallet's private key, not its public wallet address, and must start with `0x`. The corresponding wallet must be recognized by `RoleNFT.isAdmin()` as the RoleNFT contract owner, `ADMIN_ONE`, or `ADMIN_TWO`. Using any other wallet causes RoleNFT minting to fail with an `Only admin` contract error. `WALLET_SESSION_SECRET` is a server-only random value used to secure wallet login sessions. It should contain at least 32 random characters and must be configured in `frontend/.env.local`.
 
 Never commit private keys, the Supabase service-role key, Gmail App Password, or wallet-session secret.
 
